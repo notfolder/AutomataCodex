@@ -2182,10 +2182,9 @@ find backup/ -name "*.tar.gz" -mtime +30 -delete
 ### 13.1 config.yaml
 
 ```yaml
-# GitLab設定
+# GitLab設定（PATはユーザー毎にUser Config APIから取得するため、ここには設定しない）
 gitlab:
   api_url: "https://gitlab.com/api/v4"
-  personal_access_token: "${GITLAB_PERSONAL_ACCESS_TOKEN}"
   task_label: "coding-agent"
   processing_label: "coding-agent-processing"
   done_label: "coding-agent-done"
