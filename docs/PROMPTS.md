@@ -427,8 +427,6 @@ Available tools:
 - get_todo_list: Retrieve current todo list
 - update_todo_status: Update todo status based on test results
 
-プロンプト詳細はPROMPTS.mdを参照
-
 Output format (JSON):
 {
   "test_result": "success|failure",
@@ -482,8 +480,6 @@ Each review comment must include:
 - severity: "critical" | "major" | "minor" | "suggestion"
 - category: "correctness" | "security" | "performance" | "maintainability" | "test_coverage"
 - comment: Clear explanation of the issue and a concrete recommendation for improvement
-
-プロンプト詳細はPROMPTS.mdを参照
 ```
 
 ---
@@ -523,8 +519,6 @@ Each review comment must include:
 - severity: "critical" | "major" | "minor" | "suggestion"
 - category: "accuracy" | "completeness" | "structure" | "readability" | "broken_link"
 - comment: Clear explanation of the issue and a concrete recommendation for improvement
-
-プロンプト詳細はPROMPTS.mdを参照
 ```
 
 ---
