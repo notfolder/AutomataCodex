@@ -1,0 +1,15 @@
+オブジェクト図も欲しい。
+どのクラスがどのクラス持ってどうやってオブジェクト管理するのかを設計して明示して。
+
+2.3.4 Runtime Layer
+のTaskContextManagerは正しい？
+Agent Frameworkに合わせたい。
+
+4.2.1 エージェント共通設計
+の
+共通ツール（ChatClientAgentOptions.toolsに登録）:
+コードベース検索ツール
+ファイル読み込みツール
+これはExecutionEnvironmentManager内のTextEditorMCPClientを利用することを明記
+
+
