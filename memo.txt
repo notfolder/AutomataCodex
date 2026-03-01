@@ -12,4 +12,6 @@ Agent Frameworkに合わせたい。
 ファイル読み込みツール
 これはExecutionEnvironmentManager内のTextEditorMCPClientを利用することを明記
 
+ラベルを定義する。
+
 
