@@ -135,7 +135,11 @@
         "reflection_result",
         "replan_mode",
         "replan_reason",
-        "delta_requirements"
+        "delta_requirements",
+        "affected_todos",
+        "new_requirements",
+        "conflicts",
+        "comment_response"
       ],
       "tools": ["text_editor", "get_todo_list", "sync_to_gitlab"],
       "prompt_id": "plan_reflection",
