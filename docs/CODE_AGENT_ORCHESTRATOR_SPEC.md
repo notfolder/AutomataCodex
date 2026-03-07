@@ -2770,6 +2770,210 @@ logging:
 
 指定日数（デフォルト30日）より古い完了タスクをDBとファイルシステムから削除する。DBはstatus='completed'かつcompleted_atが閾値より古いレコードを削除し、ファイルシステムのcontexts/completedディレクトリ内の対象タスクディレクトリを削除する。
 
+### 12.6 ワークフロー停止・再開機構
+
+#### 12.6.1 概要と目的
+
+メンテナンスやシステムアップデート時に、実行中のワークフローを安全に停止し、作業完了後に処理を継続できる仕組みを提供する。Dockerコンテナが存在する前提での停止・再開をサポートし、コンテナが失われた場合はタスクを失敗として扱う。
+
+**対応範囲**:
+- 計画的な停止（メンテナンス、アップデート）
+- Dockerコンテナの保持（停止のみ、削除しない）
+- ワークフロー状態とDocker環境マッピングの永続化
+- 再起動時の自動再開処理
+
+**対応外**:
+- Dockerコンテナが失われた場合の復旧（タスク失敗として扱う）
+- Dockerボリュームの永続化（不要）
+- クラッシュからの復旧（計画停止のみ対応）
+
+#### 12.6.2 ワークフロー状態の永続化
+
+**データベーステーブル: workflow_execution_states**
+
+ワークフロー実行の状態を記録し、再開時に復元するための情報を保存する。
+
+| カラム名 | 型 | 説明 |
+|---------|-----|------|
+| execution_id | UUID (PK) | ワークフロー実行の一意識別子 |
+| task_uuid | UUID (FK) | tasksテーブルへの外部キー |
+| workflow_definition_id | VARCHAR | 使用中のワークフロー定義ID |
+| current_node_id | VARCHAR | 実行中または次に実行するノードID |
+| completed_nodes | JSONB | 完了したノードIDの配列 |
+| workflow_status | VARCHAR | 実行状態（running/suspended/completed/failed） |
+| suspended_at | TIMESTAMP | 停止日時 |
+| created_at | TIMESTAMP | ワークフロー開始日時 |
+| updated_at | TIMESTAMP | 最終更新日時 |
+
+**データベーステーブル: docker_environment_mappings**
+
+Docker環境とノードの対応関係を永続化し、再開時にコンテナを再利用するための情報を保存する。
+
+| カラム名 | 型 | 説明 |
+|---------|-----|------|
+| mapping_id | UUID (PK) | マッピングの一意識別子 |
+| execution_id | UUID (FK) | workflow_execution_statesへの外部キー |
+| node_id | VARCHAR | ワークフローノードID |
+| container_id | VARCHAR | DockerコンテナID |
+| container_name | VARCHAR | Dockerコンテナ名 |
+| environment_name | VARCHAR | 環境名（python/miniforge/node/default） |
+| status | VARCHAR | コンテナ状態（running/stopped） |
+| created_at | TIMESTAMP | 作成日時 |
+| updated_at | TIMESTAMP | 最終更新日時 |
+
+**コンテナ命名規則**:
+```
+coding-agent-exec-{execution_id}-{node_id}
+```
+
+実行IDとノードIDを含めることで、停止後の再開時にコンテナを一意に識別可能とする。
+
+#### 12.6.3 グレースフルシャットダウン
+
+**シグナルハンドリング**
+
+Consumerプロセスが受信するシグナルと動作：
+
+- **SIGTERM（計画停止）**:
+  1. 新規タスクの受信を停止（RabbitMQからのprefetch停止）
+  2. 実行中のワークフローが現在のノード処理を完了するまで待機（最大5分）
+  3. 現在のノード完了後、ワークフロー状態をworkflow_execution_statesテーブルに保存
+  4. Docker環境マッピングをdocker_environment_mappingsテーブルに保存
+  5. すべてのDockerコンテナを停止（docker stop、削除しない）
+  6. プロセス終了
+
+- **タイムアウト処理**: 
+  - ノード完了を5分待機しても完了しない場合は強制停止
+  - 実行中のノードはcurrent_node_idに記録して次回再実行
+
+**停止可能なタイミング**
+
+安全に停止できるポイント：
+- ノード実行完了後（出力データをワークフローコンテキストに保存済み）
+- 次のノードに進む直前
+
+停止すべきでないタイミング：
+- LLM呼び出し中
+- ツール実行中
+- Git操作実行中（これらは完了を待つ）
+
+#### 12.6.4 再開処理
+
+**再開フロー**
+
+```mermaid
+flowchart TD
+    Start[Consumer起動] --> Query[DB検索: workflow_status=suspended]
+    Query --> HasSuspended{停止中タスクあり?}
+    HasSuspended -->|No| Normal[通常処理開始<br/>RabbitMQからタスク取得]
+    HasSuspended -->|Yes| LoadState[ワークフロー状態読み込み<br/>workflow_execution_states]
+    LoadState --> LoadMapping[環境マッピング読み込み<br/>docker_environment_mappings]
+    LoadMapping --> CheckContainers[Docker: コンテナ存在確認<br/>docker ps -a]
+    CheckContainers --> AllExist{すべて存在?}
+    AllExist -->|No| MarkFailed[タスクを失敗としてマーク<br/>GitLabにエラーコメント投稿]
+    AllExist -->|Yes| StartContainers[コンテナ起動<br/>docker start]
+    StartContainers --> RestoreContext[ワークフローコンテキスト復元<br/>PostgreSQLから読み込み]
+    RestoreContext --> RestoreEnvManager[ExecutionEnvironmentManager<br/>環境マッピング復元]
+    RestoreEnvManager --> ResumeWorkflow[current_node_idから<br/>ワークフロー再開]
+    ResumeWorkflow --> UpdateStatus[workflow_status=running更新]
+    UpdateStatus --> Execute[ノード実行継続]
+    MarkFailed --> Next[次の停止タスク処理]
+    Execute --> Next
+    Next --> HasSuspended
+```
+
+**コンテナ存在確認**
+
+docker ps -aコマンドで停止中を含むすべてのコンテナを検索し、必要なコンテナがすべて存在するか確認する。フィルタ条件としてコンテナ名のパターン（coding-agent-exec-{execution_id}-*）を使用する。
+
+**コンテナが失われた場合の処理**
+
+一つでもコンテナが存在しない場合：
+1. workflow_statusをfailedに更新
+2. GitLab MRにエラーコメントを投稿（「メンテナンス中にDocker環境が失われたため、タスクを継続できません」）
+3. 存在するコンテナをすべて削除（docker rm -f）
+4. 環境マッピングレコードを削除
+5. 次の停止タスクの処理に進む
+
+**コンテナ起動とワークフロー再開**
+
+すべてのコンテナが存在する場合：
+1. 各コンテナをdocker startで起動
+2. ワークフローコンテキストをPostgreSQLから読み込む
+3. ExecutionEnvironmentManagerの環境マッピング（node_to_env_map）を復元
+4. Agent FrameworkのWorkflowをcurrent_node_idから再開
+5. workflow_statusをrunningに更新
+6. 通常のノード実行を継続
+
+#### 12.6.5 実装への影響
+
+**ExecutionEnvironmentManagerの拡張**
+
+新規メソッド：
+- `save_environment_mapping(execution_id)`: 環境マッピングをDBに保存
+- `load_environment_mapping(execution_id)`: 環境マッピングをDBから復元
+- `stop_all_containers(execution_id)`: 実行IDに関連するすべてのコンテナを停止
+- `start_all_containers(execution_id)`: 実行IDに関連するすべてのコンテナを起動
+- `check_containers_exist(execution_id)`: すべてのコンテナが存在するか確認
+
+コンテナ作成時の変更：
+- コンテナ名に実行IDとノードIDを含める（coding-agent-exec-{execution_id}-{node_id}）
+- 作成時にdocker_environment_mappingsテーブルにレコード挿入
+
+**WorkflowFactoryの拡張**
+
+新規メソッド：
+- `save_workflow_state(execution_id, current_node_id, completed_nodes)`: ワークフロー状態をDBに保存
+- `load_workflow_state(execution_id)`: ワークフロー状態をDBから復元
+- `resume_workflow(execution_id)`: 停止したワークフローを再開
+
+シグナルハンドラの実装：
+- SIGTERMシグナルをキャッチする処理を追加
+- 実行中のノード完了を最大5分待機
+- タイムアウト時は強制停止してワークフロー状態を保存
+
+**Consumerの拡張**
+
+起動時処理：
+1. workflow_status=suspendedのレコードをworkflow_execution_statesテーブルから検索
+2. 各停止タスクに対して再開処理を実行（コンテナ確認→起動→再開）
+3. すべての再開処理完了後、通常のキュー処理を開始
+
+シャットダウン処理：
+1. SIGTERMシグナル受信時にシャットダウンフラグを設定
+2. RabbitMQからの新規メッセージ受信を停止
+3. 実行中のワークフローの現在ノード完了を待機
+4. ワークフロー状態とDocker環境マッピングを保存
+5. Dockerコンテナを停止
+6. プロセス終了
+
+#### 12.6.6 運用手順
+
+**計画停止の手順**
+
+1. Producerを停止（新規タスク検出を停止）
+2. 全ConsumerにSIGTERMシグナルを送信（docker-compose stop consumer または kill -TERM）
+3. Consumerのログで「Graceful shutdown completed」メッセージを確認
+4. PostgreSQLとRabbitMQのバックアップを実施
+5. メンテナンス作業を実施
+6. Consumer再起動（docker-compose start consumer）
+7. Consumerログで停止タスクの再開を確認
+8. Producer再起動
+
+**モニタリング指標**
+
+追加すべきメトリクス：
+- 停止中タスク数（workflow_status=suspendedのレコード数）
+- 再開成功率（成功した再開処理の割合）
+- 再開失敗数（コンテナ不在による失敗）
+- 平均再開時間（停止から再開完了までの時間）
+
+**アラート条件**
+
+- 停止中タスクが10個を超えた場合（異常終了の可能性）
+- 再開失敗が連続5回発生した場合
+- 再開処理が10分以上経過しても完了しない場合
+
 ---
 
 ## 13. 設定ファイル定義

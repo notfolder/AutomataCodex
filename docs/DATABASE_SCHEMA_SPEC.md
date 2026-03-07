@@ -12,6 +12,7 @@
 - ユーザー管理テーブル群（users, user_configs, agent_prompt_overrides, user_workflow_settings）
 - ワークフロー定義テーブル群（workflow_definitions）
 - タスク管理テーブル群（tasks）
+- ワークフロー実行管理テーブル群（workflow_execution_states, docker_environment_mappings）
 - コンテキストストレージテーブル群（context_messages, context_planning_history, context_metadata, context_tool_results_metadata）
 - Todo管理テーブル（todos）
 - メトリクステーブル（token_usage）
@@ -305,6 +306,91 @@
 - task_typeの有効値: 'issue_to_mr', 'mr_processing'
 - metadataにAgent Frameworkのシリアル化されたセッション情報を保存する
 - completed_atはstatus='completed'の場合のみ設定される
+
+---
+
+## 4.5 ワークフロー実行管理テーブル群
+
+### 4.5.1 workflow_execution_statesテーブル
+
+ワークフロー実行の状態を記録し、停止・再開処理時に使用する。
+
+**テーブル名**: `workflow_execution_states`
+
+| カラム名 | 型 | 制約 | 説明 |
+|---------|-----|------|------|
+| execution_id | UUID | PRIMARY KEY | ワークフロー実行の一意識別子 |
+| task_uuid | TEXT | NOT NULL | tasksテーブルへの外部キー |
+| workflow_definition_id | INTEGER | | 使用中のワークフロー定義ID（外部キー） |
+| current_node_id | TEXT | NOT NULL | 実行中または次に実行するノードID |
+| completed_nodes | JSONB | NOT NULL DEFAULT '[]' | 完了したノードIDの配列 |
+| workflow_status | TEXT | NOT NULL DEFAULT 'running' | 実行状態（running/suspended/completed/failed） |
+| suspended_at | TIMESTAMP | | 停止日時 |
+| created_at | TIMESTAMP | NOT NULL DEFAULT CURRENT_TIMESTAMP | ワークフロー開始日時 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 最終更新日時 |
+
+**外部キー制約**:
+- `FOREIGN KEY (task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE` - タスク削除時にワークフロー状態も削除
+- `FOREIGN KEY (workflow_definition_id) REFERENCES workflow_definitions(id) ON DELETE SET NULL`
+
+**インデックス**:
+- `PRIMARY KEY (execution_id)`
+- `idx_wf_exec_states_task_uuid` ON (task_uuid) - タスク別実行状態検索用
+- `idx_wf_exec_states_status` ON (workflow_status) - 状態別検索用（特にsuspended検索）
+- `idx_wf_exec_states_suspended_at` ON (suspended_at DESC) WHERE suspended_at IS NOT NULL - 停止タスクの古い順検索用
+
+**JSONB completed_nodes構造例**:
+```json
+["user_resolver", "task_classifier", "content_transfer", "environment_setup"]
+```
+
+**備考**:
+- workflow_statusの有効値: 'running', 'suspended', 'completed', 'failed'
+- suspended_atはworkflow_status='suspended'の場合のみ設定される
+- completed_nodesはワークフローの進捗を追跡し、再開時にスキップするノードを識別する
+
+---
+
+### 4.5.2 docker_environment_mappingsテーブル
+
+Docker環境とノードの対応関係を永続化し、再開時にコンテナを再利用する。
+
+**テーブル名**: `docker_environment_mappings`
+
+| カラム名 | 型 | 制約 | 説明 |
+|---------|-----|------|------|
+| mapping_id | UUID | PRIMARY KEY | マッピングの一意識別子 |
+| execution_id | UUID | NOT NULL | workflow_execution_statesへの外部キー |
+| node_id | TEXT | NOT NULL | ワークフローノードID |
+| container_id | TEXT | NOT NULL | DockerコンテナID |
+| container_name | TEXT | NOT NULL | Dockerコンテナ名 |
+| environment_name | TEXT | NOT NULL | 環境名（python/miniforge/node/default） |
+| status | TEXT | NOT NULL DEFAULT 'running' | コンテナ状態（running/stopped） |
+| created_at | TIMESTAMP | NOT NULL DEFAULT CURRENT_TIMESTAMP | 作成日時 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 最終更新日時 |
+
+**外部キー制約**:
+- `FOREIGN KEY (execution_id) REFERENCES workflow_execution_states(execution_id) ON DELETE CASCADE` - ワークフロー実行削除時にマッピングも削除
+
+**ユニーク制約**:
+- `UNIQUE (execution_id, node_id)` - 1実行・1ノードにつき1つのコンテナマッピング
+
+**インデックス**:
+- `PRIMARY KEY (mapping_id)`
+- `idx_docker_env_map_exec_id` ON (execution_id) - 実行ID別マッピング検索用
+- `idx_docker_env_map_container_id` ON (container_id) - コンテナID別検索用
+- `idx_docker_env_map_status` ON (status) - 状態別検索用
+
+**container_name命名規則**:
+```
+coding-agent-exec-{execution_id}-{node_id}
+```
+
+**備考**:
+- statusの有効値: 'running', 'stopped'
+- environment_nameの有効値: 'python', 'miniforge', 'node', 'default'
+- container_nameは一意性を保証するため実行IDとノードIDを含む
+- 再開時にはcontainer_idを使用してDockerコンテナを特定し、起動する
 
 ---
 
