@@ -2047,38 +2047,14 @@ classDiagram
 - 複数タスクで同時使用可能
 
 **TokenUsageMiddleware**:
-- Consumer起動時に1回初期化
-- すべてのWorkflowに登録され、AIAgent呼び出しを自動的にインターセプト
-- AIAgentのレスポンスからトークン情報（`prompt_tokens`、`completion_tokens`、`total_tokens`）を取得
-- `ContextStorageManager`を使用して`token_usage`テーブルに記録
-- OpenTelemetryと統合してメトリクスとして送信
-- 複数タスクで同時使用可能（タスクごとに異なるuser_idとtask_uuidで記録）
+- すべてのAIAgent呼び出しを自動インターセプトし、トークン使用量を記録
+- データベース記録とOpenTelemetryメトリクス送信を実行
+- 詳細は「[8.9.5 TokenUsageMiddleware実装](#895-tokenusagemiddleware実装)」を参照
 
 **ErrorHandlingMiddleware**:
-- Consumer起動時に1回初期化
-- すべてのWorkflowに登録され、AIAgentおよびExecutor呼び出し時のエラーを統一的にハンドリング
-- エラー発生時に自動的にインターセプトし、エラーカテゴリを分類
-- エラーカテゴリ:
-  - `transient`: 一時的な障害（ネットワークタイムアウト、レート制限、サービス不可等）→ リトライ適用
-  - `configuration`: 設定エラー（環境変数の欠落、無効な認証情報、誤った設定）→ ユーザーアクション必要
-  - `implementation`: 実装バグ（未処理の例外、予期しないデータ）→ 開発者アクション必要
-  - `resource`: リソース不足（ディスク空間、メモリ、APIクォータ）→ 運用担当者アクション必要
-- リトライポリシー適用:
-  - `transient`エラー: 指数バックオフで最大3回リトライ（基本遅延: 5秒）
-  - その他のエラー: リトライせず、ユーザーに通知して処理を停止
-- GitLab通知:
-  - エラー通知コメントを関連するIssue/MRに自動投稿
-  - エラー種別、発生箇所、エラー内容、ユーザーアクション（該当する場合）を含む
-- データベース更新:
-  - タスクステータスを"failed"に更新
-  - エラーメッセージとスタックトレースを`tasks`テーブルに記録
-- コンテキスト保存:
-  - 完全なエラー詳細を`ContextStorageManager`を通じて永続化
-  - 事後分析とデバッグ用にエラーログを保持
-- OpenTelemetryと統合:
-  - エラー発生時に分散トレースにエラー情報を記録
-  - エラー率メトリクスを収集
-- 複数タスクで同時使用可能（タスクごとに独立したエラーハンドリング）
+- すべてのノード実行時のエラーを統一的にハンドリング
+- エラー分類（transient/configuration/implementation/resource）、リトライポリシー適用、GitLab通知を実行
+- 詳細は「[8.9.6 ErrorHandlingMiddleware実装](#896-errorhandlingmiddleware実装)」を参照
 
 **DefinitionLoader**:
 - Consumer起動時に1回初期化
@@ -3085,16 +3061,162 @@ Middlewareは以下の3つのフェーズで実行されます：
 - IDが大きい（より新しい）コメントのみを新規として抽出
 - 取得した全コメントの最後のIDを最終チェック済みコメントIDとして更新
 
-#### 8.9.5 Middlewareの登録と実行
+#### 8.9.5 TokenUsageMiddleware実装
 
-**WorkflowFactoryでの登録**:
+**責務**: すべてのAIエージェント呼び出しを自動的にインターセプトして、トークン使用量を記録し、メトリクスとして送信
+
+**初期化処理**:
+- ContextStorageManagerへの参照を保持（トークン使用量をデータベースに記録）
+- MetricsCollectorへの参照を保持（OpenTelemetryへメトリクス送信）
+
+**intercept メソッドの処理フロー**:
+
+1. **フェーズ判定**:
+   - `phase`が"after_execution"でない場合は何もせず終了（nullを返す）
+   - トークン情報はエージェント実行後にのみ取得可能
+
+2. **ノード種別判定**:
+   - 対象ノードがConfigurableAgent（AIエージェント）でない場合は何もせず終了
+   - Executorノードはトークンを使用しないためスキップ
+
+3. **レスポンス情報取得**:
+   - エージェント実行結果からLLMレスポンス情報を取得
+   - レスポンスにトークン情報が含まれているか確認
+
+4. **トークン情報抽出**:
+   - prompt_tokens: 入力プロンプトのトークン数
+   - completion_tokens: LLM生成出力のトークン数
+   - total_tokens: 合計トークン数（prompt + completion）
+   - model: 使用したモデル名（例: "gpt-4o"）
+
+5. **データベース記録**:
+   - ContextStorageManagerを使用して`token_usage`テーブルに記録
+   - 記録フィールド:
+     - user_id: ワークフローコンテキストから取得
+     - task_uuid: ワークフローコンテキストから取得
+     - node_id: 実行ノードID
+     - model: 使用モデル名
+     - prompt_tokens、completion_tokens、total_tokens
+     - created_at: 記録日時
+
+6. **メトリクス送信**:
+   - OpenTelemetry経由でメトリクスを送信
+   - メトリクス名: `token_usage_total`
+   - ラベル: model、node_id、user_id
+   - 値: total_tokens
+
+7. **コスト計算（オプション）**:
+   - モデル別の料金表に基づいてコストを計算
+   - コスト情報もデータベースに記録
+
+**並行実行時の動作**:
+- 複数タスクが同時に実行される場合でも、各タスクのuser_idとtask_uuidで区別
+- データベース書き込みはトランザクション管理で競合回避
+- メトリクス送信は非同期で実行し、ワークフロー実行をブロックしない
+
+#### 8.9.6 ErrorHandlingMiddleware実装
+
+**責務**: すべてのノード実行時のエラーを統一的にハンドリングし、エラー分類、リトライ判定、ユーザー通知を実行
+
+**初期化処理**:
+- ContextStorageManagerへの参照を保持（エラー情報をデータベースに記録）
+- GitLabClientへの参照を保持（エラー通知コメントを投稿）
+- MetricsCollectorへの参照を保持（エラーメトリクスを送信）
+- リトライポリシー設定を保持（最大リトライ回数、基本遅延時間）
+
+**intercept メソッドの処理フロー**:
+
+1. **フェーズ判定**:
+   - `phase`が"on_error"でない場合は何もせず終了（nullを返す）
+   - エラー処理は例外発生時のみ実行
+
+2. **エラー情報取得**:
+   - 発生した例外オブジェクトを取得
+   - スタックトレース、エラーメッセージ、発生ノードIDを取得
+
+3. **エラー分類**:
+   - 例外の種類とエラーメッセージからエラーカテゴリを判定
+   - **transient（一時的障害）**:
+     - ネットワークタイムアウト
+     - APIレート制限超過
+     - サービス一時的不可（503エラー）
+     - 接続タイムアウト
+   - **configuration（設定エラー）**:
+     - 環境変数の欠落
+     - 無効な認証情報（401 Unauthorized）
+     - 誤った設定値
+     - 権限不足（403 Forbidden）
+   - **implementation（実装バグ）**:
+     - 未処理の例外
+     - 予期しないデータ型
+     - Null参照エラー
+     - インデックス範囲外
+   - **resource（リソース不足）**:
+     - ディスク空間不足
+     - メモリ不足
+     - APIクォータ超過
+     - ファイルディスクリプタ枯渇
+
+4. **リトライ判定**:
+   - エラーカテゴリが`transient`の場合、リトライ可能と判定
+   - 現在のリトライ回数を確認（最大3回）
+   - その他のカテゴリはリトライ不可
+
+5. **リトライ実行（transientエラーの場合）**:
+   - 指数バックオフ戦略を適用:
+     - 1回目: 5秒待機
+     - 2回目: 10秒待機（5秒 × 2）
+     - 3回目: 20秒待機（5秒 × 4）
+   - 待機後、同じノードを再実行
+   - リトライ回数をワークフローコンテキストに記録
+
+6. **エラー記録**:
+   - ContextStorageManagerを使用してエラー情報をデータベースに記録
+   - 記録フィールド:
+     - task_uuid
+     - node_id
+     - error_category
+     - error_message
+     - stack_trace
+     - retry_count
+     - created_at
+
+7. **ユーザー通知**:
+   - リトライ不可のエラー、またはリトライ上限到達の場合
+   - GitLabClientを使用してエラー通知コメントをIssue/MRに投稿
+   - コメント内容:
+     - エラー種別
+     - 発生日時
+     - エラー詳細メッセージ
+     - スタックトレース（一部）
+     - 推奨アクション（カテゴリに応じて）
+
+8. **メトリクス送信**:
+   - OpenTelemetry経由でエラーメトリクスを送信
+   - メトリクス名: `workflow_errors_total`
+   - ラベル: error_category、node_id、retry_attempted
+   - 値: エラー発生回数
+
+9. **タスク状態更新**:
+   - リトライ不可のエラーの場合、タスク状態を"failed"に更新
+   - ワークフロー実行を中断するMiddlewareSignalを返す（action: "abort"）
+
+**エラーカテゴリ別の推奨アクション**:
+- **transient**: 自動リトライ実行、リトライ失敗時はユーザーに手動再実行を促す
+- **configuration**: 設定の確認と修正をユーザーに依頼、修正後に再実行
+- **implementation**: 開発チームにバグ報告、システム管理者へ通知
+- **resource**: 運用チームにリソース増強を依頼、一時的な負荷軽減策を実施
+
+#### 8.9.7 Middlewareの登録と実行
+
+**WorkflowFactory（ワークフローファクトリ）の役割**:
 
 **責務**: Middlewareの登録管理とノード実行時の自動介入
 
 **初期化処理**:
 - Middlewareリスト（空配列）を初期化
 
-**Middleware登録メソッド**:
+**Middleware登録処理**:
 - 引数として受け取ったMiddlewareインスタンスをリストに追加
 - 登録順序が実行順序となる
 
@@ -3139,9 +3261,46 @@ Middlewareは以下の3つのフェーズで実行されます：
 
 1. WorkflowFactoryインスタンスを生成
 2. GitLabClientインスタンスを生成
-3. CommentCheckMiddlewareインスタンスを生成（GitLabClientを引数に渡す）
-4. WorkflowFactoryに対してCommentCheckMiddlewareを登録
-5. WorkflowFactoryインスタンスを返す
+3. ContextStorageManagerインスタンスを生成
+4. MetricsCollectorインスタンスを生成
+5. 3つのMiddlewareインスタンスを生成:
+   - CommentCheckMiddleware（GitLabClientを引数に渡す）
+   - TokenUsageMiddleware（ContextStorageManager、MetricsCollectorを引数に渡す）
+   - ErrorHandlingMiddleware（ContextStorageManager、GitLabClient、MetricsCollectorを引数に渡す）
+6. WorkflowFactoryに対して3つのMiddlewareを順番に登録
+7. WorkflowFactoryインスタンスを返す
+
+**Middleware実行順序の重要性**:
+- CommentCheckMiddlewareは最初に実行（before_executionで早期リダイレクト可能）
+- TokenUsageMiddlewareは2番目（after_executionで記録）
+- ErrorHandlingMiddlewareは最後に実行（on_errorで統一的にハンドリング）
+
+#### 8.9.8 グラフ定義での適用指定
+
+**CommentCheckMiddleware有効化**:
+
+ノードmetadataで`check_comments_before: true`を指定:
+
+| ノードタイプ | 適用推奨 | 理由 |
+|------------|----------|------|
+| Planning系ノード | ✅ 推奨 | 計画作成前にコメントチェック |
+| Plan Reflection | ✅ 推奨 | 検証前にコメントチェック |
+| Execution系ノード | ⚠️ 任意 | 長時間実行の場合に推奨 |
+| Review系ノード | ❌ 不要 | 最終フェーズのため |
+
+**TokenUsageMiddlewareとErrorHandlingMiddleware**:
+
+これらはすべてのノードに自動適用されるため、グラフ定義での個別指定は不要。WorkflowFactoryへの登録のみで全ワークフローに適用される。
+
+#### 8.9.9 Middleware機構の利点
+
+1. **グラフがシンプル**: ビジネスロジックに集中、横断的関心事は分離
+2. **一元管理**: 共通処理が1箇所に集約され保守性が高い
+3. **宣言的設定**: metadataで有効化するだけで機能追加
+4. **テスト容易**: Middleware単体でテスト可能
+5. **拡張性**: 新しいMiddleware（タイムアウト監視、監査ログなど）を追加しやすい
+6. **非侵入的**: 既存ノードロジックを変更せずに機能追加
+7. **デバッグ容易**: Middlewareのログで実行フローを追跡可能
 
 ## 9. Tool管理設計 (MCP)
 
