@@ -18,6 +18,7 @@ Agent FrameworkのChatCompletionAgentを継承する。
 
 - **config: AgentNodeConfig** - エージェント定義から取得した設定
   - node_id: ノードID
+  - agent_definition_id: エージェント定義ID
   - role: ロール（planning/reflection/execution/review）
   - input_keys: 入力キー一覧
   - output_keys: 出力キー一覧
@@ -26,6 +27,7 @@ Agent FrameworkのChatCompletionAgentを継承する。
   - prompt_id: プロンプト定義ID
 - **agent: ChatCompletionAgent** - Agent FrameworkのChatCompletionAgentインスタンス
 - **kernel: Kernel** - Agent FrameworkのKernelインスタンス（ツール管理）
+- **progress_reporter: ProgressReporter** - 進捗報告インスタンス
 - **environment_id: str** - Docker環境ID（requires_environment=trueの場合）
 - **prompt_content: str** - プロンプト定義から取得したシステムプロンプト
 
@@ -35,44 +37,59 @@ Agent FrameworkのChatCompletionAgentを継承する。
 
 **処理フロー**:
 
-1. **入力データ取得**
+1. **タスクMR/Issue IID取得**
+   - context.read_state_async("task_mr_iid", scope_name='workflow')でMR IIDを取得
+   - 存在しない場合は"task_issue_iid"を取得
+   - task_iid変数に保存
+
+2. **入力データ取得**
    - config.input_keysをループ
    - 各キーについてcontext.read_state_async(key, scope_name='workflow')を呼び出し
    - 取得した値をinput_data辞書に格納
 
-2. **プロンプト生成**
+3. **進捗報告（開始）**
+   - progress_reporter.report_progress(task_iid, config.role + "_start", "処理を開始します", {"node_id": config.node_id})を呼び出し
+
+4. **プロンプト生成**
    - prompt_contentをベースにプロンプトを構築
    - input_dataの各キーをプレースホルダーとして置換
    - 例: `{task_description}`を`input_data['task_description']`で置換
 
-3. **Agent FrameworkのChatCompletionAgent呼び出し**
+5. **Agent FrameworkのChatCompletionAgent呼び出し**
    - agent.invoke_async(kernel=kernel, messages=[user_message])を呼び出し
    - user_messageは生成したプロンプト
    - ChatHistory内の過去の会話履歴が自動的にロードされる（PostgreSqlChatHistoryProvider経由）
 
-4. **LLM応答取得**
+6. **LLM応答取得**
    - Agent FrameworkからChatMessageContentを取得
    - メッセージ内容をテキストまたはJSON形式でパース
 
-5. **ツール呼び出し処理**
+7. **進捗報告（LLM応答）**
+   - response_summary = 応答内容の要約（最初の200文字程度）
+   - progress_reporter.report_progress(task_iid, config.role + "_llm_response", "LLM応答を取得しました", {"summary": response_summary})を呼び出し
+
+8. **ツール呼び出し処理**
    - LLMがfunction_callを返した場合:
      - Kernelから該当ツールを取得
      - ツールを実行（MCPツールの場合はMCPClientを経由）
      - ツール実行結果をLLMに返してフィードバックループ
      - 最終応答を取得
 
-6. **ロール別の後処理**
-   - **planning**: Todoリスト作成、GitLabへの進捗コメント投稿
-   - **reflection**: 改善判定、GitLabへのリフレクション結果投稿
+9. **ロール別の後処理**
+   - **planning**: Todoリスト作成
+   - **reflection**: 改善判定
    - **execution**: ファイル操作結果の確認、git操作の実行
-   - **review**: レビューコメント生成、GitLabへの投稿
+   - **review**: レビューコメント生成
 
-7. **出力データ保存**
+10. **進捗報告（完了）**
+   - progress_reporter.report_progress(task_iid, config.role + "_complete", "処理が完了しました", output_data)を呼び出し
+
+11. **出力データ保存**
    - config.output_keysをループ
    - 各キーについてcontext.queue_state_update_async(key, value, scope_name='workflow')を呼び出し
    - LLM応答から抽出した値を保存
 
-8. **NodeResult返却**
+12. **NodeResult返却**
    - status='success'
    - result=output_data
    - execution_time=実行時間
@@ -176,7 +193,7 @@ AgentFactoryはConfigurableAgentインスタンスを生成する。
 
 #### 2.3.3 主要メソッド
 
-##### create_agent(agent_config: AgentNodeConfig, prompt_config: PromptConfig, user_email: str) → ConfigurableAgent
+##### create_agent(agent_config: AgentNodeConfig, prompt_config: PromptConfig, user_email: str, progress_reporter: ProgressReporter) → ConfigurableAgent
 
 **処理フロー**:
 
@@ -207,7 +224,7 @@ AgentFactoryはConfigurableAgentインスタンスを生成する。
    - AIAgentインスタンスを取得
 
 5. **ConfigurableAgentインスタンス生成**
-   - agent_config、ChatCompletionAgent、Kernel、prompt_config.contentを渡す
+   - agent_config、ChatCompletionAgent、Kernel、prompt_config.content、progress_reporterを渡す
    - requires_environment=trueの場合、environment_idを設定（後で割り当て）
 
 6. **ConfigurableAgent返却**
