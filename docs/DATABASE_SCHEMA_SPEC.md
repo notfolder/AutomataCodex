@@ -82,7 +82,7 @@ erDiagram
     
     user_workflow_settings {
         TEXT user_email PK,FK
-        INTEGER workflow_definition_id PK,FK
+        INTEGER workflow_definition_id FK
         TEXT custom_settings
         TIMESTAMP created_at
         TIMESTAMP updated_at
@@ -166,8 +166,8 @@ erDiagram
         INTEGER start_seq
         INTEGER end_seq
         TEXT summary
-        INTEGER original_tokens
-        INTEGER summary_tokens
+        INTEGER original_token_count
+        INTEGER compressed_token_count
         REAL compression_ratio
         TIMESTAMP created_at
     }
@@ -332,7 +332,7 @@ erDiagram
 
 ---
 
-### 2.4 user_workflow_settingsテーブル
+### 2.3 user_workflow_settingsテーブル
 
 ユーザーが選択中のワークフロー定義を管理する。
 
@@ -342,6 +342,7 @@ erDiagram
 |---------|-----|------|------|
 | user_email | TEXT | PRIMARY KEY | ユーザーメールアドレス（外部キー） |
 | workflow_definition_id | INTEGER | NOT NULL | 選択中のワークフロー定義ID（外部キー） |
+| custom_settings | TEXT | | ユーザー固有の追加設定（JSON文字列） |
 | created_at | TIMESTAMP | NOT NULL DEFAULT CURRENT_TIMESTAMP | 設定作成日時 |
 | updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 最終更新日時 |
 
@@ -400,10 +401,10 @@ erDiagram
 {
   "version": "1.0.0",
   "name": "standard_mr_processing",
-  "entry_node": "user_resolver",
+  "entry_node": "user_resolve",
   "nodes": [
     {
-      "id": "user_resolver",
+      "id": "user_resolve",
       "type": "executor",
       "executor_type": "UserResolverExecutor",
       "metadata": {}
@@ -417,7 +418,7 @@ erDiagram
   ],
   "edges": [
     {
-      "from": "user_resolver",
+      "from": "user_resolve",
       "to": "task_classifier",
       "condition": null
     }
@@ -436,7 +437,7 @@ erDiagram
       "input_keys": ["mr_description", "mr_comments"],
       "output_keys": ["task_type", "task_category"],
       "tools": [],
-      "requires_environment": false,
+      "environment_mode": "none",
       "prompt_id": "task_classifier_prompt"
     }
   ]
@@ -849,8 +850,9 @@ LLM会話履歴を時系列順に保存する。PostgreSqlChatHistoryProviderが
 
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
-| id | SERIAL | PRIMARY KEY | TodoID |
+| id | SERIAL | PRIMARY KEY | TodoID（内部ID） |
 | task_uuid | TEXT | NOT NULL | タスクUUID（外部キー） |
+| todo_id | INTEGER | | GitLab TodoID（外部システムとの対応） |
 | parent_todo_id | INTEGER | | 親TodoID（外部キー、階層構造用） |
 | title | TEXT | NOT NULL | Todoタイトル |
 | description | TEXT | | Todo詳細説明 |
@@ -962,12 +964,15 @@ LLM会話履歴を時系列順に保存する。PostgreSqlChatHistoryProviderが
 3. workflow_definitionsテーブル
 4. user_workflow_settingsテーブル
 5. tasksテーブル
-7. context_messagesテーブル
-8. context_planning_historyテーブル
-9. context_metadataテーブル
-10. context_tool_results_metadataテーブル
-11. todosテーブル
-12. token_usageテーブル
+6. workflow_execution_statesテーブル
+7. docker_environment_mappingsテーブル
+8. context_messagesテーブル
+9. message_compressionsテーブル
+10. context_planning_historyテーブル
+11. context_metadataテーブル
+12. context_tool_results_metadataテーブル
+13. todosテーブル
+14. token_usageテーブル
 
 **システムプリセットの初期データ**:
 - workflow_definitionsテーブルに以下の2プリセットを登録:

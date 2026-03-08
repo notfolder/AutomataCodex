@@ -50,13 +50,13 @@
 | test_creation_planning | テスト作成タスクの実行計画生成 | task_context, classification_result | plan_result, todo_list |
 | documentation_planning | ドキュメント生成タスクの実行計画生成 | task_context, classification_result | plan_result, todo_list |
 | plan_reflection | プラン検証・改善 | plan_result, todo_list, task_context | reflection_result |
-| code_generation | コード生成実装 | plan_result, task_context | execution_result |
-| bug_fix | バグ修正実装 | plan_result, task_context | execution_result |
-| documentation | ドキュメント作成 | plan_result, task_context | execution_result |
-| test_creation | テスト作成 | plan_result, task_context | execution_result |
-| test_execution_evaluation | テスト実行・評価 | execution_result, task_context | review_result |
-| code_review | コードレビュー実施 | execution_result, task_context | review_result |
-| documentation_review | ドキュメントレビュー実施 | execution_result, task_context | review_result |
+| code_generation | コード生成実装 | plan_result, task_context | execution_environments, execution_results |
+| bug_fix | バグ修正実装 | plan_result, task_context | execution_environments, execution_results |
+| documentation | ドキュメント作成 | plan_result, task_context | execution_environments, execution_results |
+| test_creation | テスト作成 | plan_result, task_context | execution_environments, execution_results |
+| test_execution_evaluation | テスト実行・評価 | execution_environments, execution_results, task_context | review_result |
+| code_review | コードレビュー実施 | execution_environments, execution_results, task_context | review_result |
+| documentation_review | ドキュメントレビュー実施 | execution_environments, execution_results, task_context | review_result |
 
 ### 2.1 共通実装ルール
 
@@ -82,16 +82,16 @@
 - 各ノードは同一の`ConfigurableAgent`クラスで実装し、エージェント定義ファイルの設定によって動作を制御する
 - `IWorkflowContext`でステップ間のデータ（プラン、実行結果等）を共有する
 - Agent FrameworkのGraph-based Workflows機能を使用して分岐とループを実現する
-- グラフ定義ファイルで`requires_environment: true`が設定されたノードに対しては、ワークフロー開始前にDocker実行環境を準備する
+- グラフ定義ファイルで`environment_mode: "create"`が設定されたノードに対しては、ワークフロー開始前にDocker実行環境を準備する
 
 **注**: Issue→MR変換後、作成されたMRは次回のワークフロー実行時に以下のフローで処理される。グラフ内の各ノード（Code Generation Planning Agent等）はすべて`ConfigurableAgent`の同一クラスであり、グラフ定義ファイル・エージェント定義ファイル・プロンプト定義ファイルによって動作が決まる。
 
 ```mermaid
 flowchart TD
     Start([タスク開始]) --> LoadDef[定義ファイル読み込み<br/>DefinitionLoader]
-    LoadDef --> SetupEnv[実行環境セットアップ<br/>requires_environment=trueのノード分]
+    LoadDef --> SetupEnv[実行環境セットアップ<br/>environment_mode=createのノード分]
     SetupEnv --> Fetch[MR情報取得<br/>Consumer]
-    Fetch --> UserResolve[ユーザー情報取得<br/>User Resolver Agent]
+    Fetch --> UserResolve[ユーザー情報取得<br/>User Resolver Executor]
     UserResolve --> PrePlanning[計画前情報収集<br/>+ タスク分類<br/>Task Classifier Agent]
     
     PrePlanning --> TaskType{タスク種別判定}
@@ -131,7 +131,8 @@ flowchart TD
     TestGen --> CodeReview
     DocGen --> DocReview[ConfigurableAgent<br/>documentation_review]
     
-    CodeReview --> Reflection[ConfigurableAgent<br/>plan_reflection]
+    CodeReview --> TestExec[ConfigurableAgent<br/>test_execution_evaluation]
+    TestExec --> Reflection[ConfigurableAgent<br/>plan_reflection]
     DocReview --> Reflection
     
     Reflection --> ReplanCheck{再計画必要?}
@@ -149,14 +150,14 @@ flowchart TD
 | フェーズ | エージェント定義ID | 目的 |
 |---------|---------------|------|
 | 定義読み込み | DefinitionLoader | グラフ/エージェント/プロンプト定義をロード |
-| 環境セットアップ | EnvironmentSetupExecutor | requires_environment=trueノード分の環境を準備 |
+| 環境セットアップ | EnvironmentSetupExecutor | environment_mode=createのノード分の環境を準備 |
 | Issue/MR取得 | Consumer | RabbitMQからタスクデキュー |
 | ユーザー情報取得 | User Resolver Agent | OpenAI APIキー・LLM設定取得 |
 | 計画前情報収集 | task_classifier | タスク種別判定（4種類） |
 | 計画 | code_generation_planning / bug_fix_planning / test_creation_planning / documentation_planning | タスク種別別実行プラン生成 |
 | 実行 | code_generation / bug_fix / documentation / test_creation | タスク実装 |
 | レビュー | code_review / documentation_review | 品質確認 |
-| テスト実行・評価 | test_execution_evaluation | テスト実行・結果評価（コード生成/バグ修正のみ） |
+| テスト実行・評価 | test_execution_evaluation | テスト実行・結果評価（コード生成/バグ修正/テスト作成） |
 | リフレクション | plan_reflection | 結果評価・再計画判断 |
 
 ### 3.2 重要なフロー特性
@@ -166,7 +167,7 @@ flowchart TD
 3. **仕様ファイル必須（コード生成系）**: コード生成、バグ修正、テスト作成で仕様ファイルがなければドキュメント生成計画を立案し、仕様書作成後にタスク完了
 4. **自動レビュー**: 実行後に必ずレビューエージェントが品質確認（ユーザー承認不要）
 5. **再計画ループ**: レビューで重大な問題があれば計画フェーズに戻る
-6. **複数環境サポート**: グラフ定義で`requires_environment: true`のノードに対してDocker環境を事前準備
+6. **複数環境サポート**: グラフ定義で`environment_mode: "create"`のノードに対してDocker環境を事前準備
 
 ---
 
@@ -309,17 +310,17 @@ flowchart TD
    - 完全性
    - コードとの整合性
 4. **レビュー結果の判定**
-   - **問題なし**: テスト実行・評価フェーズへ（コード生成・バグ修正の場合）またはリフレクションへ（ドキュメント生成・テスト作成の場合）
+   - **問題なし**: テスト実行・評価フェーズへ（コード生成・バグ修正・テスト作成の場合）またはリフレクションへ（ドキュメント生成の場合）
    - **軽微な問題**: リフレクションで修正アクション生成
    - **重大な問題**: リフレクションで再計画判断
 
-### 4.5 テスト実行・評価フェーズ（コード生成・バグ修正のみ）
+### 4.5 テスト実行・評価フェーズ（コード生成・バグ修正・テスト作成）
 
 **目的**: 実装したコードの動作を検証し、テスト結果を評価する
 
 **使用エージェント**: Test Execution & Evaluation Agent
 
-**適用タスク**: コード生成、バグ修正（ドキュメント生成、テスト作成では実行しない）
+**適用タスク**: コード生成、バグ修正、テスト作成（ドキュメント生成では実行しない）
 
 **実行内容**:
 1. **テスト環境のセットアップ**
@@ -667,7 +668,8 @@ flowchart TD
     Todo --> TestCreate[ConfigurableAgent<br/>test_creation<br/>テスト作成]
     TestCreate --> CodeReview[ConfigurableAgent<br/>code_review<br/>コードレビュー]
     
-    CodeReview --> Reflection[ConfigurableAgent<br/>plan_reflection]
+    CodeReview --> TestExec[ConfigurableAgent<br/>test_execution_evaluation<br/>テスト実行・評価]
+    TestExec --> Reflection[ConfigurableAgent<br/>plan_reflection]
     Reflection --> ReplanCheck{再計画必要?}
     ReplanCheck -->|Yes 重大な問題| Planning
     ReplanCheck -->|No 軽微な修正| Complete{完了?}

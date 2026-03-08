@@ -277,6 +277,24 @@
     },
     {
       "from": "replan_branch",
+      "to": "bug_fix",
+      "condition": "context.reflection_result.action == 'proceed' && context.reflection_result.status == 'needs_revision' && context.classification_result.task_type == 'bug_fix'",
+      "label": "軽微修正（バグ修正）"
+    },
+    {
+      "from": "replan_branch",
+      "to": "test_creation",
+      "condition": "context.reflection_result.action == 'proceed' && context.reflection_result.status == 'needs_revision' && context.classification_result.task_type == 'test_creation'",
+      "label": "軽微修正（テスト作成）"
+    },
+    {
+      "from": "replan_branch",
+      "to": "documentation",
+      "condition": "context.reflection_result.action == 'proceed' && context.reflection_result.status == 'needs_revision' && context.classification_result.task_type == 'documentation'",
+      "label": "軽微修正（ドキュメント）"
+    },
+    {
+      "from": "replan_branch",
       "to": null,
       "condition": "context.reflection_result.action == 'proceed' && context.reflection_result.status == 'success'",
       "label": "完了"
@@ -371,13 +389,13 @@
 
 **注意**: 上記は簡略版です。実際のグラフではブランチマージ用のExecutorノードやテスト実行ノードが追加されます。
 
-### 4.2 並列コード生成MR処理グラフ（multi_codegen_mr_processing）
+#### 4.2.1 multi_codegen_mr_processingの詳細説明
 
 複数の異なるLLM設定で並列にコード生成を行い、レビューエージェントが最良のものを自動選択するプリセット。
 
 **特徴**:
 - 3つの並列コード生成ノード: `code_generation_fast`（高速モデル）、`code_generation_standard`（標準モデル）、`code_generation_creative`（高温度設定モデル）
-- 各並列ノードは独立したDocker環境と専用ブランチで実行（`requires_environment: true`）
+- 各並列ノードは独立したDocker環境と専用ブランチで実行（`environment_mode: "create"`）
 - 各エージェントは専用ブランチ（例: `feature/login-fast`, `feature/login-standard`, `feature/login-creative`）で作業
 - 並列実行後、`code_review`エージェントが3つの実装を比較レビューし、最良のものを自動選択
 - 選択されたブランチを元のMRブランチにマージ、他のブランチはGitLab上に保持
@@ -633,7 +651,7 @@
 
 **並列実行ノードの実装ポイント**:
 
-1. **Docker環境の独立性**: 各並列ノード（`code_generation_fast`, `code_generation_standard`, `code_generation_creative`）は`requires_environment: true`であり、`ExecutionEnvironmentManager`が各ノード用に独立したDockerコンテナを起動する。これにより、3つの実装が互いに干渉せずに並行して実行される。
+1. **Docker環境の独立性**: 各並列ノード（`code_generation_fast`, `code_generation_standard`, `code_generation_creative`）は`environment_mode: "create"`であり、`ExecutionEnvironmentManager`が各ノード用に独立したDockerコンテナを起動する。これにより、3つの実装が互いに干渉せずに並行して実行される。
 
 2. **辞書型コンテキストキー**: 全ての実行エージェント（単一・並列問わず）は`output_keys`を`["execution_environments", "execution_results"]`とする。各エージェントは自身のエージェント定義IDをキーとして辞書に書き込むことで、単一エージェントでは1要素の辞書、並列エージェントでは複数要素の辞書としてワークフローコンテキストに共存できる。この統一設計により、エージェント定義が統一され、並列エージェントの数や名称に依存しない柔軟な設計が実現される。
 
@@ -641,7 +659,7 @@
 
 4. **選択された環境の引き継ぎ**: `selected_implementation`には環境IDが含まれ、後続ノード（`test_execution_evaluation`）はこの環境IDを使用して選択された実装と同じDocker環境でテストを実行する。
 
-5. **環境数の集計**: `DefinitionLoader.validate_graph_definition()`は`requires_environment: true`のノード数を数えて返す。このグラフでは3つの並列ノードがあるため、`WorkflowFactory._setup_environments()`は3つのDockerコンテナを事前に起動する。
+5. **環境数の集計**: `DefinitionLoader.validate_graph_definition()`は`environment_mode: "create"`のノード数を数えて返す。このグラフでは3つの並列ノードがあるため、`WorkflowFactory._setup_environments()`は3つのDockerコンテナを事前に起動する。
 
 ---
 
@@ -655,7 +673,7 @@
 | entryノードの存在 | `entry_node`に指定されたIDがnodesに存在するか |
 | エッジの参照整合性 | `edges`の`from`に指定されたIDがすべてnodesに存在するか。`to`はnull（ワークフロー終了）またはnodesに存在するIDであるか |
 | condition構文 | condition式に含まれるコンテキストキーが`agent_definition`内の`output_keys`に含まれるか |
-| requires_environment集計 | `requires_environment: true`のノード数を集計し、`WorkflowFactory._setup_environments()`で事前準備するDocker環境数の根拠として返す |
+| environment_mode集計 | `environment_mode: "create"`のノード数を集計し、`WorkflowFactory._setup_environments()`で事前準備するDocker環境数の根拠として返す |
 
 ## 6. 定義の取得・更新フロー
 

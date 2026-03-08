@@ -4189,7 +4189,7 @@ ConfigManager内で環境変数をYAML設定キーにマッピングする。
 
 | ファイルパス | 理由 |
 |------------|------|
-| **`queueing.py`** (`RabbitMQTaskQueue`, `InMemoryTaskQueue`) | RabbitMQは使用しない。タスク管理はPostgreSQLとAgent Framework Workflowsで代替 |
+| **`queueing.py`** (`RabbitMQTaskQueue`, `InMemoryTaskQueue`) | RabbitMQはProducer/Consumer間のタスクキューとして引き続き使用する（セクション1.2・2.1参照）。本クラスはAgent Framework WorkflowsのコンテキストでRabbitMQ接続管理として移植する |
 | **`main.py`** (Producer/Consumer管理部分) | Agent Framework Workflowsで代替。定期実行はcron/webhookで制御 |
 | **`pause_resume_manager.py`** | PostgreSQL + Agent Framework Workflowsの状態管理で代替 |
 
@@ -4215,7 +4215,7 @@ ConfigManager内で環境変数をYAML設定キーにマッピングする。
 |------|------|---------|
 | ユーザー管理 | メールアドレスベースの設定管理 | マルチユーザー対応 |
 | APIキー管理 | ユーザー毎のOpenAI APIキー | コスト分離 |
-| Web管理画面 | Streamlitベースの設定UI | 設定変更が容易 |
+| Web管理画面 | Vue.js 3 + FastAPI バックエンドによる設定UI | 設定変更が容易 |
 | トークン追跡 | ユーザー別トークン使用量 | コスト可視化 |
 | コンテキスト継承 | 過去タスクの知識活用 | 処理精度向上 |
 | ファイル出力 | ツール実行結果の外部保存 | デバッグ、監査容易 |
