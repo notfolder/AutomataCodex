@@ -9,7 +9,7 @@
 データベース名: `coding_agent`
 
 **主要テーブルグループ**:
-- ユーザー管理テーブル群（users, user_configs, agent_prompt_overrides, user_workflow_settings）
+- ユーザー管理テーブル群（users, user_configs, user_workflow_settings）
 - ワークフロー定義テーブル群（workflow_definitions）
 - タスク管理テーブル群（tasks）
 - ワークフロー実行管理テーブル群（workflow_execution_states, docker_environment_mappings）
@@ -80,37 +80,8 @@
 - base_urlはollama/lmstudioの場合のみ必須、openaiiの場合はNULL許容
 - temperatureは0.0〜2.0の範囲、max_tokensは1〜32000の範囲
 
----
-
-### 2.3 agent_prompt_overridesテーブル
-
-ユーザーごとのエージェント別プロンプト上書き設定を管理する。
-
-**テーブル名**: `agent_prompt_overrides`
-
-| カラム名 | 型 | 制約 | 説明 |
-|---------|-----|------|------|
-| id | SERIAL | PRIMARY KEY | 上書き設定ID |
-| user_email | TEXT | NOT NULL | ユーザーメールアドレス（外部キー） |
-| agent_name | TEXT | NOT NULL | エージェント名（例: task_classifier, code_generation_planning） |
-| prompt_override | TEXT | NOT NULL | 上書きプロンプト内容 |
-| created_at | TIMESTAMP | NOT NULL DEFAULT CURRENT_TIMESTAMP | 作成日時 |
-| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 最終更新日時 |
-
-**ユニーク制約**:
-- `UNIQUE (user_email, agent_name)` - 1ユーザー・1エージェントにつき1つの上書き設定
-
-**外部キー制約**:
-- `FOREIGN KEY (user_email) REFERENCES users(email) ON DELETE CASCADE`
-
-**インデックス**:
-- `PRIMARY KEY (id)`
-- `idx_agent_prompt_overrides_user_agent` ON (user_email, agent_name) - 上書き設定検索用
-
-**備考**:
-- agent_nameはワークフロー定義のノードIDと対応する
-- prompt_overrideが空文字列の場合、デフォルトプロンプトを使用する
-- システムプロンプトの一部または全部を上書き可能
+**プロンプトカスタマイズについて**:
+ユーザーがプロンプトをカスタマイズしたい場合は、システムプリセット（standard_mr_processing等）をベースにユーザー独自のワークフロー定義を作成し、その`prompt_definition`（JSONB）内のプロンプトテキストを変更する。エージェント別の個別上書きテーブルは不要。
 
 ---
 
@@ -677,8 +648,7 @@ LLM会話履歴を時系列順に保存する。PostgreSqlChatHistoryProviderが
 2. user_configsテーブル
 3. workflow_definitionsテーブル
 4. user_workflow_settingsテーブル
-5. agent_prompt_overridesテーブル
-6. tasksテーブル
+5. tasksテーブル
 7. context_messagesテーブル
 8. context_planning_historyテーブル
 9. context_metadataテーブル
