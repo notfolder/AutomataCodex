@@ -31,6 +31,8 @@
 |---------|-----|------|------|
 | email | TEXT | PRIMARY KEY | ユーザーのメールアドレス（一意識別子） |
 | username | TEXT | NOT NULL | ユーザー表示名 |
+| password_hash | TEXT | NOT NULL | パスワードハッシュ（bcrypt） |
+| role | TEXT | NOT NULL DEFAULT 'user' | ユーザーロール（admin/user） |
 | is_active | BOOLEAN | NOT NULL DEFAULT true | アカウント有効状態 |
 | created_at | TIMESTAMP | NOT NULL DEFAULT CURRENT_TIMESTAMP | アカウント作成日時 |
 | updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 最終更新日時 |
@@ -38,10 +40,14 @@
 **インデックス**:
 - `PRIMARY KEY (email)` - メールアドレスでの高速検索
 - `idx_users_is_active` ON (is_active) - 有効ユーザーフィルタリング用
+- `idx_users_role` ON (role) - ロール別検索用
 
 **備考**:
 - メールアドレスは大文字小文字を区別せず、すべて小文字に正規化して保存する
 - is_activeがfalseの場合、システムへのアクセスを拒否する
+- password_hashはbcryptでハッシュ化（コストファクタ12）
+- roleの有効値: 'admin'（管理者）、'user'（一般ユーザー）
+- 管理者（admin）はWeb管理画面にアクセス可能、一般ユーザー（user）は自分の設定のみ変更可能
 
 ---
 
