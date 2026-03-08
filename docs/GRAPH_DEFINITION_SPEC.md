@@ -41,13 +41,18 @@
 | `type` | 文字列 | 必須 | ノードの種別（"agent" / "executor" / "condition"） |
 | `agent_definition_id` | 文字列 | agent時必須 | エージェント定義ファイル内のエージェントID |
 | `executor_class` | 文字列 | executor時必須 | 使用するExecutorクラス名（"UserResolverExecutor"等） |
-| `requires_environment` | 真偽値 | 任意 | 実行環境（Docker）が必要か（デフォルト: false） |
+| `environment_mode` | 文字列 | 任意 | 実行環境（Docker）の使用方法（"create": 新規作成、"inherit": 引き継ぎ、"none": 不要、デフォルト: "none"） |
 | `label` | 文字列 | 任意 | 表示用ラベル |
 
 **typeの種別**:
 - `agent`: `ConfigurableAgent`として実行されるノード
 - `executor`: `BaseExecutor`のサブクラスとして実行される前処理ノード（UserResolverExecutor等）
 - `condition`: 分岐条件を評価するノード
+
+**environment_modeの説明**:
+- `"create"`: 新規Docker環境を作成し、`execution_environments`辞書に環境IDを書き込む（実行エージェント）
+- `"inherit"`: `execution_environments`辞書から既存の環境IDを読み取って使用する（レビューエージェント、評価エージェント）
+- `"none"`: Docker環境を使用しない（計画エージェント、リフレクションエージェント）
 
 ### 3.3 エッジ定義（edges）
 
@@ -85,14 +90,14 @@
       "id": "user_resolve",
       "type": "executor",
       "executor_class": "UserResolverExecutor",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "ユーザー情報取得"
     },
     {
       "id": "task_classifier",
       "type": "agent",
       "agent_definition_id": "task_classifier",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "タスク分類"
     },
     {
@@ -104,28 +109,28 @@
       "id": "code_generation_planning",
       "type": "agent",
       "agent_definition_id": "code_generation_planning",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "コード生成計画"
     },
     {
       "id": "bug_fix_planning",
       "type": "agent",
       "agent_definition_id": "bug_fix_planning",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "バグ修正計画"
     },
     {
       "id": "test_creation_planning",
       "type": "agent",
       "agent_definition_id": "test_creation_planning",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "テスト作成計画"
     },
     {
       "id": "documentation_planning",
       "type": "agent",
       "agent_definition_id": "documentation_planning",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "ドキュメント生成計画"
     },
     {
@@ -137,56 +142,56 @@
       "id": "code_generation",
       "type": "agent",
       "agent_definition_id": "code_generation",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "コード生成"
     },
     {
       "id": "bug_fix",
       "type": "agent",
       "agent_definition_id": "bug_fix",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "バグ修正"
     },
     {
       "id": "test_creation",
       "type": "agent",
       "agent_definition_id": "test_creation",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "テスト作成"
     },
     {
       "id": "documentation",
       "type": "agent",
       "agent_definition_id": "documentation",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "ドキュメント作成"
     },
     {
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "requires_environment": false,
+      "environment_mode": "inherit",
       "label": "コードレビュー"
     },
     {
       "id": "documentation_review",
       "type": "agent",
       "agent_definition_id": "documentation_review",
-      "requires_environment": false,
+      "environment_mode": "inherit",
       "label": "ドキュメントレビュー"
     },
     {
       "id": "test_execution_evaluation",
       "type": "agent",
       "agent_definition_id": "test_execution_evaluation",
-      "requires_environment": true,
+      "environment_mode": "inherit",
       "label": "テスト実行・評価"
     },
     {
       "id": "plan_reflection",
       "type": "agent",
       "agent_definition_id": "plan_reflection",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "リフレクション"
     },
     {
@@ -295,53 +300,53 @@
       "id": "user_resolve",
       "type": "executor",
       "executor_class": "UserResolverExecutor",
-      "requires_environment": false
+      "environment_mode": "none"
     },
     {
       "id": "task_classifier",
       "type": "agent",
       "agent_definition_id": "task_classifier",
-      "requires_environment": false
+      "environment_mode": "none"
     },
     {
       "id": "code_generation_planning",
       "type": "agent",
       "agent_definition_id": "code_generation_planning",
-      "requires_environment": false
+      "environment_mode": "none"
     },
     {
       "id": "code_generation_a",
       "type": "agent",
       "agent_definition_id": "code_generation_fast",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "コード生成A（高速モデル）"
     },
     {
       "id": "code_generation_b",
       "type": "agent",
       "agent_definition_id": "code_generation_standard",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "コード生成B（標準モデル）"
     },
     {
       "id": "code_generation_c",
       "type": "agent",
       "agent_definition_id": "code_generation_creative",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "コード生成C（高温度設定）"
     },
     {
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "requires_environment": false,
+      "environment_mode": "inherit",
       "label": "コードレビュー（3案比較・自動選択）"
     },
     {
       "id": "plan_reflection",
       "type": "agent",
       "agent_definition_id": "plan_reflection",
-      "requires_environment": false
+      "environment_mode": "none"
     }
   ],
   "edges": [
@@ -401,14 +406,14 @@
       "id": "user_resolve",
       "type": "executor",
       "executor_class": "UserResolverExecutor",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "ユーザー情報取得"
     },
     {
       "id": "task_classifier",
       "type": "agent",
       "agent_definition_id": "task_classifier",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "タスク分類"
     },
     {
@@ -420,14 +425,14 @@
       "id": "code_generation_planning",
       "type": "agent",
       "agent_definition_id": "code_generation_planning",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "コード生成計画"
     },
     {
       "id": "plan_reflection",
       "type": "agent",
       "agent_definition_id": "plan_reflection",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "プラン検証"
     },
     {
@@ -444,42 +449,42 @@
       "id": "code_generation_fast",
       "type": "agent",
       "agent_definition_id": "code_generation_fast",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "コード生成（高速モデル）"
     },
     {
       "id": "code_generation_standard",
       "type": "agent",
       "agent_definition_id": "code_generation_standard",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "コード生成（標準モデル）"
     },
     {
       "id": "code_generation_creative",
       "type": "agent",
       "agent_definition_id": "code_generation_creative",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "コード生成（高温度モデル）"
     },
     {
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "コードレビュー（3案比較・自動選択）"
     },
     {
       "id": "branch_merge",
       "type": "executor",
       "executor_class": "BranchMergeExecutor",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "選択ブランチのマージ"
     },
     {
       "id": "test_execution_evaluation",
       "type": "agent",
       "agent_definition_id": "test_execution_evaluation",
-      "requires_environment": true,
+      "environment_mode": "inherit",
       "label": "テスト実行・評価"
     },
     {
@@ -491,7 +496,7 @@
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "requires_environment": false,
+      "environment_mode": "inherit",
       "label": "コードレビュー"
     },
     {

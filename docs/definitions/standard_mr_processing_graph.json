@@ -8,14 +8,14 @@
       "id": "user_resolve",
       "type": "executor",
       "executor_class": "UserResolverExecutor",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "ユーザー情報取得"
     },
     {
       "id": "task_classifier",
       "type": "agent",
       "agent_definition_id": "task_classifier",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "タスク分類"
     },
     {
@@ -27,7 +27,7 @@
       "id": "code_generation_planning",
       "type": "agent",
       "agent_definition_id": "code_generation_planning",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "コード生成計画",
       "metadata": {
         "check_comments_before": true,
@@ -40,7 +40,7 @@
       "id": "bug_fix_planning",
       "type": "agent",
       "agent_definition_id": "bug_fix_planning",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "バグ修正計画",
       "metadata": {
         "check_comments_before": true,
@@ -53,7 +53,7 @@
       "id": "test_creation_planning",
       "type": "agent",
       "agent_definition_id": "test_creation_planning",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "テスト作成計画",
       "metadata": {
         "check_comments_before": true,
@@ -66,7 +66,7 @@
       "id": "documentation_planning",
       "type": "agent",
       "agent_definition_id": "documentation_planning",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "ドキュメント生成計画",
       "metadata": {
         "check_comments_before": true,
@@ -84,28 +84,28 @@
       "id": "code_generation",
       "type": "agent",
       "agent_definition_id": "code_generation",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "コード生成"
     },
     {
       "id": "bug_fix",
       "type": "agent",
       "agent_definition_id": "bug_fix",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "バグ修正"
     },
     {
       "id": "test_creation",
       "type": "agent",
       "agent_definition_id": "test_creation",
-      "requires_environment": true,
+      "environment_mode": "create",
       "label": "テスト作成"
     },
     {
       "id": "documentation",
       "type": "agent",
       "agent_definition_id": "documentation",
-      "requires_environment": false,
+      "environment_mode": "create",
       "label": "ドキュメント作成"
     },
     {
@@ -117,28 +117,28 @@
       "id": "test_execution_evaluation",
       "type": "agent",
       "agent_definition_id": "test_execution_evaluation",
-      "requires_environment": true,
+      "environment_mode": "inherit",
       "label": "テスト実行・評価"
     },
     {
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "requires_environment": false,
+      "environment_mode": "inherit",
       "label": "コードレビュー"
     },
     {
       "id": "documentation_review",
       "type": "agent",
       "agent_definition_id": "documentation_review",
-      "requires_environment": false,
+      "environment_mode": "inherit",
       "label": "ドキュメントレビュー"
     },
     {
       "id": "plan_reflection",
       "type": "agent",
       "agent_definition_id": "plan_reflection",
-      "requires_environment": false,
+      "environment_mode": "none",
       "label": "リフレクション",
       "metadata": {
         "check_comments_before": true
