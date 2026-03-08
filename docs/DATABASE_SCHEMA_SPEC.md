@@ -17,6 +17,220 @@
 - Todo管理テーブル（todos）
 - メトリクステーブル（token_usage）
 
+### 1.2 ER図
+
+システム全体のエンティティ間の関係を以下に示す。すべてのテーブルと外部キー関係を省略なく表現している。
+
+```mermaid
+erDiagram
+    users ||--o{ user_configs : "has"
+    users ||--o{ user_workflow_settings : "has"
+    users ||--o{ tasks : "creates"
+    users ||--o{ token_usage : "uses"
+    
+    workflow_definitions ||--o{ user_workflow_settings : "used_by"
+    workflow_definitions ||--o{ tasks : "defines"
+    workflow_definitions ||--o{ workflow_execution_states : "defines"
+    
+    tasks ||--o{ workflow_execution_states : "has"
+    tasks ||--o{ context_messages : "has"
+    tasks ||--o{ message_compressions : "has"
+    tasks ||--o{ context_planning_history : "has"
+    tasks ||--|| context_metadata : "has"
+    tasks ||--o{ context_tool_results_metadata : "has"
+    tasks ||--o{ todos : "has"
+    tasks ||--o{ token_usage : "records"
+    
+    workflow_execution_states ||--o{ docker_environment_mappings : "maps"
+    
+    users {
+        TEXT email PK
+        TEXT username
+        TEXT password_hash
+        TEXT role
+        BOOLEAN is_active
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    
+    user_configs {
+        TEXT user_email PK,FK
+        TEXT llm_provider
+        TEXT api_key_encrypted
+        TEXT model_name
+        REAL temperature
+        INTEGER max_tokens
+        REAL top_p
+        REAL frequency_penalty
+        REAL presence_penalty
+        TEXT base_url
+        INTEGER timeout
+        BOOLEAN context_compression_enabled
+        INTEGER token_threshold
+        INTEGER keep_recent_messages
+        INTEGER min_to_compress
+        REAL min_compression_ratio
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    
+    user_workflow_settings {
+        TEXT user_email PK,FK
+        INTEGER workflow_definition_id PK,FK
+        TEXT custom_settings
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    
+    workflow_definitions {
+        INTEGER id PK
+        TEXT name
+        TEXT description
+        TEXT graph_definition
+        TEXT agent_definition
+        TEXT prompt_definition
+        BOOLEAN is_preset
+        TEXT created_by
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    
+    tasks {
+        TEXT uuid PK
+        TEXT task_type
+        TEXT task_identifier
+        TEXT repository
+        TEXT user_email FK
+        TEXT status
+        INTEGER workflow_definition_id FK
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        TIMESTAMP completed_at
+        INTEGER total_messages
+        INTEGER total_summaries
+        INTEGER total_tool_calls
+        INTEGER final_token_count
+        TEXT error_message
+        JSONB metadata
+        JSONB assigned_branches
+        VARCHAR selected_branch
+    }
+    
+    workflow_execution_states {
+        UUID execution_id PK
+        TEXT task_uuid FK
+        INTEGER workflow_definition_id FK
+        TEXT current_node_id
+        JSONB completed_nodes
+        TEXT workflow_status
+        TIMESTAMP suspended_at
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    
+    docker_environment_mappings {
+        UUID mapping_id PK
+        UUID execution_id FK
+        TEXT node_id
+        TEXT container_id
+        TEXT container_name
+        TEXT environment_name
+        TEXT status
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    
+    context_messages {
+        SERIAL id PK
+        TEXT task_uuid FK
+        INTEGER seq
+        TEXT role
+        TEXT content
+        TEXT tool_call_id
+        TEXT tool_name
+        INTEGER tokens
+        BOOLEAN is_compressed_summary
+        JSONB compressed_range
+        TIMESTAMP created_at
+    }
+    
+    message_compressions {
+        SERIAL id PK
+        TEXT task_uuid FK
+        INTEGER start_seq
+        INTEGER end_seq
+        TEXT summary
+        INTEGER original_tokens
+        INTEGER summary_tokens
+        REAL compression_ratio
+        TIMESTAMP created_at
+    }
+    
+    context_planning_history {
+        SERIAL id PK
+        TEXT task_uuid FK
+        TEXT phase
+        TEXT node_id
+        JSONB plan
+        TIMESTAMP created_at
+    }
+    
+    context_metadata {
+        TEXT task_uuid PK,FK
+        INTEGER message_count
+        INTEGER total_tokens
+        INTEGER compression_count
+        TIMESTAMP last_compressed_at
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    
+    context_tool_results_metadata {
+        SERIAL id PK
+        TEXT task_uuid FK
+        TEXT tool_name
+        TEXT file_path
+        INTEGER file_size
+        TIMESTAMP created_at
+    }
+    
+    todos {
+        SERIAL id PK
+        TEXT task_uuid FK
+        INTEGER todo_id
+        TEXT title
+        TEXT status
+        INTEGER order_index
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    
+    token_usage {
+        SERIAL id PK
+        TEXT user_email FK
+        TEXT task_uuid FK
+        TEXT node_id
+        TEXT model
+        INTEGER prompt_tokens
+        INTEGER completion_tokens
+        INTEGER total_tokens
+        TIMESTAMP created_at
+    }
+```
+
+**凡例**:
+- `||--o{`: 1対多の関係
+- `||--||`: 1対1の関係
+- `PK`: Primary Key（主キー）
+- `FK`: Foreign Key（外部キー）
+
+**主要な関係**:
+- **users**: システムのユーザーを管理。user_configs、user_workflow_settings、tasks、token_usageに対して1対多の関係
+- **workflow_definitions**: ワークフロー定義を管理。user_workflow_settings、tasks、workflow_execution_statesに対して1対多の関係
+- **tasks**: タスク実行の中心エンティティ。すべてのコンテキスト関連テーブル、workflow_execution_states、todos、token_usageに対して1対多の関係（context_metadataのみ1対1）
+- **workflow_execution_states**: ワークフロー実行状態を管理。docker_environment_mappingsに対して1対多の関係
+- **コンテキストテーブル群**: すべてtasksテーブルのtask_uuidを外部キーとして参照し、タスクごとのデータを保存
+
 ---
 
 ## 2. ユーザー管理テーブル群
