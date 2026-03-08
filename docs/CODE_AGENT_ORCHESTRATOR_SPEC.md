@@ -294,7 +294,7 @@ sequenceDiagram
 - **プロンプトカスタマイズ**: エージェントごとのプロンプト上書き（13エージェント対応）
 - **ワークフロー定義管理**: システムプリセット（standard_mr_processing、multi_codegen_mr_processing）とユーザー独自定義
 - **トークン統計**: ユーザー別のLLMトークン使用量記録
-- **Web管理画面**: Streamlitベースのダッシュボード
+- **Web管理画面**: Vue.js + FastAPI バックエンド
 
 **データベーステーブル**（詳細は [DATABASE_SCHEMA_SPEC.md](DATABASE_SCHEMA_SPEC.md) を参照）:
 - `users` - ユーザー基本情報
@@ -2624,12 +2624,13 @@ services:
   # Web管理画面
   user-config-web:
     build: .
-    command: streamlit run user_config_api/streamlit_app.py --server.port 8501
+    command: npm run dev -- --host 0.0.0.0
+    working_dir: /app/web-config
     env_file: .env
     environment:
-      USER_CONFIG_API_URL: http://user-config-api:8080
+      VITE_API_URL: http://user-config-api:8080
     ports:
-      - "8501:8501"
+      - "5173:5173"
     depends_on:
       - user-config-api
   
@@ -3355,7 +3356,7 @@ ConfigManager内で環境変数をYAML設定キーにマッピングする。
 | **`user-config-api/models.py`** | Pydanticモデル | そのまま移植 | - |
 | **`user-config-api/database.py`** | SQLAlchemy DB接続 | そのまま移植 | - |
 | **`user-config-api/encryption.py`** | APIキー暗号化 | そのまま移植 | - |
-| **`web-config/app.py`** | Streamlit Web UI | そのまま移植 | - |
+| **`web-config/`** | Vue.js Web UI | 新規実装 | Vuetify 3使用 |
 
 #### 14.3.5 環境管理（Docker実行環境）
 
@@ -3656,8 +3657,8 @@ user-config-api/database.py
 user-config-api/encryption.py
   - APIキー暗号化
 
-web-config/app.py
-  - Streamlit Web UI
+web-config/
+  - Vue.js Web UI
 ```
 
 ### A.9 データベース
