@@ -24,7 +24,7 @@
         "delta_requirements"
       ],
       "output_keys": ["plan_result", "todo_list", "plan_metadata"],
-      "tools": ["text_editor", "create_todo_list", "sync_to_gitlab"],
+      "tools": ["text_editor", "create_todo_list"],
       "prompt_id": "code_generation_planning",
       "max_iterations": 15,
       "timeout_seconds": 300,
@@ -51,7 +51,7 @@
         "delta_requirements"
       ],
       "output_keys": ["plan_result", "todo_list", "plan_metadata"],
-      "tools": ["text_editor", "create_todo_list", "sync_to_gitlab"],
+      "tools": ["text_editor", "create_todo_list"],
       "prompt_id": "bug_fix_planning",
       "max_iterations": 15,
       "timeout_seconds": 300,
@@ -78,7 +78,7 @@
         "delta_requirements"
       ],
       "output_keys": ["plan_result", "todo_list", "plan_metadata"],
-      "tools": ["text_editor", "create_todo_list", "sync_to_gitlab"],
+      "tools": ["text_editor", "create_todo_list"],
       "prompt_id": "test_creation_planning",
       "max_iterations": 15,
       "timeout_seconds": 300,
@@ -105,7 +105,7 @@
         "delta_requirements"
       ],
       "output_keys": ["plan_result", "todo_list", "plan_metadata"],
-      "tools": ["text_editor", "create_todo_list", "sync_to_gitlab"],
+      "tools": ["text_editor", "create_todo_list"],
       "prompt_id": "documentation_planning",
       "max_iterations": 15,
       "timeout_seconds": 300,
@@ -141,7 +141,7 @@
         "conflicts",
         "comment_response"
       ],
-      "tools": ["text_editor", "get_todo_list", "sync_to_gitlab"],
+      "tools": ["text_editor", "get_todo_list"],
       "prompt_id": "plan_reflection",
       "max_iterations": 10,
       "timeout_seconds": 180,
@@ -155,8 +155,7 @@
       "tools": [
         "text_editor",
         "command_executor",
-        "update_todo_status",
-        "sync_to_gitlab"
+        "update_todo_status"
       ],
       "prompt_id": "code_generation",
       "max_iterations": 40,
@@ -171,8 +170,7 @@
       "tools": [
         "text_editor",
         "command_executor",
-        "update_todo_status",
-        "sync_to_gitlab"
+        "update_todo_status"
       ],
       "prompt_id": "bug_fix",
       "max_iterations": 40,
@@ -187,8 +185,7 @@
       "tools": [
         "text_editor",
         "command_executor",
-        "update_todo_status",
-        "sync_to_gitlab"
+        "update_todo_status"
       ],
       "prompt_id": "test_creation",
       "max_iterations": 30,
@@ -200,7 +197,7 @@
       "role": "execution",
       "input_keys": ["plan_result", "task_context"],
       "output_keys": ["execution_result"],
-      "tools": ["text_editor", "update_todo_status", "sync_to_gitlab"],
+      "tools": ["text_editor", "update_todo_status"],
       "prompt_id": "documentation",
       "max_iterations": 30,
       "timeout_seconds": 900,
@@ -211,7 +208,7 @@
       "role": "review",
       "input_keys": ["execution_result", "task_context"],
       "output_keys": ["review_result"],
-      "tools": ["text_editor", "sync_to_gitlab"],
+      "tools": ["text_editor"],
       "prompt_id": "code_review",
       "max_iterations": 10,
       "timeout_seconds": 300,
@@ -222,7 +219,7 @@
       "role": "review",
       "input_keys": ["execution_result", "task_context"],
       "output_keys": ["review_result"],
-      "tools": ["text_editor", "sync_to_gitlab"],
+      "tools": ["text_editor"],
       "prompt_id": "documentation_review",
       "max_iterations": 10,
       "timeout_seconds": 300,
@@ -233,7 +230,7 @@
       "role": "review",
       "input_keys": ["execution_result", "task_context"],
       "output_keys": ["review_result"],
-      "tools": ["command_executor", "sync_to_gitlab"],
+      "tools": ["command_executor"],
       "prompt_id": "test_execution_evaluation",
       "max_iterations": 15,
       "timeout_seconds": 600,
