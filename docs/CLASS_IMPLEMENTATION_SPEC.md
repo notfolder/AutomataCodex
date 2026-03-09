@@ -28,31 +28,10 @@ Agent FrameworkのChatCompletionAgentを継承する。
 - **agent: ChatCompletionAgent** - Agent FrameworkのChatCompletionAgentインスタンス
 - **kernel: Kernel** - Agent FrameworkのKernelインスタンス（ツール管理）
 - **progress_reporter: ProgressReporter** - 進捗報告インスタンス
-- **environment_id: str** - Docker環境ID（environment_mode="create"または"inherit"の場合）
+- **environment_id: str** - ビルド時に確定したDocker環境ID（environment_mode="create"または"inherit"の場合）
 - **prompt_content: str** - プロンプト定義から取得したシステムプロンプト
 
 ### 1.4 主要メソッド
-
-#### get_environment_id(context: IWorkflowContext) → str
-
-**処理フロー**:
-
-1. **execution_environments辞書取得**
-   - context.read_state_async("execution_environments", scope_name='workflow')を呼び出し
-   - 辞書が存在しない場合は空辞書として初期化
-
-2. **環境ID確認**
-   - execution_environments辞書にconfig.agent_definition_idがキーとして存在するか確認
-   - 存在する場合: 該当する環境IDを返す（環境引き継ぎ）
-
-3. **環境プールから環境ID割り当て**
-   - execution_environments辞書に該当キーが存在しない場合:
-     - ExecutionEnvironmentManager.get_environment(config.node_id)を呼び出して環境プールから未使用の環境IDを割り当てる
-     - execution_environments[config.agent_definition_id] = 割り当てられた環境IDとして辞書に追加
-     - context.queue_state_update_async("execution_environments", execution_environments, scope_name='workflow')で辞書を保存
-     - 割り当てられた環境IDを返す
-
-**注意**: config.environment_modeが"inherit"の場合、通常は先行ノードが既に環境IDを辞書に書き込んでいるため、ステップ2で環境IDが取得できる。config.environment_modeが"create"の場合はステップ3で環境プールから環境を割り当てる。環境自体はワークフロー開始時に既に作成済みであり、get_environment()は割り当てのみを行う。
 
 #### execute_async(context: IWorkflowContext) → NodeResult
 
@@ -68,58 +47,54 @@ Agent FrameworkのChatCompletionAgentを継承する。
    - 各キーについてcontext.read_state_async(key, scope_name='workflow')を呼び出し
    - 取得した値をinput_data辞書に格納
 
-3. **環境ID取得（environment_modeが"create"または"inherit"の場合）**
-   - config.environment_modeが"create"または"inherit"の場合:
-     - get_environment_id(context)を呼び出して環境IDを取得
-     - self.environment_idに保存
-     - MCPクライアントに環境IDを設定
-
-4. **進捗報告（開始）**
+3. **進捗報告（開始）**
    - progress_reporter.report_progress(task_iid, config.role + "_start", "処理を開始します", {"node_id": config.node_id})を呼び出し
 
-5. **プロンプト生成**
+4. **プロンプト生成**
    - prompt_contentをベースにプロンプトを構築
    - input_dataの各キーをプレースホルダーとして置換
    - 例: `{task_description}`を`input_data['task_description']`で置換
 
-6. **Agent FrameworkのChatCompletionAgent呼び出し**
+5. **Agent FrameworkのChatCompletionAgent呼び出し**
    - agent.invoke_async(kernel=kernel, messages=[user_message])を呼び出し
    - user_messageは生成したプロンプト
    - ChatHistory内の過去の会話履歴が自動的にロードされる（PostgreSqlChatHistoryProvider経由）
 
-7. **LLM応答取得**
+6. **LLM応答取得**
    - Agent FrameworkからChatMessageContentを取得
    - メッセージ内容をテキストまたはJSON形式でパース
 
-8. **進捗報告（LLM応答）**
+7. **進捗報告（LLM応答）**
    - response_summary = 応答内容の要約（最初の200文字程度）
    - progress_reporter.report_progress(task_iid, config.role + "_llm_response", "LLM応答を取得しました", {"summary": response_summary})を呼び出し
 
-9. **ツール呼び出し処理**
+8. **ツール呼び出し処理**
    - LLMがfunction_callを返した場合:
      - Kernelから該当ツールを取得
      - ツールを実行（MCPツールの場合はMCPClientを経由）
      - ツール実行結果をLLMに返してフィードバックループ
      - 最終応答を取得
 
-10. **ロール別の後処理**
+9. **ロール別の後処理**
    - **planning**: Todoリスト作成
    - **reflection**: 改善判定
    - **execution**: ファイル操作結果の確認、git操作の実行
    - **review**: レビューコメント生成
 
-11. **進捗報告（完了）**
+10. **進捗報告（完了）**
    - progress_reporter.report_progress(task_iid, config.role + "_complete", "処理が完了しました", output_data)を呼び出し
 
-12. **出力データ保存**
+11. **出力データ保存**
    - config.output_keysをループ
    - 各キーについてcontext.queue_state_update_async(key, value, scope_name='workflow')を呼び出し
    - LLM応答から抽出した値を保存
 
-13. **NodeResult返却**
+12. **NodeResult返却**
    - status='success'
    - result=output_data
    - execution_time=実行時間
+
+**注意**: environment_idはビルド時（AgentFactory.create_agent()）に確定済みのため、execute_async()での動的割り当ては行わない。
 
 #### get_chat_history() → List[ChatMessage]
 
@@ -312,34 +287,37 @@ AgentFactoryはConfigurableAgentインスタンスを生成する。
 
 #### 2.3.2 保持データ
 
-- **kernel: Kernel** - Agent FrameworkのKernelインスタンス
-- **mcp_client_factory: MCPClientFactory** - MCPクライアントファクトリ
+- **mcp_server_configs: Dict[str, MCPServerConfig]** - MCPサーバー設定（create_agent()呼び出し時にMCPClientFactoryを新規生成するため、設定情報のみを保持）
 - **chat_history_provider: PostgreSqlChatHistoryProvider** - チャット履歴Provider
 - **planning_context_provider: PlanningContextProvider** - プランニングコンテキストProvider
 - **tool_result_context_provider: ToolResultContextProvider** - ツール結果コンテキストProvider
 
 #### 2.3.3 主要メソッド
 
-##### create_agent(agent_config: AgentNodeConfig, prompt_config: PromptConfig, user_email: str, progress_reporter: ProgressReporter) → ConfigurableAgent
+##### create_agent(agent_config: AgentNodeConfig, prompt_config: PromptConfig, user_email: str, progress_reporter: ProgressReporter, env_id: str | None = None) → ConfigurableAgent
 
 **処理フロー**:
 
-1. **Kernel設定**
+1. **Kernel・MCPClientFactory新規生成**
+   - このエージェント専用の新しいKernelインスタンスを生成する
+   - mcp_server_configsを渡して、このエージェント専用のMCPClientFactoryインスタンスを新規生成する
+
+2. **Kernel設定**
    - agent_config.toolsをループ
    - 各ツール名について:
-     - MCPツールの場合: mcp_client_factory.create_client(tool_name)でMCPクライアントを取得し、Kernelに登録
+     - MCPツールの場合: mcp_client_factory.create_client(tool_name, env_id, kernel)でMCPクライアントを生成し、Kernelにツールを登録する
      - ネイティブツールの場合: kernel.add_function()で直接登録（TodoManagementTool等）
 
-2. **User Config取得**
+3. **User Config取得**
    - UserConfigClientからuser_emailのLLM設定を取得
    - api_key、model_name、temperature等を取得
 
-3. **ChatClient生成**
+4. **ChatClient生成**
    - Agent FrameworkのChatClientを生成
    - OpenAI/Ollama/LM Studioプロバイダーに応じて適切なクライアントを選択
    - api_key、model_name等を設定
 
-4. **システムプロンプト構築**
+5. **システムプロンプト構築**
    - `chat_options.instructions`に設定するプロンプトを組み立てる
    - プロンプト冒頭にリポジトリから読み込んだ以下のファイルを含める（YAMLフロントマターを持つため自動組み込み）:
      - **AGENTS.md**: エージェントの動作モード定義（ドキュメント作成モード、コード実装モード等）
@@ -347,22 +325,22 @@ AgentFactoryはConfigurableAgentインスタンスを生成する。
    - その後に`prompt_config.content`（プロンプト定義のシステムプロンプト）を連結する
    - 両ファイルはワークフロー開始時に最新内容を読み込み、すべてのエージェント呼び出しで同一内容を使用する
 
-5. **ChatCompletionAgent生成**
+6. **ChatCompletionAgent生成**
    - ChatClient.as_ai_agent()を呼び出し
    - ChatClientAgentOptionsを設定:
      - name: agent_config.node_id
-     - chat_options.instructions: 手順4で組み立てたシステムプロンプト
+     - chat_options.instructions: 手順5で組み立てたシステムプロンプト
      - chat_history_provider: chat_history_provider
      - ai_context_providers: [planning_context_provider, tool_result_context_provider]
      - chat_options.temperature: prompt_config.temperature_overrideまたはデフォルト値
      - chat_options.model: prompt_config.model_overrideまたはデフォルト値
    - AIAgentインスタンスを取得
 
-6. **ConfigurableAgentインスタンス生成**
+7. **ConfigurableAgentインスタンス生成**
    - agent_config、ChatCompletionAgent、Kernel、prompt_config.content、progress_reporterを渡す
-   - environment_modeが"create"または"inherit"の場合、environment_idを設定（後で割り当て）
+   - environment_modeが"create"または"inherit"の場合、environment_idにenv_idを設定する
 
-7. **ConfigurableAgent返却**
+8. **ConfigurableAgent返却**
 
 ### 2.4 MCPClientFactory
 
@@ -374,11 +352,10 @@ MCPClientFactoryはMCPサーバーへのクライアント接続を生成し、A
 
 - **mcp_server_configs: Dict[str, MCPServerConfig]** - サーバー設定辞書
 - **mcp_client_registry: MCPClientRegistry** - クライアント登録管理
-- **kernel: Kernel** - Agent FrameworkのKernel
 
 #### 2.4.3 主要メソッド
 
-##### create_client(server_name: str) → MCPClient
+##### create_client(server_name: str, env_id: str, kernel: Kernel) → MCPClient
 
 **処理フロー**:
 
@@ -391,21 +368,21 @@ MCPClientFactoryはMCPサーバーへのクライアント接続を生成し、A
    - 存在しない場合: エラーをスロー
 
 3. **MCPClientインスタンス生成**
-   - MCPServerConfigのcommand、envを使用してMCPClientを生成
-   - stdio経由で接続
+   - MCPServerConfigのcommandにenv_idを埋め込み、接続対象のDockerコンテナを特定する
+   - commandとenvを使用してMCPClientを生成し、stdio経由で接続する
 
 4. **MCP接続**
    - MCPClient.connect()を呼び出してMCPサーバーとの通信を開始
 
 5. **Kernelへのツール登録**
-   - _register_mcp_tools_to_kernel(server_name, mcp_client)を呼び出し
+   - _register_mcp_tools_to_kernel(server_name, mcp_client, kernel)を呼び出し
 
 6. **クライアント登録**
    - mcp_client_registryにserver_nameとmcp_clientを登録
 
 7. **MCPClient返却**
 
-##### _register_mcp_tools_to_kernel(server_name: str, mcp_client: MCPClient) → None
+##### _register_mcp_tools_to_kernel(server_name: str, mcp_client: MCPClient, kernel: Kernel) → None
 
 **処理フロー**:
 
@@ -418,7 +395,7 @@ MCPClientFactoryはMCPサーバーへのクライアント接続を生成し、A
    - KernelFunctionインスタンスを取得
 
 3. **Kernelに登録**
-   - kernel.add_function(plugin_name=server_name, function=kernel_function)を呼び出し
+   - 引数で受け取ったkernelに対してkernel.add_function(plugin_name=server_name, function=kernel_function)を呼び出す
 
 ##### _create_kernel_function_from_mcp_tool(tool: MCPTool, mcp_client: MCPClient) → KernelFunction
 
@@ -434,18 +411,18 @@ MCPClientFactoryはMCPサーバーへのクライアント接続を生成し、A
 
 3. **KernelFunction返却**
 
-##### create_text_editor_client() → MCPClient
+##### create_text_editor_client(env_id: str, kernel: Kernel) → MCPClient
 
 **処理フロー**:
 
-1. create_client('text-editor')を呼び出す
+1. create_client('text-editor', env_id, kernel)を呼び出す
 2. 返却
 
-##### create_command_executor_client() → MCPClient
+##### create_command_executor_client(env_id: str, kernel: Kernel) → MCPClient
 
 **処理フロー**:
 
-1. create_client('command-executor')を呼び出す
+1. create_client('command-executor', env_id, kernel)を呼び出す
 2. 返却
 
 ### 2.5 TaskStrategyFactory

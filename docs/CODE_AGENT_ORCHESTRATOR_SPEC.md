@@ -323,7 +323,7 @@ sequenceDiagram
 - `WorkflowBuilder`: Workflow構築
 - `ExecutorFactory`: Executor生成
 - `AgentFactory`: AIAgent生成
-- `MCPClientFactory`: MCPClient生成
+- `mcp_server_configs`: MCPサーバー設定（AgentFactoryがcreate_agent()呼び出し時にMCPClientFactoryを新規生成するため、設定情報のみを保持）
 - `ContextStorageManager`: コンテキスト管理
 - `TodoManager`: Todo管理
 - `TokenUsageMiddleware`: トークン統計
@@ -341,9 +341,9 @@ sequenceDiagram
 **実装方針**:
 1. コンストラクタで各Factory、Manager、Middleware、DefinitionLoaderを保持
 2. ワークフロー生成時にDefinitionLoaderでユーザーのワークフロー定義を取得する
-3. グラフ定義のenvironment_mode="create"のノード数分のDocker環境を事前準備する
+3. グラフ定義のenvironment_mode="create"のノード数分のDocker環境を事前準備し、各ノードへのenv_id割り当て（node_id→env_id対応表）をビルド時に確定する。"inherit"ノードはグラフのエッジ定義から先行ノードの環境IDを引き継ぐ
 4. WorkflowBuilderを使用してExecutorを追加（UserResolver、EnvironmentSetup等）
-5. グラフ定義に従って各ノードのConfigurableAgentをWorkflowBuilderに追加する
+5. グラフ定義に従って各ノードの確定したenv_idをcreate_agent()に渡し、ConfigurableAgentをWorkflowBuilderに追加する
 6. TokenUsageMiddlewareをWorkflowBuilderに追加する
 7. WorkflowBuilderのbuild()メソッドでWorkflowオブジェクトを生成して返却する
 8. タスク処理開始時にUser Config APIからユーザーの`user_config`を取得し、`user_config.learning_enabled=true`の場合、ワークフロー生成前に`_inject_learning_node()`を呼び出す
@@ -435,36 +435,28 @@ graph LR
 **保持オブジェクト**:
 - `Dict[str, MCPServerConfig]`: サーバー設定
 - `MCPClientRegistry`: クライアント登録管理
-- `Kernel`: Agent Frameworkのカーネル（ツール登録用）
 
 **主要メソッド**:
-- `create_client(server_name)`: 指定されたMCPサーバーへのクライアント生成
-- `create_text_editor_client()`: text-editorクライアント生成（Agent Frameworkツールとして登録）
-- `create_command_executor_client()`: command-executorクライアント生成（Agent Frameworkツールとして登録）
-- `register_mcp_tools_to_kernel(kernel)`: MCPツールをAgent Frameworkのカーネルに登録
+- `create_client(server_name, env_id, kernel)`: 指定されたMCPサーバーへのクライアント生成
+- `create_text_editor_client(env_id, kernel)`: text-editorクライアント生成（Agent Frameworkツールとして登録）
+- `create_command_executor_client(env_id, kernel)`: command-executorクライアント生成（Agent Frameworkツールとして登録）
 
 **実装方針**:
-1. コンストラクタでMCPServerConfig辞書、MCPClientRegistry、Agent FrameworkのKernelを保持
-2. create_client()でMCPクライアント生成とツール登録を実施
+1. コンストラクタでMCPServerConfig辞書とMCPClientRegistryを保持する。KernelはAgentFactoryがエージェントごとに新規生成して引数で渡すため、MCPClientFactoryは保持しない
+2. create_client(server_name, env_id, kernel)でMCPクライアント生成とツール登録を実施
    - 既にレジストリに登録済みの場合は既存クライアントを返却
    - 設定から指定されたサーバー名のMCPServerConfigを取得
-   - MCPClientを生成してstdio経由で接続
+   - MCPServerConfigのcommandにenv_idを埋め込んで対象Dockerコンテナを特定し、MCPClientを生成してstdio経由で接続する
    - レジストリに登録
-   - _register_mcp_tools_to_kernel()を呼び出してAgent Frameworkのツールとして登録
-3. _register_mcp_tools_to_kernel()でMCPツールをKernelに登録
+   - _register_mcp_tools_to_kernel(server_name, mcp_client, kernel)を呼び出してAgent Frameworkのツールとして登録
+3. _register_mcp_tools_to_kernel(server_name, mcp_client, kernel)でMCPツールを引数で受け取ったKernelに登録
    - MCPクライアントから利用可能なツール一覧を取得
    - 各ツールを_create_kernel_function_from_mcp_tool()でKernelFunctionに変換
    - kernel.add_function()でKernelに登録（plugin_name=サーバー名、function_name=ツール名）
 4. _create_kernel_function_from_mcp_tool()でMCPツールをKernelFunctionとしてラップ
    - 非同期wrapper関数を定義してMCPツールを呼び出す
    - KernelFunction.from_native_method()でKernelFunctionとしてラップ
-5. create_text_editor_client()とcreate_command_executor_client()は各MCPサーバーへのエイリアス
-
-**Agent Frameworkツール統合のポイント**:
-1. **MCPクライアント通信**: `MCPClient`でstdio経由でMCPサーバーと通信
-2. **KernelFunctionラップ**: MCPツールを`KernelFunction`としてラップし、Agent Frameworkから呼び出し可能にする
-3. **Kernel登録**: ラップしたツールを`kernel.add_function()`でKernelに登録
-4. **ChatCompletionAgentで使用**: Kernelに登録されたツールは、同じKernelを使用する`ChatCompletionAgent`から自動的に利用可能になる
+5. create_text_editor_client(env_id, kernel)とcreate_command_executor_client(env_id, kernel)は各MCPサーバーへのエイリアス
 
 ---
 
@@ -1135,9 +1127,7 @@ graph TB
     end
     
     subgraph "MCP/ツール管理層"
-        MCPClientFactory[MCPClientFactory<br/>MCPクライアント生成<br/>ツール登録]
-        MCPRegistry[MCPClientRegistry<br/>クライアント再利用管理]
-        EnvAwareMCPClient[EnvironmentAwareMCPClient<br/>環境認識MCPラッパー]
+        MCPClientFactory[MCPClientFactory<br/>MCPクライアント生成<br/>ツール登録<br/>（エージェントごとに新規生成）]
     end
     
     subgraph "MCPサーバー層"
@@ -1205,7 +1195,7 @@ graph TB
     WorkflowFactory -->|定義読み込み| DefinitionLoader
     WorkflowFactory -->|Factory保持| ExecutorFactory
     WorkflowFactory -->|Factory保持| AgentFactory
-    WorkflowFactory -->|Factory保持| MCPClientFactory
+    WorkflowFactory -->|mcp_server_configs渡し| AgentFactory
     WorkflowFactory -->|Manager保持| EnvManager
     WorkflowFactory -->|Manager保持| ContextManager
     WorkflowFactory -->|Manager保持| TodoManager
@@ -1248,6 +1238,7 @@ graph TB
     AgentFactory -->|Agent生成| Agent6
     AgentFactory -->|Agent生成| Agent7
     AgentFactory -->|Agent生成| AgentN
+    AgentFactory -->|create_agentごとに新規生成| MCPClientFactory
     WorkflowFactory -->|学習ノード自動挿入| LearningAgent
     
     %% Workflow→Agent実行
@@ -1260,24 +1251,19 @@ graph TB
     Workflow -->|Agent実行| Agent7
     Workflow -->|学習Agent実行| LearningAgent
     
-    %% Agent→MCP
-    Agent1 -->|ツール使用| MCPRegistry
-    Agent2 -->|ツール使用| MCPRegistry
-    Agent3 -->|ツール使用| MCPRegistry
-    Agent4 -->|ツール使用| MCPRegistry
-    Agent5 -->|ツール使用| MCPRegistry
-    Agent6 -->|ツール使用| MCPRegistry
-    Agent7 -->|ツール使用| MCPRegistry
+    %% Agent→MCP（各エージェントは専用MCPClientFactoryインスタンスのKernel経由でツール使用）
+    Agent1 -->|専用Kernel経由でツール使用| MCPClientFactory
+    Agent2 -->|専用Kernel経由でツール使用| MCPClientFactory
+    Agent3 -->|専用Kernel経由でツール使用| MCPClientFactory
+    Agent4 -->|専用Kernel経由でツール使用| MCPClientFactory
+    Agent5 -->|専用Kernel経由でツール使用| MCPClientFactory
+    Agent6 -->|専用Kernel経由でツール使用| MCPClientFactory
+    Agent7 -->|専用Kernel経由でツール使用| MCPClientFactory
     
-    %% MCP管理
-    MCPRegistry -->|クライアント取得| MCPClientFactory
-    MCPRegistry -->|ラッパー取得| EnvAwareMCPClient
+    %% MCP管理（ビルド時にenv_idでDockerコンテナを特定して接続）
     MCPClientFactory -->|クライアント生成| GitLabMCP
-    MCPClientFactory -->|クライアント生成| EditorMCP
-    MCPClientFactory -->|クライアント生成| CommandMCP
-    EnvAwareMCPClient -->|環境ID取得| EnvManager
-    EnvAwareMCPClient -->|MCP実行| EditorMCP
-    EnvAwareMCPClient -->|MCP実行| CommandMCP
+    MCPClientFactory -->|ビルド時env_id埋め込みで接続| EditorMCP
+    MCPClientFactory -->|ビルド時env_id埋め込みで接続| CommandMCP
     
     %% コンテキスト管理
     ChatHistoryProvider -->|永続化| ContextManager
@@ -1342,9 +1328,7 @@ graph TB
 - **AgentFactory**: エージェント定義に基づいてChatCompletionAgentを生成し、Provider・Middlewareを登録
 - **PrePlanningManager**: 計画前にプロジェクト環境を解析し、適切な実行環境を選択
 - **EnvironmentAnalyzer**: リポジトリから環境ファイル（requirements.txt、package.json等）を検出
-- **MCPClientFactory**: MCPサーバーとの通信クライアントを生成し、Agent Frameworkツールとして登録
-- **MCPClientRegistry**: MCPクライアントの再利用を管理
-- **EnvironmentAwareMCPClient**: 環境IDを認識してMCPツールを実行
+- **MCPClientFactory**: AgentFactory.create_agent()ごとに新規生成され、ビルド時にenv_idをMCPServerConfig.commandに埋め込んで特定のDockerコンテナへ接続し、Agent FrameworkツールとしてKernelに登録する。内部にMCPClientRegistry（server_nameをキーとするクライアント管理辞書）を保持する
 - **ContextStorageManager**: PostgreSQL経由でコンテキストを永続化
 - **ExecutionEnvironmentManager**: Docker環境を複数タスクで共有管理、環境ID生成、プール管理
 - **PostgreSqlChatHistoryProvider**: 会話履歴をPostgreSQLに永続化（Agent Framework標準Providerを継承）
