@@ -50,13 +50,13 @@
 | test_creation_planning | テスト作成タスクの実行計画生成 | task_context, classification_result | plan_result, todo_list |
 | documentation_planning | ドキュメント生成タスクの実行計画生成 | task_context, classification_result | plan_result, todo_list |
 | plan_reflection | プラン検証・改善 | plan_result, todo_list, task_context | reflection_result |
-| code_generation | コード生成実装 | plan_result, task_context | execution_environments, execution_results |
-| bug_fix | バグ修正実装 | plan_result, task_context | execution_environments, execution_results |
-| documentation | ドキュメント作成 | plan_result, task_context | execution_environments, execution_results |
-| test_creation | テスト作成 | plan_result, task_context | execution_environments, execution_results |
-| test_execution_evaluation | テスト実行・評価 | execution_environments, execution_results, task_context | review_result |
-| code_review | コードレビュー実施 | execution_environments, execution_results, task_context | review_result |
-| documentation_review | ドキュメントレビュー実施 | execution_environments, execution_results, task_context | review_result |
+| code_generation | コード生成実装 | plan_result, task_context | execution_results |
+| bug_fix | バグ修正実装 | plan_result, task_context | execution_results |
+| documentation | ドキュメント作成 | plan_result, task_context | execution_results |
+| test_creation | テスト作成 | plan_result, task_context | execution_results |
+| test_execution_evaluation | テスト実行・評価 | execution_results, task_context | review_result |
+| code_review | コードレビュー実施 | execution_results, task_context | review_result |
+| documentation_review | ドキュメントレビュー実施 | execution_results, task_context | review_result |
 
 ### 2.1 共通実装ルール
 
@@ -82,18 +82,17 @@
 - 各ノードは同一の`ConfigurableAgent`クラスで実装し、エージェント定義ファイルの設定によって動作を制御する
 - `IWorkflowContext`でステップ間のデータ（プラン、実行結果等）を共有する
 - Agent FrameworkのGraph-based Workflows機能を使用して分岐とループを実現する
-- グラフ定義ファイルで`environment_mode: "create"`が設定されたノードに対しては、ワークフロー開始前にDocker実行環境を準備する
+- ワークフロー開始前に`PlanEnvSetupExecutor`がpython固定のplan環境を1つ作成しリポジトリをcloneする。実行環境は各タスク分岐内の`exec_env_setup_*`ノード（ExecEnvSetupExecutor）がplanning完了後に`selected_environment`を参照し、ノード設定の`env_count`数分を作成して`branch_envs`コンテキストに保存する
 
 **注**: Issue→MR変換後、作成されたMRは次回のワークフロー実行時に以下のフローで処理される。グラフ内の各ノード（Code Generation Planning Agent等）はすべて`ConfigurableAgent`の同一クラスであり、グラフ定義ファイル・エージェント定義ファイル・プロンプト定義ファイルによって動作が決まる。
 
 ```mermaid
 flowchart TD
     Start([タスク開始]) --> LoadDef[定義ファイル読み込み<br/>DefinitionLoader]
-    LoadDef --> SetupEnv[実行環境セットアップ<br/>environment_mode=createのノード分]
-    SetupEnv --> Fetch[MR情報取得<br/>Consumer]
+    LoadDef --> PlanEnvSetup[plan環境セットアップ<br/>python固定・1つ・リポジトリclone<br/>PlanEnvSetupExecutor]
+    PlanEnvSetup --> Fetch[MR情報取得<br/>Consumer]
     Fetch --> UserResolve[ユーザー情報取得<br/>User Resolver Executor]
-    UserResolve --> PrePlanning[計画前情報収集<br/>+ タスク分類<br/>Task Classifier Agent]
-    
+    UserResolve --> PrePlanning[計画前情報収集<br/>+ タスク分類<br/>Task Classifier Agent<br/>plan環境でコード参照]
     PrePlanning --> TaskType{タスク種別判定}
     
     TaskType -->|コード生成| CodeGenPlanning[ConfigurableAgent<br/>code_generation_planning]
@@ -103,28 +102,22 @@ flowchart TD
     
     CodeGenPlanning --> CodeGenSpec{仕様書確認}
     CodeGenSpec -->|仕様書なし| DocPlanning
-    CodeGenSpec -->|仕様書あり| CodeGenTodo[Todo投稿]
+    CodeGenSpec -->|仕様書あり| CodeGenExecEnv[実行環境セットアップ<br/>exec_env_setup_code_gen<br/>ExecEnvSetupExecutor]
     
     BugFixPlanning --> BugFixSpec{仕様書確認}
     BugFixSpec -->|仕様書なし| DocPlanning
-    BugFixSpec -->|仕様書あり| BugFixTodo[Todo投稿]
+    BugFixSpec -->|仕様書あり| BugFixExecEnv[実行環境セットアップ<br/>exec_env_setup_bug_fix<br/>ExecEnvSetupExecutor]
     
     TestPlanning --> TestSpec{仕様書確認}
     TestSpec -->|仕様書なし| DocPlanning
-    TestSpec -->|仕様書あり| TestTodo[Todo投稿]
+    TestSpec -->|仕様書あり| TestExecEnv[実行環境セットアップ<br/>exec_env_setup_test<br/>ExecEnvSetupExecutor]
     
-    DocPlanning --> DocTodo[Todo投稿]
+    DocPlanning --> DocExecEnv[実行環境セットアップ<br/>exec_env_setup_doc<br/>ExecEnvSetupExecutor]
     
-    CodeGenTodo --> Execute
-    BugFixTodo --> Execute
-    TestTodo --> Execute
-    DocTodo --> Execute
-    
-    Execute{タスク実行}
-    Execute -->|コード生成| CodeGen[ConfigurableAgent<br/>code_generation]
-    Execute -->|バグ修正| BugFix[ConfigurableAgent<br/>bug_fix]
-    Execute -->|ドキュメント生成| DocGen[ConfigurableAgent<br/>documentation]
-    Execute -->|テスト作成| TestGen[ConfigurableAgent<br/>test_creation]
+    CodeGenExecEnv --> CodeGen[ConfigurableAgent<br/>code_generation]
+    BugFixExecEnv --> BugFix[ConfigurableAgent<br/>bug_fix]
+    TestExecEnv --> TestGen[ConfigurableAgent<br/>test_creation]
+    DocExecEnv --> DocGen[ConfigurableAgent<br/>documentation]
     
     CodeGen --> CodeReview[ConfigurableAgent<br/>code_review]
     BugFix --> CodeReview
@@ -139,7 +132,7 @@ flowchart TD
     ReplanCheck -->|Yes 重大な問題| TaskType
     ReplanCheck -->|No 問題なし/軽微| Complete{完了?}
     
-    Complete -->|No 追加作業| Execute
+    Complete -->|No 追加作業| CodeGen
     Complete -->|Yes| Finish[タスク完了]
     
     Finish --> End([終了])
@@ -150,7 +143,8 @@ flowchart TD
 | フェーズ | エージェント定義ID | 目的 |
 |---------|---------------|------|
 | 定義読み込み | DefinitionLoader | グラフ/エージェント/プロンプト定義をロード |
-| 環境セットアップ | EnvironmentSetupExecutor | environment_mode=createのノード分の環境を準備 |
+| plan環境セットアップ | PlanEnvSetupExecutor | python固定のplan環境を1つ作成しリポジトリをclone。`plan_environment_id`をコンテキストに保存 |
+| 実行環境セットアップ | ExecEnvSetupExecutor | 各タスク分岐内でplanning完了後に`selected_environment`を参照し`env_count`数分の実行環境を準備。`branch_envs`をコンテキストに保存 |
 | Issue/MR取得 | Consumer | RabbitMQからタスクデキュー |
 | ユーザー情報取得 | User Resolver Agent | OpenAI APIキー・LLM設定取得 |
 | 計画前情報収集 | task_classifier | タスク種別判定（4種類） |
@@ -167,7 +161,7 @@ flowchart TD
 3. **仕様ファイル必須（コード生成系）**: コード生成、バグ修正、テスト作成で仕様ファイルがなければドキュメント生成計画を立案し、仕様書作成後にタスク完了
 4. **自動レビュー**: 実行後に必ずレビューエージェントが品質確認（ユーザー承認不要）
 5. **再計画ループ**: レビューで重大な問題があれば計画フェーズに戻る
-6. **複数環境サポート**: グラフ定義で`environment_mode: "create"`のノードに対してDocker環境を事前準備
+6. **分岐別Docker環境準備**: plan環境（python固定・1つ・planningエージェント全員で共有）はワークフロー開始前に`PlanEnvSetupExecutor`が作成する。実行環境は各タスク分岐内の`exec_env_setup_*`ノード（ExecEnvSetupExecutor）がplanning完了後に`env_count`数分作成し、`branch_envs`コンテキストキーに保存する
 
 ---
 
@@ -192,17 +186,18 @@ flowchart TD
    - **テスト作成**: テストコード、テストケース追加の要求
 3. リポジトリ構造の把握
 4. 関連ファイルの特定
-5. **環境情報の収集と実行環境の選択**（PrePlanningManager）:
-   - EnvironmentAnalyzerを使用して環境構築関連ファイルを検出
+5. **環境情報の収集と実行環境の選択**（task_classifier / PrePlanningManager）:
+   - plan環境（`plan_environment_id`で識別）のtext_editor MCPを使用してclone済みリポジトリのファイルリストを直接取得
+   - EnvironmentAnalyzerで環境ファイルを検出・解析
    - 検出されたファイル情報をLLMに渡してプロジェクト言語を判定
    - LLMが適切な環境名（python, miniforge, node, default）を選択
-   - 選択された環境名をワークフローコンテキストに保存
+   - 選択された環境名を`selected_environment`としてワークフローコンテキストに保存（後続のExecEnvSetupExecutorが参照）
 
 **環境選択の処理フロー**:
 
 ```mermaid
 flowchart TD
-    Start[PrePlanningManager開始] --> FileList[ファイルリスト取得<br/>FileListContextLoader]
+    Start[task_classifier開始] --> FileList[plan環境のtext_editor MCPで<br/>clone済みリポジトリのファイルリスト取得]
     FileList --> Detect[環境ファイル検出<br/>EnvironmentAnalyzer]
     Detect --> Prompt[LLMプロンプト構築<br/>検出ファイル情報を含む]
     Prompt --> LLM[LLM呼び出し<br/>言語判定と環境選択]

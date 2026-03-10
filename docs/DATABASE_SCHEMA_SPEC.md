@@ -437,7 +437,6 @@ erDiagram
       "input_keys": ["mr_description", "mr_comments"],
       "output_keys": ["task_type", "task_category"],
       "tools": [],
-      "environment_mode": "none",
       "prompt_id": "task_classifier_prompt"
     }
   ]

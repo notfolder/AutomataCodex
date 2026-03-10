@@ -8,14 +8,13 @@
       "id": "user_resolve",
       "type": "executor",
       "executor_class": "UserResolverExecutor",
-      "environment_mode": "none",
       "label": "ユーザー情報取得"
     },
     {
       "id": "task_classifier",
       "type": "agent",
       "agent_definition_id": "task_classifier",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "タスク分類"
     },
     {
@@ -27,7 +26,7 @@
       "id": "code_generation_planning",
       "type": "agent",
       "agent_definition_id": "code_generation_planning",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "コード生成計画",
       "metadata": {
         "check_comments_before": true,
@@ -39,7 +38,7 @@
       "id": "bug_fix_planning",
       "type": "agent",
       "agent_definition_id": "bug_fix_planning",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "バグ修正計画",
       "metadata": {
         "check_comments_before": true,
@@ -51,7 +50,7 @@
       "id": "test_creation_planning",
       "type": "agent",
       "agent_definition_id": "test_creation_planning",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "テスト作成計画",
       "metadata": {
         "check_comments_before": true,
@@ -63,7 +62,7 @@
       "id": "documentation_planning",
       "type": "agent",
       "agent_definition_id": "documentation_planning",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "ドキュメント生成計画",
       "metadata": {
         "check_comments_before": true,
@@ -77,31 +76,59 @@
       "label": "仕様書確認"
     },
     {
+      "id": "exec_env_setup_code_gen",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 1,
+      "label": "実行環境セットアップ（コード生成）"
+    },
+    {
+      "id": "exec_env_setup_bug_fix",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 1,
+      "label": "実行環境セットアップ（バグ修正）"
+    },
+    {
+      "id": "exec_env_setup_test",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 1,
+      "label": "実行環境セットアップ（テスト作成）"
+    },
+    {
+      "id": "exec_env_setup_doc",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 1,
+      "label": "実行環境セットアップ（ドキュメント）"
+    },
+    {
       "id": "code_generation",
       "type": "agent",
       "agent_definition_id": "code_generation",
-      "environment_mode": "create",
+      "env_ref": "1",
       "label": "コード生成"
     },
     {
       "id": "bug_fix",
       "type": "agent",
       "agent_definition_id": "bug_fix",
-      "environment_mode": "create",
+      "env_ref": "1",
       "label": "バグ修正"
     },
     {
       "id": "test_creation",
       "type": "agent",
       "agent_definition_id": "test_creation",
-      "environment_mode": "create",
+      "env_ref": "1",
       "label": "テスト作成"
     },
     {
       "id": "documentation",
       "type": "agent",
       "agent_definition_id": "documentation",
-      "environment_mode": "create",
+      "env_ref": "1",
       "label": "ドキュメント作成"
     },
     {
@@ -113,28 +140,27 @@
       "id": "test_execution_evaluation",
       "type": "agent",
       "agent_definition_id": "test_execution_evaluation",
-      "environment_mode": "inherit",
+      "env_ref": "1",
       "label": "テスト実行・評価"
     },
     {
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "environment_mode": "inherit",
+      "env_ref": "1",
       "label": "コードレビュー"
     },
     {
       "id": "documentation_review",
       "type": "agent",
       "agent_definition_id": "documentation_review",
-      "environment_mode": "inherit",
+      "env_ref": "1",
       "label": "ドキュメントレビュー"
     },
     {
       "id": "plan_reflection",
       "type": "agent",
       "agent_definition_id": "plan_reflection",
-      "environment_mode": "none",
       "label": "リフレクション",
       "metadata": {
         "check_comments_before": true,
@@ -195,7 +221,7 @@
     },
     {
       "from": "documentation_planning",
-      "to": "documentation"
+      "to": "exec_env_setup_doc"
     },
     {
       "from": "spec_check_branch",
@@ -205,21 +231,37 @@
     },
     {
       "from": "spec_check_branch",
-      "to": "code_generation",
+      "to": "exec_env_setup_code_gen",
       "condition": "context.plan_result.spec_file_exists == true && context.classification_result.task_type == 'code_generation'",
       "label": "仕様書あり（コード生成）"
     },
     {
       "from": "spec_check_branch",
-      "to": "bug_fix",
+      "to": "exec_env_setup_bug_fix",
       "condition": "context.plan_result.spec_file_exists == true && context.classification_result.task_type == 'bug_fix'",
       "label": "仕様書あり（バグ修正）"
     },
     {
       "from": "spec_check_branch",
-      "to": "test_creation",
+      "to": "exec_env_setup_test",
       "condition": "context.plan_result.spec_file_exists == true && context.classification_result.task_type == 'test_creation'",
       "label": "仕様書あり（テスト作成）"
+    },
+    {
+      "from": "exec_env_setup_code_gen",
+      "to": "code_generation"
+    },
+    {
+      "from": "exec_env_setup_bug_fix",
+      "to": "bug_fix"
+    },
+    {
+      "from": "exec_env_setup_test",
+      "to": "test_creation"
+    },
+    {
+      "from": "exec_env_setup_doc",
+      "to": "documentation"
     },
     {
       "from": "code_generation",

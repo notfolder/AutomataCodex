@@ -41,7 +41,8 @@
 | `type` | 文字列 | 必須 | ノードの種別（"agent" / "executor" / "condition"） |
 | `agent_definition_id` | 文字列 | agent時必須 | エージェント定義ファイル内のエージェントID |
 | `executor_class` | 文字列 | executor時必須 | 使用するExecutorクラス名（"UserResolverExecutor"等） |
-| `environment_mode` | 文字列 | 任意 | 実行環境（Docker）の使用方法（"create": 新規作成、"inherit": 引き継ぎ、"none": 不要、デフォルト: "none"） |
+| `env_ref` | 文字列 | 任意 | 使用する実行環境の参照（"plan": plan共有環境、"1"/"2"/"3": 分岐内の第N実行環境、省略: 環境不要） |
+| `env_count` | 整数 | ExecEnvSetupExecutor時必須 | 作成する実行環境の数。`executor_class: "ExecEnvSetupExecutor"`のノードにのみ指定する |
 | `label` | 文字列 | 任意 | 表示用ラベル |
 | `metadata` | オブジェクト | 任意 | ノード固有の拡張設定（後述） |
 
@@ -50,10 +51,13 @@
 - `executor`: `BaseExecutor`のサブクラスとして実行される前処理ノード（UserResolverExecutor等）
 - `condition`: 分岐条件を評価するノード
 
-**environment_modeの説明**:
-- `"create"`: 新規Docker環境を作成し、`execution_environments`辞書に環境IDを書き込む（実行エージェント）
-- `"inherit"`: `execution_environments`辞書から既存の環境IDを読み取って使用する（レビューエージェント、評価エージェント）
-- `"none"`: Docker環境を使用しない（計画エージェント、リフレクションエージェント）
+**env_refの説明**:
+- `"plan"`: WorkflowFactoryがワークフロー開始前に作成した共有plan環境を使用する。コンテキストの`plan_environment_id`キーから環境IDを取得する（task_classifierおよびplanningエージェント）
+- `"1"` / `"2"` / `"3"`: 分岐内の第N実行環境を使用する。対応するExecEnvSetupExecutorが事前に作成した`branch_envs`辞書の第N番環境を参照する（実行エージェントおよびレビューエージェント）
+- 省略: Docker環境を使用しない（リフレクション、条件分岐、Executorノードなど環境参照が不要なノード）
+
+**env_countの説明**:
+- `ExecEnvSetupExecutor`ノード専用フィールド。作成する実行環境の数を整数で指定する。standard_mr_processingでは各分岐で`1`を指定し、multi_codegen_mr_processingのコード生成分岐では並列エージェント数（例: `3`）を指定する
 
 **metadataフィールドの定義**:
 
@@ -102,14 +106,13 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "id": "user_resolve",
       "type": "executor",
       "executor_class": "UserResolverExecutor",
-      "environment_mode": "none",
       "label": "ユーザー情報取得"
     },
     {
       "id": "task_classifier",
       "type": "agent",
       "agent_definition_id": "task_classifier",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "タスク分類"
     },
     {
@@ -121,7 +124,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "id": "code_generation_planning",
       "type": "agent",
       "agent_definition_id": "code_generation_planning",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "コード生成計画",
       "metadata": {
         "check_comments_before": true,
@@ -132,7 +135,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "id": "bug_fix_planning",
       "type": "agent",
       "agent_definition_id": "bug_fix_planning",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "バグ修正計画",
       "metadata": {
         "check_comments_before": true,
@@ -143,7 +146,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "id": "test_creation_planning",
       "type": "agent",
       "agent_definition_id": "test_creation_planning",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "テスト作成計画",
       "metadata": {
         "check_comments_before": true,
@@ -154,7 +157,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "id": "documentation_planning",
       "type": "agent",
       "agent_definition_id": "documentation_planning",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "ドキュメント生成計画",
       "metadata": {
         "check_comments_before": true,
@@ -167,59 +170,91 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "label": "仕様書確認"
     },
     {
+      "id": "exec_env_setup_code_gen",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 1,
+      "label": "実行環境セットアップ（コード生成）"
+    },
+    {
+      "id": "exec_env_setup_bug_fix",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 1,
+      "label": "実行環境セットアップ（バグ修正）"
+    },
+    {
+      "id": "exec_env_setup_test",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 1,
+      "label": "実行環境セットアップ（テスト作成）"
+    },
+    {
+      "id": "exec_env_setup_doc",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 1,
+      "label": "実行環境セットアップ（ドキュメント）"
+    },
+    {
       "id": "code_generation",
       "type": "agent",
       "agent_definition_id": "code_generation",
-      "environment_mode": "create",
+      "env_ref": "1",
       "label": "コード生成"
     },
     {
       "id": "bug_fix",
       "type": "agent",
       "agent_definition_id": "bug_fix",
-      "environment_mode": "create",
+      "env_ref": "1",
       "label": "バグ修正"
     },
     {
       "id": "test_creation",
       "type": "agent",
       "agent_definition_id": "test_creation",
-      "environment_mode": "create",
+      "env_ref": "1",
       "label": "テスト作成"
     },
     {
       "id": "documentation",
       "type": "agent",
       "agent_definition_id": "documentation",
-      "environment_mode": "none",
+      "env_ref": "1",
       "label": "ドキュメント作成"
+    },
+    {
+      "id": "execution_type_branch",
+      "type": "condition",
+      "label": "実行タイプ判定"
+    },
+    {
+      "id": "test_execution_evaluation",
+      "type": "agent",
+      "agent_definition_id": "test_execution_evaluation",
+      "env_ref": "1",
+      "label": "テスト実行・評価"
     },
     {
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "environment_mode": "inherit",
+      "env_ref": "1",
       "label": "コードレビュー"
     },
     {
       "id": "documentation_review",
       "type": "agent",
       "agent_definition_id": "documentation_review",
-      "environment_mode": "inherit",
+      "env_ref": "1",
       "label": "ドキュメントレビュー"
-    },
-    {
-      "id": "test_execution_evaluation",
-      "type": "agent",
-      "agent_definition_id": "test_execution_evaluation",
-      "environment_mode": "inherit",
-      "label": "テスト実行・評価"
     },
     {
       "id": "plan_reflection",
       "type": "agent",
       "agent_definition_id": "plan_reflection",
-      "environment_mode": "none",
       "label": "リフレクション",
       "metadata": {
         "check_comments_before": true,
@@ -263,6 +298,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
     { "from": "code_generation_planning", "to": "spec_check_branch" },
     { "from": "bug_fix_planning", "to": "spec_check_branch" },
     { "from": "test_creation_planning", "to": "spec_check_branch" },
+    { "from": "documentation_planning", "to": "exec_env_setup_doc" },
     {
       "from": "spec_check_branch",
       "to": "documentation_planning",
@@ -271,66 +307,90 @@ metadataはノード固有の動作をカスタマイズするオプションの
     },
     {
       "from": "spec_check_branch",
-      "to": "code_generation",
+      "to": "exec_env_setup_code_gen",
       "condition": "context.plan_result.spec_file_exists == true && context.classification_result.task_type == 'code_generation'",
       "label": "仕様書あり（コード生成）"
     },
     {
       "from": "spec_check_branch",
-      "to": "bug_fix",
+      "to": "exec_env_setup_bug_fix",
       "condition": "context.plan_result.spec_file_exists == true && context.classification_result.task_type == 'bug_fix'",
       "label": "仕様書あり（バグ修正）"
     },
     {
       "from": "spec_check_branch",
-      "to": "test_creation",
+      "to": "exec_env_setup_test",
       "condition": "context.plan_result.spec_file_exists == true && context.classification_result.task_type == 'test_creation'",
       "label": "仕様書あり（テスト作成）"
     },
-    { "from": "documentation_planning", "to": "documentation" },
-    { "from": "code_generation", "to": "code_review" },
-    { "from": "bug_fix", "to": "code_review" },
-    { "from": "test_creation", "to": "code_review" },
-    { "from": "documentation", "to": "documentation_review" },
-    { "from": "code_review", "to": "test_execution_evaluation" },
-    { "from": "test_execution_evaluation", "to": "plan_reflection" },
+    { "from": "exec_env_setup_code_gen", "to": "code_generation" },
+    { "from": "exec_env_setup_bug_fix", "to": "bug_fix" },
+    { "from": "exec_env_setup_test", "to": "test_creation" },
+    { "from": "exec_env_setup_doc", "to": "documentation" },
+    { "from": "code_generation", "to": "execution_type_branch" },
+    { "from": "bug_fix", "to": "execution_type_branch" },
+    { "from": "test_creation", "to": "execution_type_branch" },
+    { "from": "documentation", "to": "execution_type_branch" },
+    {
+      "from": "execution_type_branch",
+      "to": "test_execution_evaluation",
+      "condition": "context.classification_result.task_type in ['code_generation', 'bug_fix']",
+      "label": "テスト実行"
+    },
+    {
+      "from": "execution_type_branch",
+      "to": "code_review",
+      "condition": "context.classification_result.task_type == 'test_creation'",
+      "label": "レビュー（テスト作成）"
+    },
+    {
+      "from": "execution_type_branch",
+      "to": "documentation_review",
+      "condition": "context.classification_result.task_type == 'documentation'",
+      "label": "レビュー（ドキュメント）"
+    },
+    { "from": "test_execution_evaluation", "to": "code_review" },
+    { "from": "code_review", "to": "plan_reflection" },
     { "from": "documentation_review", "to": "plan_reflection" },
     { "from": "plan_reflection", "to": "replan_branch" },
     {
       "from": "replan_branch",
       "to": "task_type_branch",
-      "condition": "context.reflection_result.action == 'revise_plan'",
-      "label": "再計画"
+      "condition": "context.reflection_result.action == 'revise_plan' && (context.reflection_result.severity == 'critical' || context.reflection_result.replan_mode == 'full')",
+      "label": "フル再計画",
+      "metadata": {
+        "trigger": "replan",
+        "context_transform": {
+          "plan_result": "previous_plan_result",
+          "reflection_result.replan_reason": "replan_reason"
+        }
+      }
     },
     {
       "from": "replan_branch",
-      "to": "code_generation",
-      "condition": "context.reflection_result.action == 'proceed' && context.reflection_result.status == 'needs_revision' && context.classification_result.task_type == 'code_generation'",
-      "label": "軽微修正（コード生成）"
-    },
-    {
-      "from": "replan_branch",
-      "to": "bug_fix",
-      "condition": "context.reflection_result.action == 'proceed' && context.reflection_result.status == 'needs_revision' && context.classification_result.task_type == 'bug_fix'",
-      "label": "軽微修正（バグ修正）"
-    },
-    {
-      "from": "replan_branch",
-      "to": "test_creation",
-      "condition": "context.reflection_result.action == 'proceed' && context.reflection_result.status == 'needs_revision' && context.classification_result.task_type == 'test_creation'",
-      "label": "軽微修正（テスト作成）"
-    },
-    {
-      "from": "replan_branch",
-      "to": "documentation",
-      "condition": "context.reflection_result.action == 'proceed' && context.reflection_result.status == 'needs_revision' && context.classification_result.task_type == 'documentation'",
-      "label": "軽微修正（ドキュメント）"
+      "to": "task_type_branch",
+      "condition": "context.reflection_result.action == 'revise_plan' && context.reflection_result.replan_mode == 'incremental'",
+      "label": "差分計画",
+      "metadata": {
+        "trigger": "replan_incremental",
+        "context_transform": {
+          "plan_result": "previous_plan_result",
+          "reflection_result.replan_reason": "replan_reason",
+          "reflection_result.new_requirements": "delta_requirements"
+        }
+      }
     },
     {
       "from": "replan_branch",
       "to": null,
-      "condition": "context.reflection_result.action == 'proceed' && context.reflection_result.status == 'success'",
+      "condition": "context.reflection_result.action == 'proceed'",
       "label": "完了"
+    },
+    {
+      "from": "replan_branch",
+      "to": "execution_type_branch",
+      "condition": "context.reflection_result.action == 'revise_plan' && context.reflection_result.severity != 'critical'",
+      "label": "軽微な修正"
     }
   ]
 }
@@ -350,62 +410,67 @@ metadataはノード固有の動作をカスタマイズするオプションの
     {
       "id": "user_resolve",
       "type": "executor",
-      "executor_class": "UserResolverExecutor",
-      "environment_mode": "none"
+      "executor_class": "UserResolverExecutor"
     },
     {
       "id": "task_classifier",
       "type": "agent",
       "agent_definition_id": "task_classifier",
-      "environment_mode": "none"
+      "env_ref": "plan"
     },
     {
       "id": "code_generation_planning",
       "type": "agent",
       "agent_definition_id": "code_generation_planning",
-      "environment_mode": "none"
+      "env_ref": "plan"
+    },
+    {
+      "id": "exec_env_setup_code_gen",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 3,
+      "label": "実行環境セットアップ（コード生成3並列）"
     },
     {
       "id": "code_generation_a",
       "type": "agent",
       "agent_definition_id": "code_generation_fast",
-      "environment_mode": "create",
+      "env_ref": "1",
       "label": "コード生成A（高速モデル）"
     },
     {
       "id": "code_generation_b",
       "type": "agent",
       "agent_definition_id": "code_generation_standard",
-      "environment_mode": "create",
+      "env_ref": "2",
       "label": "コード生成B（標準モデル）"
     },
     {
       "id": "code_generation_c",
       "type": "agent",
       "agent_definition_id": "code_generation_creative",
-      "environment_mode": "create",
+      "env_ref": "3",
       "label": "コード生成C（高温度設定）"
     },
     {
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "environment_mode": "inherit",
       "label": "コードレビュー（3案比較・自動選択）"
     },
     {
       "id": "plan_reflection",
       "type": "agent",
-      "agent_definition_id": "plan_reflection",
-      "environment_mode": "none"
+      "agent_definition_id": "plan_reflection"
     }
   ],
   "edges": [
     { "from": "user_resolve", "to": "task_classifier" },
     { "from": "task_classifier", "to": "code_generation_planning" },
-    { "from": "code_generation_planning", "to": "code_generation_a" },
-    { "from": "code_generation_planning", "to": "code_generation_b" },
-    { "from": "code_generation_planning", "to": "code_generation_c" },
+    { "from": "code_generation_planning", "to": "exec_env_setup_code_gen" },
+    { "from": "exec_env_setup_code_gen", "to": "code_generation_a" },
+    { "from": "exec_env_setup_code_gen", "to": "code_generation_b" },
+    { "from": "exec_env_setup_code_gen", "to": "code_generation_c" },
     { "from": "code_generation_a", "to": "code_review" },
     { "from": "code_generation_b", "to": "code_review" },
     { "from": "code_generation_c", "to": "code_review" },
@@ -427,9 +492,9 @@ metadataはノード固有の動作をカスタマイズするオプションの
 複数の異なるLLM設定で並列にコード生成を行い、レビューエージェントが最良のものを自動選択するプリセット。
 
 **特徴**:
-- 3つの並列コード生成ノード: `code_generation_fast`（高速モデル）、`code_generation_standard`（標準モデル）、`code_generation_creative`（高温度設定モデル）
-- 各並列ノードは独立したDocker環境と専用ブランチで実行（`environment_mode: "create"`）
-- 各エージェントは専用ブランチ（例: `feature/login-fast`, `feature/login-standard`, `feature/login-creative`）で作業
+- 3つの並列コード生成ノード: `code_generation_a`（高速モデル）、`code_generation_b`（標準モデル）、`code_generation_c`（高温度設定モデル）
+- 各並列ノードは独立したDocker環境と専用ブランチで実行（`env_ref: "1"/"2"/"3"`）
+- 各エージェントは専用ブランチ（例: `feature/login-a`, `feature/login-b`, `feature/login-c`）で作業
 - 並列実行後、`code_review`エージェントが3つの実装を比較レビューし、最良のものを自動選択
 - 選択されたブランチを元のMRブランチにマージ、他のブランチはGitLab上に保持
 
@@ -441,9 +506,9 @@ metadataはノード固有の動作をカスタマイズするオプションの
 **並列実行の仕組み**:
 - ワークフロー開始時に元のMRブランチ（例: `feature/login`）から3つのサブブランチを作成
 - 各エージェントに専用ブランチ名を`task_context`で渡す
-- `task_type_branch`から`code_generation_fast`, `code_generation_standard`, `code_generation_creative`の3つのエッジが並列に発火
-- 各エージェントは辞書型キー（`execution_environments`と`execution_results`）に自身のエージェント定義IDをキーとして書き込む
-- 3つのエージェントが完了後、`code_review`ノードが辞書から3つの実装結果を取得し、比較レビューして最良のものを`selected_implementation`として出力
+- `exec_env_setup_code_gen`ノード（env_count: 3）がplanning完了後に3つの実行環境を作成して`branch_envs`に保存
+- `parallel_codegen_branch`から`code_generation_a/b/c`の3つのエッジが並列に発火し、各エージェントは`branch_envs[1/2/3]`から対応する環境IDを取得
+- 3つのエージェントが完了後、`code_review`ノードが`branch_envs`から3つの環境を参照し、比較レビューして最良のものを`selected_implementation`として出力
 - 選択されたブランチを元のMRブランチにマージし、後続フロー（`test_execution_evaluation`）に進む
 
 ```json
@@ -457,14 +522,13 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "id": "user_resolve",
       "type": "executor",
       "executor_class": "UserResolverExecutor",
-      "environment_mode": "none",
       "label": "ユーザー情報取得"
     },
     {
       "id": "task_classifier",
       "type": "agent",
       "agent_definition_id": "task_classifier",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "タスク分類"
     },
     {
@@ -476,14 +540,13 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "id": "code_generation_planning",
       "type": "agent",
       "agent_definition_id": "code_generation_planning",
-      "environment_mode": "none",
+      "env_ref": "plan",
       "label": "コード生成計画"
     },
     {
       "id": "plan_reflection",
       "type": "agent",
       "agent_definition_id": "plan_reflection",
-      "environment_mode": "none",
       "label": "プラン検証"
     },
     {
@@ -492,50 +555,55 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "label": "プラン再検討判定"
     },
     {
+      "id": "exec_env_setup_code_gen",
+      "type": "executor",
+      "executor_class": "ExecEnvSetupExecutor",
+      "env_count": 3,
+      "label": "実行環境セットアップ（並列3環境）"
+    },
+    {
       "id": "parallel_codegen_branch",
       "type": "condition",
       "label": "並列コード生成開始"
     },
     {
-      "id": "code_generation_fast",
+      "id": "code_generation_a",
       "type": "agent",
-      "agent_definition_id": "code_generation_fast",
-      "environment_mode": "create",
+      "agent_definition_id": "code_generation_a",
+      "env_ref": "1",
       "label": "コード生成（高速モデル）"
     },
     {
-      "id": "code_generation_standard",
+      "id": "code_generation_b",
       "type": "agent",
-      "agent_definition_id": "code_generation_standard",
-      "environment_mode": "create",
+      "agent_definition_id": "code_generation_b",
+      "env_ref": "2",
       "label": "コード生成（標準モデル）"
     },
     {
-      "id": "code_generation_creative",
+      "id": "code_generation_c",
       "type": "agent",
-      "agent_definition_id": "code_generation_creative",
-      "environment_mode": "create",
+      "agent_definition_id": "code_generation_c",
+      "env_ref": "3",
       "label": "コード生成（高温度モデル）"
     },
     {
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "environment_mode": "none",
       "label": "コードレビュー（3案比較・自動選択）"
     },
     {
       "id": "branch_merge",
       "type": "executor",
       "executor_class": "BranchMergeExecutor",
-      "environment_mode": "none",
       "label": "選択ブランチのマージ"
     },
     {
       "id": "test_execution_evaluation",
       "type": "agent",
       "agent_definition_id": "test_execution_evaluation",
-      "environment_mode": "inherit",
+      "env_ref": "1",
       "label": "テスト実行・評価"
     },
     {
@@ -544,10 +612,10 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "label": "テスト結果判定"
     },
     {
-      "id": "code_review",
+      "id": "final_code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
-      "environment_mode": "inherit",
+      "env_ref": "1",
       "label": "コードレビュー"
     },
     {
@@ -591,40 +659,45 @@ metadataはノード固有の動作をカスタマイズするオプションの
     },
     {
       "from": "plan_revision_branch",
-      "to": "parallel_codegen_branch",
+      "to": "exec_env_setup_code_gen",
       "condition": "context.reflection_result.action == 'proceed'",
-      "label": "並列実行"
+      "label": "環境セットアップ"
+    },
+    {
+      "from": "exec_env_setup_code_gen",
+      "to": "parallel_codegen_branch",
+      "label": "環境準備完了"
     },
     {
       "from": "parallel_codegen_branch",
-      "to": "code_generation_fast",
+      "to": "code_generation_a",
       "condition": "true",
       "label": "高速モデル"
     },
     {
       "from": "parallel_codegen_branch",
-      "to": "code_generation_standard",
+      "to": "code_generation_b",
       "condition": "true",
       "label": "標準モデル"
     },
     {
       "from": "parallel_codegen_branch",
-      "to": "code_generation_creative",
+      "to": "code_generation_c",
       "condition": "true",
       "label": "高温度モデル"
     },
     {
-      "from": "code_generation_fast",
+      "from": "code_generation_a",
       "to": "code_review",
       "label": "完了"
     },
     {
-      "from": "code_generation_standard",
+      "from": "code_generation_b",
       "to": "code_review",
       "label": "完了"
     },
     {
-      "from": "code_generation_creative",
+      "from": "code_generation_c",
       "to": "code_review",
       "label": "完了"
     },
@@ -645,7 +718,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
     },
     {
       "from": "test_result_branch",
-      "to": "code_review",
+      "to": "final_code_review",
       "condition": "context.review_result.status == 'passed'",
       "label": "テスト成功"
     },
@@ -656,7 +729,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "label": "修正上限"
     },
     {
-      "from": "code_review",
+      "from": "final_code_review",
       "to": "review_result_branch",
       "label": "レビュー完了"
     },
@@ -684,15 +757,15 @@ metadataはノード固有の動作をカスタマイズするオプションの
 
 **並列実行ノードの実装ポイント**:
 
-1. **Docker環境の独立性**: 各並列ノード（`code_generation_fast`, `code_generation_standard`, `code_generation_creative`）は`environment_mode: "create"`であり、`ExecutionEnvironmentManager`が各ノード用に独立したDockerコンテナを起動する。これにより、3つの実装が互いに干渉せずに並行して実行される。
+1. **Docker環境の独立性**: `exec_env_setup_code_gen`ノード（env_count: 3）がplanning完了後に3つの独立したDockerコンテナを起動し、`branch_envs: {1: env_id_1, 2: env_id_2, 3: env_id_3}`としてコンテキストに保存する。各並列ノードはenv_refで指定された番号の環境を使用する。
 
-2. **辞書型コンテキストキー**: 全ての実行エージェント（単一・並列問わず）は`output_keys`を`["execution_environments", "execution_results"]`とする。各エージェントは自身のエージェント定義IDをキーとして辞書に書き込むことで、単一エージェントでは1要素の辞書、並列エージェントでは複数要素の辞書としてワークフローコンテキストに共存できる。この統一設計により、エージェント定義が統一され、並列エージェントの数や名称に依存しない柔軟な設計が実現される。
+2. **env_refによる環境参照**: 各並列ノードは`env_ref: "1"/"2"/"3"`を持ち、`branch_envs`コンテキストから対応する環境IDを自動取得する。これにより、3つの実装が互いに干渉せずに並行して実行される。
 
-3. **集約ノード（code_review）**: このノードは`input_keys`を`["execution_environments", "execution_results", "task_context"]`とし、辞書から全ての実行結果（単一または並列）を取得し、比較レビューを実施して最良のものを自動選択する。選択された実装情報を`selected_implementation`として出力。
+3. **集約ノード（code_review）**: `env_ref`を省略し、`input_keys`に`branch_envs`を含める。これにより全3環境にアクセスして比較レビューを実施し、最良のものを`selected_implementation`として出力する。
 
-4. **選択された環境の引き継ぎ**: `selected_implementation`には環境IDが含まれ、後続ノード（`test_execution_evaluation`）はこの環境IDを使用して選択された実装と同じDocker環境でテストを実行する。
+4. **選択された環境の引き継ぎ**: `selected_implementation`には選択された実装のブランチ名と環境IDが含まれ、`branch_merge`でマージ後、`test_execution_evaluation`（`env_ref: "1"`）が選択環境でテストを実行する。
 
-5. **環境数の集計**: `DefinitionLoader.validate_graph_definition()`は`environment_mode: "create"`のノード数を数えて返す。このグラフでは3つの並列ノードがあるため、`WorkflowFactory._setup_environments()`は3つのDockerコンテナを事前に起動する。
+5. **env_countバリデーション**: `DefinitionLoader.validate_graph_definition()`は`exec_env_setup_code_gen`の`env_count: 3`が同一分岐内のノードの最大`env_ref`番号（3）以上であることを検証する。
 
 ---
 
@@ -706,7 +779,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
 | entryノードの存在 | `entry_node`に指定されたIDがnodesに存在するか |
 | エッジの参照整合性 | `edges`の`from`に指定されたIDがすべてnodesに存在するか。`to`はnull（ワークフロー終了）またはnodesに存在するIDであるか |
 | condition構文 | condition式に含まれるコンテキストキーが`agent_definition`内の`output_keys`に含まれるか |
-| environment_mode集計 | `environment_mode: "create"`のノード数を集計し、`WorkflowFactory._setup_environments()`で事前準備するDocker環境数の根拠として返す |
+| env_refバリデーション | 各ノードの`env_ref`値が有効か（"plan"、"1"〜"N"の整数文字列、または省略）。ExecEnvSetupExecutorノードは`env_count`フィールドが必須。同一分岐内で`env_ref: "N"`を持つノードの最大N値が同分岐のExecEnvSetupExecutorの`env_count`以下であるかを検証する |
 
 ## 6. 定義の取得・更新フロー
 
