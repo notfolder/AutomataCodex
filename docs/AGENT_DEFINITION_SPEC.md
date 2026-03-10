@@ -48,7 +48,7 @@
 | role | 処理内容 |
 |------|---------|
 | `planning` | コンテキスト取得→LLM呼び出し（プランニング）→Todoリスト作成→GitLab投稿→コンテキスト保存 |
-| `reflection` | プラン取得→LLM呼び出し（検証）→改善判定→GitLab投稿→コンテキスト保存 |
+| `reflection` | コンテキスト取得→LLM呼び出し（検証）→改善判定→GitLab投稿→コンテキスト保存 |
 | `execution` | プラン取得→LLM呼び出し（実装/生成）→ファイル操作（MCPツール）→git操作→コンテキスト保存 |
 | `review` | MR差分取得→LLM呼び出し（レビュー）→コメント生成→GitLab投稿→コンテキスト保存 |
 
@@ -506,19 +506,19 @@
 
 **エージェント定義ID**: `plan_reflection`
 
-**責務**: プランニング後にプランを検証し、問題点を特定して改善案を提示する。プロンプト詳細はPROMPTS.mdおよびプロンプト定義ファイルを参照。
+**責務**: 指定されたコンテキストを検証し、問題点を特定して改善案を提示する。プロンプト詳細はPROMPTS.mdおよびプロンプト定義ファイルを参照。
 
 **エージェント定義の主要設定**:
 - `role`: "reflection"
 - `input_keys`: ["plan_result", "todo_list", "task_context", "review_result"]
 - `output_keys`: ["reflection_result"]
 - `tools`: ["text_editor", "get_todo_list"]
-- `environment_mode`: "none"
+- `environment_mode`: "none"または"inherit"（環境参照が必要な場合は"inherit"を指定）
 
 **処理フロー**:
-1. プランとTodoリストの取得
-   - ワークフローコンテキストから実行計画を取得
-   - Todoリストの詳細を確認
+1. コンテキストの取得
+   - ワークフローコンテキストから検証対象のデータを取得
+   - 関連するTodoリストが存在する場合は詳細を確認
    - Issue/MRの要求内容を確認
 2. プランの検証
    - **整合性チェック**: プランの各ステップが論理的に整合しているか
@@ -542,7 +542,6 @@
    - 問題点と改善案を見やすい形式で提示
 7. コンテキスト保存
    - 検証結果と改善案をワークフローコンテキストに保存
-   - 反復回数をカウント（max_reflection_count以内）
 
 **検証結果の出力形式**:
 - `reflection_result`: "approved" | "needs_revision"（承認/改善必要）

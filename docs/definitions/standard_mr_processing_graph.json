@@ -138,7 +138,8 @@
       "label": "リフレクション",
       "metadata": {
         "check_comments_before": true,
-        "comment_redirect_to": "task_classifier"
+        "comment_redirect_to": "task_classifier",
+        "max_retries": 3
       }
     },
     {

@@ -804,7 +804,8 @@ flowchart TD
 
 7. **toolsとroleの整合性**:
    - `environment_mode`の値が有効か（"create"、"inherit"、"none"のいずれか）
-   - "planning"と"reflection"ロールは環境不要のため、`environment_mode: "none"`であるべき
+   - "planning"ロールは環境不要のため、`environment_mode: "none"`のみ許容
+   - "reflection"ロールは`environment_mode: "none"`または`"inherit"`を許容（コード生成後の成果物確認など、環境参照が必要なケースに対応）
    - "execution"ロールで新規環境が必要な場合は`environment_mode: "create"`
    - "review"ロールや評価エージェントは`environment_mode: "inherit"`
 
@@ -2310,8 +2311,7 @@ Middlewareは以下の3つのフェーズで実行されます：
    - 現在の`plan_result`を`previous_plan_result`キーにコピー（再計画時の参照用）
    
 6. **リダイレクト先の決定**:
-   - ノードのmetadataから`comment_redirect_to`フィールドを取得
-   - 未設定の場合はデフォルト値`"plan_reflection"`を使用
+   - ノードのmetadataから`comment_redirect_to`フィールドを取得（`check_comments_before: true`の場合は必須のため、バリデーション時点で存在が保証されている）
    
 7. **リダイレクトシグナル生成**:
    - MiddlewareSignalを生成して返す
@@ -2531,11 +2531,15 @@ Middlewareは以下の3つのフェーズで実行されます：
 4. パターンに一致し、かつリトライ回数が上限以内の場合: Trueを返す（許容）
 5. それ以外: Falseを返す（許容しない）
 
-**デフォルト許容パターン**:
+**許容パターンの構築**:
 
-- **plan_reflectionノード**: planノードからの遷移を最大3回まで許容
-  - 理由: プラン改善のフィードバックループは正常な動作
-  - 上限: ユーザーコメントによる修正指示が3回以上続く場合は介入が必要
+LoopGuardMiddlewareの初期化時に、グラフ定義内の`role: "reflection"`を持つすべてのノードとその入辺エッジから`allowed_retry_patterns`を自動的に構築する。
+
+- 各reflectionノードについて、入辺（そのノードへのエッジ）の`from`ノードIDを`allowed_from`として収集する
+- `max_retries`はノードの`metadata.max_retries`から取得する（省略時は3）
+- 構築例: `{"plan_reflection": {"allowed_from": ["code_generation_planning"], "max_retries": 3}}`
+
+ハードコードされたデフォルトパターンは存在しない。グラフ定義の`role: "reflection"`ノードが存在しない場合、`allowed_retry_patterns`は空辞書となり、すべてのループが`max_visits_per_node`を超えた時点で異常と判定される。
 
 **並行実行時の動作**:
 
@@ -2709,7 +2713,7 @@ Middlewareは以下の3つのフェーズで実行されます：
 | Execution系ノード | ⚠️ 任意 | `task_classifier` | 長時間実行の場合に推奨 |
 | Review系ノード | ❌ 不要 | — | 最終フェーズのため |
 
-`comment_redirect_to`を省略した場合はデフォルト値`"plan_reflection"`が使用される。
+`check_comments_before: true`を指定する場合は`comment_redirect_to`も必須である。省略した場合は`validate_graph_definition()`でバリデーションエラーとなる。
 
 **TokenUsageMiddleware、ErrorHandlingMiddleware、InfiniteLoopDetectionMiddleware**:
 
@@ -3800,14 +3804,6 @@ file_storage:
     - "txt"
     - "md"
     - "log"
-
-# プランニング設定（planning, verificationは常時有効）
-planning:
-  max_reflection_count: 3  # 環境変数: PLANNING_MAX_REFLECTION_COUNT
-  max_plan_revision_count: 2  # 環境変数: PLANNING_MAX_PLAN_REVISION_COUNT
-  reflection_interval: 5  # 環境変数: PLANNING_REFLECTION_INTERVAL（ステップ数）
-  verification:
-    max_rounds: 2  # 環境変数: PLANNING_VERIFICATION_MAX_ROUNDS
 
 # MCP設定
 mcp_servers:

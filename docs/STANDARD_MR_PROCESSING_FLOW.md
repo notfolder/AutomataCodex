@@ -400,7 +400,7 @@ flowchart TD
         Check{新規コメント?}
         MW -->|ノード実行前| Check
         Check -->|なし| Continue[ノード実行継続]
-        Check -->|あり| Interrupt[実行中断<br/>plan_reflectionへリダイレクト]
+        Check -->|あり| Interrupt[実行中断<br/>comment_redirect_toで指定されたノードへリダイレクト]
     end
     
     subgraph 差分計画判定

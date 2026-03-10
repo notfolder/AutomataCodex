@@ -62,8 +62,9 @@ metadataはノード固有の動作をカスタマイズするオプションの
 | フィールド | 型 | 説明 |
 |-----------|------|------|
 | `check_comments_before` | bool | trueの場合、ノード実行前にCommentCheckMiddlewareが新規コメントを確認する |
-| `comment_redirect_to` | 文字列 | 新規コメント検出時のリダイレクト先ノードID。省略時はデフォルト値`"plan_reflection"`が使用される |
+| `comment_redirect_to` | 文字列 | 新規コメント検出時のリダイレクト先ノードID。`check_comments_before: true`を指定する場合は必須。省略した場合はバリデーションエラー |
 | `preserve_context` | 文字列配列 | 再計画時に保持するコンテキストキーのリスト |
+| `max_retries` | 整数 | `role: "reflection"`ノードの最大リトライ回数。LoopGuardMiddlewareが`allowed_retry_patterns`の構築に使用する。省略時は3 |
 
 ### 3.3 エッジ定義（edges）
 
@@ -222,7 +223,8 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "label": "リフレクション",
       "metadata": {
         "check_comments_before": true,
-        "comment_redirect_to": "task_classifier"
+        "comment_redirect_to": "task_classifier",
+        "max_retries": 3
       }
     },
     {
