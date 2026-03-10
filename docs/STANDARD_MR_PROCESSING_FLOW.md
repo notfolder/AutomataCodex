@@ -489,7 +489,7 @@ flowchart TD
 
 - **透過的**: グラフ構造を汚さず、ビジネスロジックに集中できる
 - **宣言的**: ノードmetadataで`check_comments_before: true`と`comment_redirect_to`を指定するのみ
-- **柔軟なリダイレクト**: `comment_redirect_to`でノードごとにリダイレクト先を設定可能。標準MR処理フローでは`"task_classifier"`を指定し、タスク種別から再判定する
+- **柔軟なリダイレクト**: `comment_redirect_to`でノードごとにリダイレクト先を設定可能。標準MR処理フローでは計画ノード群は`task_classifier`、実行・レビューノード群は`plan_reflection`を指定する
 - **一元管理**: コメントチェックロジックが1箇所に集約され保守性が高い
 - **柔軟な適用**: 必要なノードにのみ適用可能
 
@@ -507,7 +507,7 @@ flowchart TD
 
 1. **Middleware介入**: ノード実行前にCommentCheckMiddlewareが自動的に新規コメントをチェック（対象ノードのmetadata.check_comments_before: trueの場合のみ）
 2. **コンテキスト追加**: 新規コメントがあれば`user_new_comments`キーに格納
-3. **実行中断とリダイレクト**: 新規コメント検出時は現在のノード実行を中断し、ノードmetadataの`comment_redirect_to`で指定されたノードへリダイレクト（標準MR処理フローでは`task_classifier`を指定）
+3. **実行中断とリダイレクト**: 新規コメント検出時は現在のノード実行を中断し、ノードmetadataの`comment_redirect_to`で指定されたノードへリダイレクト（計画ノード群は`task_classifier`、実行・レビューノード群は`plan_reflection`）
 4. **差分計画判定**: `plan_reflection`エージェントが新規コメントを解析
    - **独立した追加要求**: `replan_mode: incremental`で差分計画
    - **既存計画と矛盾**: `replan_mode: full`でフル再計画
@@ -542,9 +542,10 @@ flowchart TD
 
 #### 4.8.5 グラフ定義での実装
 
-- Planningノード群に`metadata.check_comments_before: true`、`metadata.comment_redirect_to: "task_classifier"`を追加
-- Plan Reflectionノードに`metadata.check_comments_before: true`、`metadata.comment_redirect_to: "task_classifier"`を追加
-- Executionノード群は`check_comments_before: true`と`comment_redirect_to: "task_classifier"`を必要に応じて追加
+- **計画ノード群**（`code_generation_planning` / `bug_fix_planning` / `test_creation_planning` / `documentation_planning`）: `metadata.check_comments_before: true`、`metadata.comment_redirect_to: "task_classifier"`を追加
+- **Plan Reflectionノード**（`plan_reflection`）: `metadata.check_comments_before: true`、`metadata.comment_redirect_to: "task_classifier"`を追加
+- **実行ノード群**（`code_generation` / `bug_fix` / `test_creation` / `documentation`）: `metadata.check_comments_before: true`、`metadata.comment_redirect_to: "plan_reflection"`を追加（既存の`plan_result`・Todoを保持したまま差分判定させるため）
+- **レビュー・テストの実行ノード群**（`test_execution_evaluation` / `code_review` / `documentation_review`）: `metadata.check_comments_before: true`、`metadata.comment_redirect_to: "plan_reflection"`を追加（実行結果を加味しながらコメントを差分判定させるため）
 - 明示的な`CommentMonitorExecutor`ノードは不要
 
 #### 4.8.6 エージェント定義での実装

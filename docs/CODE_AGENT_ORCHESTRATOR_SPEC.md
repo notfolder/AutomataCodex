@@ -2718,8 +2718,8 @@ LoopGuardMiddlewareの初期化時に、グラフ定義内の`role: "reflection"
 |------------|----------|-----------------|------|
 | Planning系ノード | ✅ 推奨 | `task_classifier` | タスク種別の再判定が必要 |
 | Plan Reflection | ✅ 推奨 | `task_classifier` | コメントによりタスク全体が変わりうる |
-| Execution系ノード | ⚠️ 任意 | `task_classifier` | 長時間実行の場合に推奨 |
-| Review系ノード | ❌ 不要 | — | 最終フェーズのため |
+| Execution系ノード | ✅ 推奨 | `plan_reflection` | 既存の`plan_result`・Todoを保持したまま差分判定させるため |
+| Review・テスト実行系ノード | ✅ 推奨 | `plan_reflection` | 実行結果を加味しながらコメントを差分判定させるため |
 
 `check_comments_before: true`を指定する場合は`comment_redirect_to`も必須である。省略した場合は`validate_graph_definition()`でバリデーションエラーとなる。
 

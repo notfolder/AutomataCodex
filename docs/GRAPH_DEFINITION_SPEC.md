@@ -202,28 +202,44 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "type": "agent",
       "agent_definition_id": "code_generation",
       "env_ref": "1",
-      "label": "コード生成"
+      "label": "コード生成",
+      "metadata": {
+        "check_comments_before": true,
+        "comment_redirect_to": "plan_reflection"
+      }
     },
     {
       "id": "bug_fix",
       "type": "agent",
       "agent_definition_id": "bug_fix",
       "env_ref": "1",
-      "label": "バグ修正"
+      "label": "バグ修正",
+      "metadata": {
+        "check_comments_before": true,
+        "comment_redirect_to": "plan_reflection"
+      }
     },
     {
       "id": "test_creation",
       "type": "agent",
       "agent_definition_id": "test_creation",
       "env_ref": "1",
-      "label": "テスト作成"
+      "label": "テスト作成",
+      "metadata": {
+        "check_comments_before": true,
+        "comment_redirect_to": "plan_reflection"
+      }
     },
     {
       "id": "documentation",
       "type": "agent",
       "agent_definition_id": "documentation",
       "env_ref": "1",
-      "label": "ドキュメント作成"
+      "label": "ドキュメント作成",
+      "metadata": {
+        "check_comments_before": true,
+        "comment_redirect_to": "plan_reflection"
+      }
     },
     {
       "id": "execution_type_branch",
@@ -235,21 +251,33 @@ metadataはノード固有の動作をカスタマイズするオプションの
       "type": "agent",
       "agent_definition_id": "test_execution_evaluation",
       "env_ref": "1",
-      "label": "テスト実行・評価"
+      "label": "テスト実行・評価",
+      "metadata": {
+        "check_comments_before": true,
+        "comment_redirect_to": "plan_reflection"
+      }
     },
     {
       "id": "code_review",
       "type": "agent",
       "agent_definition_id": "code_review",
       "env_ref": "1",
-      "label": "コードレビュー"
+      "label": "コードレビュー",
+      "metadata": {
+        "check_comments_before": true,
+        "comment_redirect_to": "plan_reflection"
+      }
     },
     {
       "id": "documentation_review",
       "type": "agent",
       "agent_definition_id": "documentation_review",
       "env_ref": "1",
-      "label": "ドキュメントレビュー"
+      "label": "ドキュメントレビュー",
+      "metadata": {
+        "check_comments_before": true,
+        "comment_redirect_to": "plan_reflection"
+      }
     },
     {
       "id": "plan_reflection",
