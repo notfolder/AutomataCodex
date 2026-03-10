@@ -63,7 +63,6 @@ metadataはノード固有の動作をカスタマイズするオプションの
 |-----------|------|------|
 | `check_comments_before` | bool | trueの場合、ノード実行前にCommentCheckMiddlewareが新規コメントを確認する |
 | `comment_redirect_to` | 文字列 | 新規コメント検出時のリダイレクト先ノードID。省略時はデフォルト値`"plan_reflection"`が使用される |
-| `replan_mode` | 文字列 | 再計画時の動作（"full": 完全再計画、"incremental": 差分計画、"hybrid": LLMが判断） |
 | `preserve_context` | 文字列配列 | 再計画時に保持するコンテキストキーのリスト |
 
 ### 3.3 エッジ定義（edges）

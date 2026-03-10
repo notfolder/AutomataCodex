@@ -32,7 +32,6 @@
       "metadata": {
         "check_comments_before": true,
         "comment_redirect_to": "task_classifier",
-        "replan_mode": "hybrid",
         "preserve_context": ["plan_result", "todo_list"]
       }
     },
@@ -45,7 +44,6 @@
       "metadata": {
         "check_comments_before": true,
         "comment_redirect_to": "task_classifier",
-        "replan_mode": "hybrid",
         "preserve_context": ["plan_result", "todo_list"]
       }
     },
@@ -58,7 +56,6 @@
       "metadata": {
         "check_comments_before": true,
         "comment_redirect_to": "task_classifier",
-        "replan_mode": "hybrid",
         "preserve_context": ["plan_result", "todo_list"]
       }
     },
@@ -71,7 +68,6 @@
       "metadata": {
         "check_comments_before": true,
         "comment_redirect_to": "task_classifier",
-        "replan_mode": "hybrid",
         "preserve_context": ["plan_result", "todo_list"]
       }
     },
