@@ -1,10 +1,10 @@
-# CodeAgentOrchestrator
+# AutomataCodex
 
 GitLab上のIssue/MRを自動的に処理するコードエージェントオーケストレーションシステム。
 
 ## 概要
 
-本システムはGitLabのIssueやMerge Requestを検出し、AIエージェントを使って自動的にコード生成・バグ修正・テスト作成・ドキュメント生成を実行する。Agent Framework（Microsoft Semantic Kernel）を基盤とし、グラフ定義・エージェント定義・プロンプト定義ファイルによって柔軟なワークフローを実現する。
+本システムはGitLabのIssueやMerge Requestを検出し、AIエージェントを使って自動的にコード生成・バグ修正・テスト作成・ドキュメント生成を実行する。Microsoft Agent Frameworkを基盤とし、グラフ定義・エージェント定義・プロンプト定義ファイルによって柔軟なワークフローを実現する。
 
 詳細な設計仕様は [`docs/CODE_AGENT_ORCHESTRATOR_SPEC.md`](docs/CODE_AGENT_ORCHESTRATOR_SPEC.md) を参照。
 
@@ -48,7 +48,7 @@ GitLab上のIssue/MRを自動的に処理するコードエージェントオー
 |-------|------|
 | `POSTGRES_PASSWORD` | PostgreSQL パスワード |
 | `ENCRYPTION_KEY` | APIキー暗号化用32バイトキー |
-| `GITLAB_TOKEN` | GitLab Personal Access Token |
+| `GITLAB_PAT` | GitLab bot用 Personal Access Token |
 | `GITLAB_URL` | GitLab インスタンスURL |
 | `RABBITMQ_URL` | RabbitMQ接続URL |
 

@@ -4060,7 +4060,7 @@ ConfigManager内で環境変数をYAML設定キーにマッピングする。
 
 ## 付録B: Agent Framework vs coding_agent 対応表
 
-| 機能 | coding_agent | CodeAgentOrchestrator (Agent Framework) |
+| 機能 | coding_agent | # AutomataCodex (Agent Framework) |
 |------|--------------|----------------------------------------|
 | **タスクキュー** | RabbitMQ / InMemory | RabbitMQ（Producer/Consumerパターン踏襲） |
 | **ワークフロー制御** | 独自実装（main.py） | Producer/Consumer + Agent Framework Workflows |
