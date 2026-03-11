@@ -2233,9 +2233,9 @@ graph TB
     Branch --> B[code_generation_b<br/>env_ref: 2]
     Branch --> C[code_generation_c<br/>env_ref: 3]
     
-    A -->|branch_envs[1]| Rev[code_review<br/>3つの環境を順次確認]
-    B -->|branch_envs[2]| Rev
-    C -->|branch_envs[3]| Rev
+    A -->|"branch_envs[1]"| Rev[code_review<br/>3つの環境を順次確認]
+    B -->|"branch_envs[2]"| Rev
+    C -->|"branch_envs[3]"| Rev
     
     style A fill:#99ccff
     style B fill:#99ccff
