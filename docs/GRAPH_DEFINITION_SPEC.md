@@ -785,7 +785,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
 
 **並列実行ノードの実装ポイント**:
 
-1. **Docker環境の独立性**: `exec_env_setup_code_gen`ノード（env_count: 3）がplanning完了後に3つの独立したDockerコンテナを起動し、`branch_envs: {1: env_id_1, 2: env_id_2, 3: env_id_3}`としてコンテキストに保存する。各並列ノードはenv_refで指定された番号の環境を使用する。
+1. **Docker環境の独立性**: `exec_env_setup_code_gen`ノード（env_count: 3）がplanning完了後に3つの独立したDockerコンテナを起動し、`branch_envs: {1: {"env_id": env_id_1, "branch": branch_1}, 2: {...}, 3: {...}}`としてコンテキストに保存する。各並列ノードはenv_refで指定された番号の環境を使用する。
 
 2. **env_refによる環境参照**: 各並列ノードは`env_ref: "1"/"2"/"3"`を持ち、`branch_envs`コンテキストから対応する環境IDを自動取得する。これにより、3つの実装が互いに干渉せずに並行して実行される。
 

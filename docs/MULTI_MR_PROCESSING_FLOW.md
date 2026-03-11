@@ -171,7 +171,7 @@ flowchart TD
 |---------|---------------|------|
 | 定義読み込み | DefinitionLoader | グラフ/エージェント/プロンプト定義をロード |
 | plan環境セットアップ | PlanEnvSetupExecutor | python固定のplan環境を1つ作成しリポジトリをclone |
-| 実行環境セットアップ（コード生成） | ExecEnvSetupExecutor（env_count:3） | 3つの実行環境を作成。`branch_envs: {1: env_id, 2: env_id, 3: env_id}`をコンテキストに保存。サブブランチを3本作成 |
+| 実行環境セットアップ（コード生成） | ExecEnvSetupExecutor（env_count:3） | 3つの実行環境を作成。`branch_envs: {1: {env_id: "...", branch: "..."}, 2: {...}, 3: {...}}`をコンテキストに保存。サブブランチを3本作成 |
 | 実行環境セットアップ（他タスク） | ExecEnvSetupExecutor（env_count:1） | 1つの実行環境を作成 |
 | 並列コード生成 | code_generation_fast / code_generation_standard / code_generation_creative | 各自の担当ブランチで独立した実装を並列実行 |
 | コードレビュー・実装選択 | code_review（code_review_multiプロンプト） | コード生成タスク: 3実装を比較し最良を選択。バグ修正・テスト作成: 標準コードレビュー |
@@ -209,21 +209,21 @@ flowchart TD
 1. **3環境の作成**: 3つのDockerコンテナ環境を作成して`branch_envs`コンテキストに保存する
    ```
    branch_envs: {
-     1: "env-uuid-1",  // code_generation_fast が使用
-     2: "env-uuid-2",  // code_generation_standard が使用
-     3: "env-uuid-3"   // code_generation_creative が使用
+     1: {"env_id": "env-uuid-1", "branch": "feature/login-code-gen-1"},  // code_generation_fast が使用
+     2: {"env_id": "env-uuid-2", "branch": "feature/login-code-gen-2"},  // code_generation_standard が使用
+     3: {"env_id": "env-uuid-3", "branch": "feature/login-code-gen-3"}   // code_generation_creative が使用
    }
    ```
 
 2. **サブブランチの作成**: 元MRブランチからサブブランチを3本作成する
-   - 命名規則: `{元ブランチ名}-fast`, `{元ブランチ名}-standard`, `{元ブランチ名}-creative`
+   - 命名規則: ノードID（`exec_env_setup_code_gen`）から `exec_env_setup_` を除去し `_` を `-` に変換したサフィックスに `-{N}` を付与
    - 例: 元ブランチ `feature/login` の場合:
-     - `feature/login-fast`   （code_generation_fast用）
-     - `feature/login-standard`（code_generation_standard用）
-     - `feature/login-creative`（code_generation_creative用）
+     - `feature/login-code-gen-1`（環境1用）
+     - `feature/login-code-gen-2`（環境2用）
+     - `feature/login-code-gen-3`（環境3用）
    - 実装: `GitLabClient.create_branch(branch_name, base_branch)` を3回呼び出し
 
-3. **task_contextへのブランチ情報設定**: 各エージェントの`task_context`に`assigned_branch`フィールドを追加し、担当ブランチ名を設定する
+3. **task_contextへのブランチ情報設定**: AgentFactoryがエージェントノード生成時に `branch_envs[N]["branch"]` を `task_context.assigned_branch` に設定する
 
 ### 4.4 並列コード生成フェーズ
 
@@ -237,7 +237,7 @@ flowchart TD
 **各エージェントの実行内容**:
 
 1. `task_context.assigned_branch`から自身の担当ブランチ名を取得する
-2. `get_environment_id()`で`branch_envs[N]`からDockerコンテナの環境IDを取得する
+2. `get_environment_id()`で`branch_envs[N]["env_id"]`からDockerコンテナの環境IDを取得する
 3. 担当ブランチをcheckoutして作業を開始する
 4. 仕様書と計画に基づいて各エージェントの方針に従い実装を完成させる
 5. テストコードを作成してcommit・pushする
@@ -285,7 +285,7 @@ flowchart TD
 
 5. **`selected_implementation`の出力**: 以下のフィールドを含む辞書として出力する
    - `environment_id`: 選択された実装の環境ID
-   - `branch_name`: 選択された実装のブランチ名（例: `feature/login-standard`）
+   - `branch_name`: 選択された実装のブランチ名（例: `feature/login-code-gen-2`）
    - `selection_reason`: 選択理由の説明文
    - `quality_score`: 総合評価スコア（0.0〜1.0）
    - `evaluation_details`: 各評価基準の詳細（strengths・weaknessesリスト）
@@ -330,9 +330,9 @@ flowchart TD
     SpecBranch -->|仕様書なし| DocPlanning[documentation_planning<br/>仕様書作成]
     SpecBranch -->|仕様書あり| EnvSetup[exec_env_setup_code_gen<br/>3環境作成・3サブブランチ作成<br/>branch_envs保存]
 
-    EnvSetup --> Fast[code_generation_fast<br/>担当: feature/xxx-fast<br/>env_ref: 1<br/>速度優先実装]
-    EnvSetup --> Standard[code_generation_standard<br/>担当: feature/xxx-standard<br/>env_ref: 2<br/>品質・速度バランス実装]
-    EnvSetup --> Creative[code_generation_creative<br/>担当: feature/xxx-creative<br/>env_ref: 3<br/>代替アプローチ実装]
+    EnvSetup --> Fast[code_generation_fast<br/>担当: feature/xxx-code-gen-1<br/>env_ref: 1<br/>速度優先実装]
+    EnvSetup --> Standard[code_generation_standard<br/>担当: feature/xxx-code-gen-2<br/>env_ref: 2<br/>品質・速度バランス実装]
+    EnvSetup --> Creative[code_generation_creative<br/>担当: feature/xxx-code-gen-3<br/>env_ref: 3<br/>代替アプローチ実装]
 
     subgraph parallel["並列実行（各エージェントが独立したブランチ・Docker環境で作業）"]
         direction LR
@@ -345,7 +345,7 @@ flowchart TD
     Standard --> Review
     Creative --> Review
 
-    Review --> Merge[branch_merge_executor<br/>選択ブランチを元MRブランチにマージ<br/>例: feature/xxx-standard → feature/xxx]
+    Review --> Merge[branch_merge_executor<br/>選択ブランチを元MRブランチにマージ<br/>例: feature/xxx-code-gen-2 → feature/xxx]
 
     Merge --> Reflection[plan_reflection<br/>マージ後コードの最終評価<br/>再計画判断]
 
@@ -361,31 +361,31 @@ flowchart TD
 
 ### 6.1 ブランチ命名規則
 
-各並列コード生成エージェントのサブブランチは、元MRブランチ名の末尾にエージェント種別を付加した名前で作成される。
+各並列コード生成エージェントのサブブランチは、ノードID（`exec_env_setup_code_gen`）から `exec_env_setup_` プレフィックスを除去し `_` を `-` に変換したサフィックスに環境番号 `-{N}` を付与した名前で作成される。
 
-| エージェント | サブブランチ名パターン | 命名例（元ブランチ: `feature/login`） |
-|------------|---------------------|--------------------------------------|
-| code_generation_fast | `{元ブランチ名}-fast` | `feature/login-fast` |
-| code_generation_standard | `{元ブランチ名}-standard` | `feature/login-standard` |
-| code_generation_creative | `{元ブランチ名}-creative` | `feature/login-creative` |
+| 環境番号 | サブブランチ名パターン | 命名例（元ブランチ: `feature/login`、ノードID: `exec_env_setup_code_gen`） |
+|---------|---------------------|-------------------------------------------------------------------|
+| 1 | `{元ブランチ名}-code-gen-1` | `feature/login-code-gen-1` |
+| 2 | `{元ブランチ名}-code-gen-2` | `feature/login-code-gen-2` |
+| 3 | `{元ブランチ名}-code-gen-3` | `feature/login-code-gen-3` |
 
 ### 6.2 ブランチのライフサイクル
 
 ```mermaid
 flowchart LR
-    A([元MRブランチ<br/>feature/login]) -->|ExecEnvSetupExecutor| B[feature/login-fast]
-    A -->|ExecEnvSetupExecutor| C[feature/login-standard]
-    A -->|ExecEnvSetupExecutor| D[feature/login-creative]
+    A([元MRブランチ<br/>feature/login]) -->|ExecEnvSetupExecutor| B[feature/login-code-gen-1]
+    A -->|ExecEnvSetupExecutor| C[feature/login-code-gen-2]
+    A -->|ExecEnvSetupExecutor| D[feature/login-code-gen-3]
 
-    B -->|実装・commit・push| B2[feature/login-fast<br/>実装完了]
-    C -->|実装・commit・push| C2[feature/login-standard<br/>実装完了]
-    D -->|実装・commit・push| D2[feature/login-creative<br/>実装完了]
+    B -->|実装・commit・push| B2[feature/login-code-gen-1<br/>実装完了]
+    C -->|実装・commit・push| C2[feature/login-code-gen-2<br/>実装完了]
+    D -->|実装・commit・push| D2[feature/login-code-gen-3<br/>実装完了]
 
     B2 -->|code_reviewが選択| E{最良実装選択}
     C2 --> E
     D2 --> E
 
-    E -->|選択された実装| F[BranchMergeExecutor<br/>feature/login-standard → feature/login]
+    E -->|選択された実装| F[BranchMergeExecutor<br/>feature/login-code-gen-2 → feature/login]
     F --> G([元MRブランチ<br/>feature/login<br/>最良実装を反映])
 
     B2 -.->|選択されなかった場合| H[(GitLab上に保持)]
@@ -394,7 +394,7 @@ flowchart LR
 
 ### 6.3 ブランチ保持ポリシー
 
-- 選択されなかったサブブランチ（例: `feature/login-fast`、`feature/login-creative`）はGitLab上にそのまま残す
+- 選択されなかったサブブランチ（例: `feature/login-code-gen-1`、`feature/login-code-gen-3`）はGitLab上にそのまま残す
 - 自動削除は行わない（ユーザーが手動で削除可能）
 - ユーザーはGitLab UI上で各ブランチのコードを確認・比較できる
 

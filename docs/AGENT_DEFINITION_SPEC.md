@@ -333,7 +333,7 @@
 | `classification_result` | ClassificationResult | タスク種別・関連ファイル・仕様書情報 | task_classifier |
 | `plan_result` | PlanResult | 実行計画・仕様書有無フラグ | *_planning |
 | `todo_list` | TodoList | Todoリスト | *_planning |
-| `branch_envs` | 辞書型（Dict[int, str]） | 番号をキーとした環境ID辞書（`{1: env_id, 2: env_id, ...}`）。ExecEnvSetupExecutorが設定し、`env_ref`を持つエージェントが自動参照する | ExecEnvSetupExecutor |
+| `branch_envs` | 辞書型（Dict[int, dict]） | 番号をキーとした環境情報辞書（`{1: {"env_id": "...", "branch": "..."}, ...}`）。ExecEnvSetupExecutorが設定し、`env_ref`を持つエージェントが自動参照する | ExecEnvSetupExecutor |
 | `execution_results` | 辞書型（Dict[str, ExecutionResult]） | 実行エージェントの実行結果マッピング。キー：エージェント定義ID、値：ExecutionResult。単一エージェントでも辞書型を使用（1要素の辞書） | code_generation / bug_fix / test_creation / documentation / code_generation_* 等 |
 | `selected_implementation` | SelectedImplementation | 自動選択された最良の実装情報（環境ID、ブランチ名、選択理由、評価スコア、評価詳細） | code_review（multi用） |
 | `reflection_result` | ReflectionResult | プラン検証結果・再計画判断 | plan_reflection |
@@ -358,7 +358,7 @@
 
 **コンテキストキーの設計方針**:
 
-実行エージェントは `execution_results` 辞書に自身のエージェント定義IDをキーとして実行結果を書き込む。実行環境は `env_ref` フィールドによって指定され、グラフ定義レベルで `branch_envs` コンテキストキーから自動取得されるため、エージェント定義の input_keys/output_keys には `branch_envs` を原則含めない（multi_codegen の `code_review` を除く）。
+実行エージェントは `execution_results` 辞書に自身のエージェント定義IDをキーとして実行結果を書き込む。実行環境は `env_ref` フィールドによって指定され、グラフ定義レベルで `branch_envs` コンテキストキーから自動取得されるため、エージェント定義の input_keys/output_keys には `branch_envs` を原則含めない（multi_codegen の `code_review` を除く）。`branch_envs` の各エントリは `env_id`（環境ID）と `branch`（作業ブランチ名）を持ち、AgentFactory がエージェント生成時に対応する `branch` を `task_context.assigned_branch` に設定する。
 
 ---
 

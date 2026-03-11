@@ -493,7 +493,7 @@ erDiagram
 | final_token_count | INTEGER | | 最終トークン数 |
 | error_message | TEXT | | エラーメッセージ |
 | metadata | JSONB | DEFAULT '{}' | タスクメタデータ（シリアル化されたセッション、継承データ等） |
-| assigned_branches | JSONB | | 並列コード生成時のブランチ割り当て（例: {"fast": "feature/login-fast", "standard": "feature/login-standard", "creative": "feature/login-creative"}） |
+| assigned_branches | JSONB | | 並列コード生成時のブランチ割り当て（例: {"1": "feature/login-code-gen-1", "2": "feature/login-code-gen-2", "3": "feature/login-code-gen-3"}） |
 | selected_branch | VARCHAR(255) | | レビュー後に選択されたブランチ名 |
 
 **外部キー制約**:
@@ -547,9 +547,9 @@ erDiagram
 **JSONB assigned_branches構造例**（multi_codegen_mr_processingワークフロー使用時）:
 ```
 {
-  "fast": "feature/login-fast",
-  "standard": "feature/login-standard",
-  "creative": "feature/login-creative"
+  "1": "feature/login-code-gen-1",
+  "2": "feature/login-code-gen-2",
+  "3": "feature/login-code-gen-3"
 }
 ```
 
