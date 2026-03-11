@@ -2824,6 +2824,8 @@ mcp_servers:
       ALLOWED_DIRECTORIES: "/workspace"
 ```
 
+**注意**: `mcp/command_executor.py` は [coding_agent](https://github.com/notfolder/coding_agent) の [mcp/command_executor.py](https://github.com/notfolder/coding_agent/blob/main/mcp/command_executor.py) をそのまま使用する（新規実装不要）。
+
 #### 9.2.1 ExecutionEnvironmentManager連携
 
 command-executorとtext-editorはMCPサーバーとして実装するが、ExecutionEnvironmentManager上で動くので、handlers/execution_environment_mcp_wrapper.pyを参照して設計する。
