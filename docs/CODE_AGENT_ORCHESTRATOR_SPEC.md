@@ -1,12 +1,12 @@
-# GitLab Coding Agent — Agent Framework 設計
+# GitLab Coding Agent: AutomataCodex — Agent Framework 設計
 
 **参考**: [Agent Framework Documentation (Python)](https://github.com/microsoft/agent-framework)
 
 **関連ドキュメント**:
+- [CLASS_IMPLEMENTATION_SPEC.md](CLASS_IMPLEMENTATION_SPEC.md) - クラス設計
 - [AGENT_DEFINITION_SPEC.md](AGENT_DEFINITION_SPEC.md) - エージェント定義仕様（コンテキストデータ構造を含む）
 - [GRAPH_DEFINITION_SPEC.md](GRAPH_DEFINITION_SPEC.md) - ワークフローグラフ定義
 - [DATABASE_SCHEMA_SPEC.md](DATABASE_SCHEMA_SPEC.md) - データベーススキーマ定義
-- [TOOL_SPEC.md](TOOL_SPEC.md) - ツール仕様
 - [STANDARD_MR_PROCESSING_FLOW.md](STANDARD_MR_PROCESSING_FLOW.md) - 標準MR処理フロー
 
 ## 1. 目的と範囲
