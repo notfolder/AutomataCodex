@@ -58,7 +58,7 @@
 |-----------|------|------|
 | `text_editor` | 実MCPサーバー | ファイル読み書き操作（text-editor MCPサーバーが内包する複数ツール） |
 | `command_executor` | 実MCPサーバー | コマンド実行（command-executor MCPサーバーが内包する複数ツール） |
-| `todo_list` | 仮想MCPサーバー | Todoリスト操作（`create_todo_list` / `get_todo_list` / `update_todo_status` の3ツールを内包。GitLab自動同期） |
+| `todo_list` | 仮想MCPサーバー | Todoリスト操作（`create_todo_list` / `get_todo_list` / `update_todo_status` の3ツールを内包。進捗報告コメントへ自動反映） |
 
 `mcp_server_configs` 設定に登録された実MCPサーバー名を追加で指定することも可能。
 
@@ -447,7 +447,7 @@
 2. 仕様ファイルの存在確認（docs/SPEC_*.md等）
 3. 仕様ファイルが存在しない場合はドキュメント生成ワークフローにリダイレクト
 4. 仕様ファイルが存在する場合、コード生成のためのアクションプランを生成
-5. Todoリストの作成（`create_todo_list`ツールで永続化、GitLab自動同期）
+5. Todoリストの作成（`create_todo_list`ツールで永続化、進捗報告コメントへ自動反映）
 
 #### 6.2.2 バグ修正 Planning Agent ノード
 
