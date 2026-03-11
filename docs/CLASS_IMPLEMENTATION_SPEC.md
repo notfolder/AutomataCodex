@@ -1757,54 +1757,171 @@ IssueToMRConverterはIssueからMRへの変換を実行する。
 
 #### 8.3.1 概要
 
-ProgressReporterはタスクの進捗状況をMRコメントとして投稿する。
+ProgressReporterはタスクの進捗状況を1タスク1コメント上書き方式でMRに反映するファサードクラス。`ConfigurableAgent`・各`Executor`からイベントを受け取り、`MermaidGraphRenderer`でコメント全体を再構築し、`ProgressCommentManager`に渡して上書き更新を実行する。ノード名の表示はグラフ定義の`label`フィールドを使用する。
 
 #### 8.3.2 保持データ
 
-- **gitlab_client: GitLabClient** - GitLab APIクライアント
-- **context_storage_manager: ContextStorageManager** - コンテキストストレージマネージャー
+- **graph_def: dict** - グラフ定義（labelフィールドの参照に使用）
+- **mermaid_renderer: MermaidGraphRenderer** - Mermaidフローチャート生成クラス
+- **comment_manager: ProgressCommentManager** - 1コメント管理クラス
+- **node_states: dict[str, str]** - ノードIDをキーとした現在の状態辞書（pending/running/done/error/skipped）
+- **latest_llm_response: str** - 最後に受信したLLM応答の先頭200文字
+- **latest_event_summary: str** - 最新イベントのサマリ文字列
+- **error_detail: str | None** - エラー詳細テキスト（エラー発生時のみ）
 
 #### 8.3.3 主要メソッド
 
-##### report_progress(mr_iid: int, event: str, agent_definition_id: str, node_id: str, details: Dict) → None
+##### initialize(context: WorkflowContext, mr_iid: int) → None
+
+タスク開始時に呼び出し、全ノードをpendingで初期化したコメントをMRに新規作成する。
 
 **処理フロー**:
 
-1. **コメント生成**
-   - format_progress_comment(event, agent_definition_id, node_id, details)を呼び出し
-   - Markdown形式のコメントを取得
+1. **ノード状態の初期化**
+   - graph_defの全ノードIDに対して`node_states[node_id] = "pending"`を設定する
 
-2. **GitLabに投稿**
-   - gitlab_client.add_merge_request_note(project_id, mr_iid, comment)
+2. **初期コメント作成**
+   - `comment_manager.create_progress_comment(context, mr_iid, node_states)`を呼び出す
+   - GitLab Note IDをWorkflowContext `progress_comment_id`に保存する
 
-3. **進捗ログ記録**
-   - add_progress_log(mr_iid, event, agent_definition_id, node_id, details)を呼び出し
+##### report_progress(context: WorkflowContext, event: str, node_id: str, details: dict) → None
 
-##### format_progress_comment(event: str, agent_definition_id: str, node_id: str, details: Dict) → str
-
-**処理フロー**:
-
-1. **イベント別フォーマット**
-   - start: 🚀 絵文字、agent_definition_idを表示ラベルとして使用、開始時刻
-   - llm_response: 💬 絵文字、agent_definition_idを表示ラベルとして使用、応答要約
-   - complete: ✨ 絵文字、agent_definition_idを表示ラベルとして使用、実行時間、主要な変更のサマリ
-   - error: ❌ 絵文字、agent_definition_idを表示ラベルとして使用、エラー種別、エラーメッセージ
-
-2. **Markdown生成**
-   - イベントに応じたMarkdownテンプレートを使用
-   - detailsの各フィールドをテンプレートに埋め込み
-
-3. **Markdown返却**
-
-##### add_progress_log(mr_iid: int, event: str, agent_definition_id: str, node_id: str, details: Dict) → None
+各イベント発生時に呼び出し、コメントを上書き更新する。
 
 **処理フロー**:
 
-1. **ログエントリ生成**
-   - log_entry = {"event": event, "agent_definition_id": agent_definition_id, "node_id": node_id, "details": details, "timestamp": datetime.now()}
+1. **ノード状態の更新**
+   - `start`: `node_states[node_id] = "running"`
+   - `complete`: `node_states[node_id] = "done"`
+   - `error`: `node_states[node_id] = "error"`
+   - `llm_response`: node_statesは変更しない
 
-2. **コンテキストストレージに記録**
-   - context_storage_manager.append_progress_log(task_uuid, log_entry)
+2. **サマリ・応答の更新**
+   - labelの取得: graph_defのnodesからnode_idに対応するlabelを参照する
+   - `start`: `latest_event_summary = "⏳ [{label}] 処理を開始します ― {timestamp}"`
+   - `complete`: `latest_event_summary = "✅ [{label}] 完了しました ― {elapsed}秒"`
+   - `error`: `latest_event_summary = "❌ [{label}] エラーが発生しました"`、`error_detail`にエラー情報を格納する
+   - `llm_response`: `latest_llm_response = details["response"][:200]`
+
+3. **コメント上書き**
+   - `comment_manager.update_progress_comment(context, mr_iid, node_states, latest_event_summary, latest_llm_response, error_detail)`を呼び出す
+
+##### finalize(context: WorkflowContext, mr_iid: int, summary: str) → None
+
+タスク全体完了時に呼び出し、全ノードをdoneにして最終サマリを付記したコメントを上書きする。
+
+**処理フロー**:
+
+1. **全ノードをdone化**
+   - pendingまたはrunningのまま残っているノードをすべて`"done"`に更新する
+
+2. **最終サマリ設定**
+   - `latest_event_summary = "✨ タスク完了 ― {summary}"`
+
+3. **コメント上書き**
+   - `comment_manager.update_progress_comment(context, mr_iid, node_states, latest_event_summary, latest_llm_response, error_detail)`を呼び出す
+
+---
+
+### 8.4 MermaidGraphRenderer
+
+#### 8.4.1 概要
+
+MermaidGraphRendererはグラフ定義（graph_def）とノード状態dict（node_states）からMermaidフローチャート文字列を生成するクラス。並列グループ（同一ノードから複数ノードへのファンアウト）を自動検出し、subgraphとして出力する。
+
+#### 8.4.2 保持データ
+
+- **graph_def: dict** - グラフ定義（nodesとedgesを含む）
+
+#### 8.4.3 主要メソッド
+
+##### render(node_states: dict[str, str]) → str
+
+graph_defとnode_statesからMermaidフローチャート文字列を生成して返す。
+
+**処理フロー**:
+
+1. **並列グループ検出**
+   - graph_defのedgesを走査し、同一fromノードから2つ以上のtoノードへエッジが出ているグループを並列グループとして検出する
+   - fromノードがcondition typeの場合は並列グループとして扱わない（条件分岐のため）
+
+2. **ノード定義行の生成**
+   - 各ノードのtypeに応じてMermaid記法でノード定義行を生成する
+     - `agent`: `{id}["{label}"]:::{state}`
+     - `executor`: `{id}(["{label}"]):::{state}`
+     - `condition`: `{id}{"{label"}:::{state}` （`{`と`}`が菱形を表す）
+   - 並列グループに属するノードは`subgraph parallel["並列..."]{ direction LR ... }`でまとめる
+
+3. **エッジ定義行の生成**
+   - graph_defのedgesをMermaidの`-->`記法で出力する
+   - labelが設定されているエッジは`-- {edge_label} -->`記法を使用する
+   - 並列グループのファンアウト・ファンインエッジは`&`記法（`A --> B & C`）でまとめて記述する
+
+4. **classDef行の生成**
+   - node_statesに含まれる状態種別に応じてclassDef行を出力する
+   - 出力するclassDef: pending/running/done/error/skipped
+
+5. **全体的な文字列組み立て**
+   - `flowchart TD`ヘッダから始まり、ノード定義行・エッジ定義行・classDef行を順に結合して返す
+
+---
+
+### 8.5 ProgressCommentManager
+
+#### 8.5.1 概要
+
+ProgressCommentManagerはMRへの1コメント作成と上書き更新を管理するクラス。タスク開始時のコメント新規作成（GitLab Note IDをWorkflowContextに保存）と、各イベント時の上書き更新（スロットリング付き）を担当する。
+
+#### 8.5.2 保持データ
+
+- **gitlab_client: GitLabClient** - GitLab APIクライアント
+- **mermaid_renderer: MermaidGraphRenderer** - Mermaidフローチャート生成クラス
+- **last_update_time: float** - 直前のコメント更新時刻（Unix時刻。スロットリング用）
+
+#### 8.5.3 主要メソッド
+
+##### create_progress_comment(context: WorkflowContext, mr_iid: int, node_states: dict[str, str]) → int
+
+タスク開始時に1度だけ呼び出し、初期コメントをMRに作成してGitLab Note IDを返す。
+
+**処理フロー**:
+
+1. **初期コメント本文の組み立て**
+   - `mermaid_renderer.render(node_states)`でMermaidフローチャートを生成する
+   - 最新状態行は`🚀 ワークフローを開始します ― {timestamp}`とする
+   - 最新LLM応答欄・エラー詳細欄は空欄とする
+   - 4セクション構成のコメント本文を組み立てる
+
+2. **GitLabにコメント投稿**
+   - `gitlab_client.create_merge_request_note(mr_iid, body)`を呼び出す
+   - 返却されたGitLab Note IDを取得する
+
+3. **WorkflowContextへの保存**
+   - `context.set_state("progress_comment_id", note_id)`でNote IDを保存する
+
+4. **Note IDを返却**
+
+##### update_progress_comment(context: WorkflowContext, mr_iid: int, node_states: dict[str, str], event_summary: str, llm_response: str, error_detail: str | None) → None
+
+各イベント発生時に呼び出し、既存コメントを上書き更新する。
+
+**処理フロー**:
+
+1. **スロットリング**
+   - `time.time() - last_update_time < 1.0`の場合は差分を待機する
+   - 待機後、`last_update_time`を現在時刻に更新する
+
+2. **Note IDの取得**
+   - `context.get_state("progress_comment_id")`でNote IDを取得する
+   - Note IDが未設定の場合はエラーログを出力して処理を中断する
+
+3. **コメント本文の再構築**
+   - `mermaid_renderer.render(node_states)`でMermaidフローチャートを生成する
+   - event_summary・llm_response・error_detailを各セクションにはめ込んで本文を組み立てる
+   - error_detailがNoneの場合はエラー詳細セクション（`<details>`）を省略する
+
+4. **GitLabコメントを上書き**
+   - `gitlab_client.update_merge_request_note(mr_iid, note_id, body)`を呼び出す
 
 ---
 
@@ -1922,7 +2039,7 @@ GuidelineLearningAgentは唯一`git_client`を保持してcommit & pushを実行
 - Middleware実装: CommentCheckMiddleware、TokenUsageMiddleware、ErrorHandlingMiddleware
 - ExecutionEnvironmentManager: Docker環境管理
 - MCPClient関連: MCPClient、EnvironmentAwareMCPClient
-- その他: TodoManagementTool、IssueToMRConverter、ProgressReporter
+- その他: TodoManagementTool、IssueToMRConverter、ProgressReporter、MermaidGraphRenderer、ProgressCommentManager
 
 **実装時の注意点**:
 - すべてのメソッドは非同期（async/await）で実装する
