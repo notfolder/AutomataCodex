@@ -22,12 +22,12 @@ Agent Frameworkの[Executor](https://github.com/microsoft/agent-framework/blob/m
   - role: ロール（planning/reflection/execution/review）
   - input_keys: 入力キー一覧
   - output_keys: 出力キー一覧
-  - tools: ツール名一覧
+  - mcp_servers: 利用するMCPサーバー名一覧（実MCPサーバーおよび仮想MCPサーバー `todo_list`）
   - environment_mode: は廃止。代替は`env_ref`フィールド（グラフ定義の`AgentNodeConfig`に保持）
   - env_ref: 使用する実行環境の参照（"plan": plan共有環境、"1"/"2"/"3": 分岐内の第N実行環境、省略: 環境不要）
   - prompt_id: プロンプト定義ID
 - **agent: Agent** - Agent Frameworkの[Agent](https://github.com/microsoft/agent-framework/blob/main/python/packages/core/agent_framework/_agents.py)インスタンス（LLM呼び出し）
-- **tools: list[MCPStdioTool | FunctionTool]** - エージェントが使用するツールリスト（[MCPStdioTool](https://github.com/microsoft/agent-framework/blob/main/python/packages/core/agent_framework/_mcp.py) / [FunctionTool](https://github.com/microsoft/agent-framework/blob/main/python/packages/core/agent_framework/_tools.py)等）
+- **tools: list[MCPStdioTool | FunctionTool]** - エージェントが使用するツールリスト（`mcp_servers` の各サーバーを解決して生成した [MCPStdioTool](https://github.com/microsoft/agent-framework/blob/main/python/packages/core/agent_framework/_mcp.py) / [FunctionTool](https://github.com/microsoft/agent-framework/blob/main/python/packages/core/agent_framework/_tools.py) の結合リスト）
 - **progress_reporter: ProgressReporter** - 進捗報告インスタンス
 - **environment_id: str** - ビルド時に確定したDocker環境ID。`env_ref`が"plan"の場合はコンテキストの`plan_environment_id`から、"1"/"2"/"3"の場合はコンテキストの`branch_envs[N]`からビルド時に取得する。省略の場合はNone
 - **prompt_content: str** - プロンプト定義から取得したシステムプロンプト
@@ -121,7 +121,7 @@ Agent Frameworkの[Executor](https://github.com/microsoft/agent-framework/blob/m
 
 **処理フロー**:
 
-1. config.toolsにtool_nameが含まれているか確認（含まれていない場合はエラー）
+1. config.mcp_serversにtool_nameが含まれているか確認（含まれていない場合はエラー）
 2. [MCPStdioTool](https://github.com/microsoft/agent-framework/blob/main/python/packages/core/agent_framework/_mcp.py)経由でtool_nameのツールを呼び出す（Agent Frameworkが自動的に実行するため、エージェントがツール呼び出しを求めた場合に使用）
 3. 結果を辞書形式で返す
 
@@ -299,10 +299,10 @@ AgentFactoryはConfigurableAgentインスタンスを生成する。
    - mcp_server_configsを渡して、このエージェント専用のMCPClientFactoryインスタンスを新規生成する
 
 2. **ツールリスト構築**
-   - agent_config.toolsをループ
-   - 各ツール名について:
-     - MCPツールの場合: mcp_client_factory.create_mcp_tool(tool_name, env_id)で[MCPStdioTool](https://github.com/microsoft/agent-framework/blob/main/python/packages/core/agent_framework/_mcp.py)オブジェクトを生成してツールリストに追加する
-     - ネイティブツールの場合: FunctionToolとしてツールリストに追加する（TodoManagementTool等）
+   - agent_config.mcp_serversをループ
+   - 各サーバー名について:
+     - `todo_list` の場合（仮想MCPサーバー）: TodoManagementToolのFunctionTool群（`create_todo_list` / `get_todo_list` / `update_todo_status`）をツールリストに追加する
+     - それ以外の場合（実MCPサーバー）: mcp_client_factory.create_mcp_tool(server_name, env_id)で[MCPStdioTool](https://github.com/microsoft/agent-framework/blob/main/python/packages/core/agent_framework/_mcp.py)オブジェクトを生成してツールリストに追加する
 
 3. **User Config取得**
    - UserConfigClientからuser_emailのLLM設定を取得

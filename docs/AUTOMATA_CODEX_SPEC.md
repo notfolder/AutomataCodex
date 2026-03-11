@@ -516,7 +516,7 @@ graph LR
 - `role`: エージェント役割（"planning" | "reflection" | "execution" | "review"）
 - `input_keys`: 前ステップから受け取るワークフローコンテキストのキー一覧
 - `output_keys`: 次ステップへ渡すワークフローコンテキストのキー一覧
-- `tools`: 利用するツール名一覧（"text_editor", "command_executor", "todo_management" 等）
+- `mcp_servers`: 利用するMCPサーバー名一覧（`"text_editor"`, `"command_executor"`, `"todo_list"`（仮想） 等。省略時は空配列扱い）
 - `env_ref`: 使用する実行環境の参照（"plan": plan共有環境、"1"/"2"/"3": 分岐内の第N実行環境、省略: 環境不要）
 - `prompt_id`: プロンプト定義ファイル内のプロンプト識別子
 
@@ -570,8 +570,8 @@ ProgressReporterは`agent_definition_id`を表示ラベルとして使用し、`
    - 本システムは適切なAPIを呼び出すことで、並列安全性をフレームワークに委譲
 
 **ツール登録**:
-- エージェント定義の`tools`フィールドに基づき、`AgentFactory`が`tools`リストに動的に登録する
-- 登録可能なツール: text-editor MCPツール、command-executor MCPツール、create_todo_list、get_todo_list、update_todo_status
+- エージェント定義の`mcp_servers`フィールドに基づき、`AgentFactory`がツールリストに動的に登録する
+- 登録可能なサーバー: `text_editor`（実MCPサーバー）、`command_executor`（実MCPサーバー）、`todo_list`（仮想MCPサーバー。`create_todo_list` / `get_todo_list` / `update_todo_status` の3ツールを内包）。`mcp_server_configs` 設定で実MCPサーバーを追加可能
 
 #### BaseExecutor（Executor基底クラス）
 
@@ -795,7 +795,7 @@ flowchart TD
 
 1. **必須フィールドの存在確認**:
    - `version`, `agents`が存在するか
-   - 各エージェントに`id`, `role`, `input_keys`, `output_keys`, `tools`, `prompt_id`が存在するか
+   - 各エージェントに`id`, `role`, `input_keys`, `output_keys`, `prompt_id`が存在するか（`mcp_servers`は任意フィールドのため省略可）
 
 2. **グラフ定義との整合性**:
    - グラフ定義の各ノードで参照される`agent_definition_id`に対応するエージェント定義が`agents`配列内に存在するか
@@ -805,9 +805,10 @@ flowchart TD
    - 各エージェントの`role`が"planning"、"reflection"、"execution"、"review"のいずれかであるか
    - `role`は処理ロジック（環境モード決定・ツール使用可否の制御）のみに使用する。MRへの表示ラベルは`agent_definition_id`を使用するため、新規ノード追加時でも`role`の有効値を変更する必要はない
 
-4. **toolsの有効値チェック**:
-   - 各エージェントの`tools`配列内のツール名がすべてシステムに登録済みのツール名一覧に含まれるか
-   - 登録可能なツール: `text_editor`, `command_executor`, `create_todo_list`, `get_todo_list`, `update_todo_status`, `get_mr_context`, `get_issue_context`
+4. **mcp_serversの有効値チェック**:
+   - 各エージェントの`mcp_servers`配列内のサーバー名がすべてシステムに登録済みの値に含まれるか
+   - 組み込みの指定可能値: `text_editor`, `command_executor`, `todo_list`（仮想MCPサーバー）
+   - `mcp_server_configs` 設定に登録された実MCPサーバー名も追加で指定可能
 
 5. **input_keysとoutput_keysの一貫性**:
    - 同じエージェント内で`input_keys`と`output_keys`に同じキー名が含まれていないか
@@ -817,7 +818,7 @@ flowchart TD
    - 単一エージェントも並列エージェントも同じ辞書型キー（`branch_envs`、`execution_results`）への書き込みは複数エージェントで共有可能
    - 各エージェントは自身のエージェント定義IDをキーとして辞書に書き込む
 
-7. **toolsとroleの整合性**:
+7. **mcp_serversとroleの整合性**:
    - `env_ref`値が有効か（"plan"、"1"〜"N"の整数文字列、または省略）
    - "planning"ロールは`env_ref: "plan"`または省略のみ許容（planningエージェントはplan環境またはDocker環境不要のいずれかで動作する）
    - "reflection"ロールは`env_ref`省略のみ許容（リフレクションエージェントはDocker環境を必要としない）
