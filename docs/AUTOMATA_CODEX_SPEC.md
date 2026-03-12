@@ -2954,7 +2954,7 @@ retry_policy:
     base_delay: 2.0
 ```
 
-### 9.3 エラーハンドリングフロー
+### 10.3 エラーハンドリングフロー
 
 ```mermaid
 flowchart TD
@@ -2976,7 +2976,7 @@ flowchart TD
     Continue -->|No| Stop[タスク中断]
 ```
 
-### 9.4 エラー通知
+### 10.4 エラー通知
 
 #### Issue/MRコメント
 
