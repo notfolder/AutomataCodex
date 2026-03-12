@@ -48,13 +48,13 @@
 | §7 GitLab API 操作設計（GitLabClient）| CLASS_IMPLEMENTATION_SPEC.md | **矛盾あり**: AUTOMATA_CODEX_SPEC.md §7.2 で GitLabClient クラスの責務と主要メソッドグループが記載されているが、CLASS_IMPLEMENTATION_SPEC.md に GitLabClient の独立した詳細設計章が存在しない |
 | §8.3 Agent Framework標準Providerのカスタム実装 | CLASS_IMPLEMENTATION_SPEC.md §4 | 問題なし |
 | §8.5 コンテキスト圧縮 | CLASS_IMPLEMENTATION_SPEC.md §4.4（ContextCompressionService）, DATABASE_SCHEMA_SPEC.md §2.2（user_configsテーブル） | 問題なし |
-| §8.6 コンテキスト継承 | CLASS_IMPLEMENTATION_SPEC.md §8（その他主要クラス: TaskInheritanceContextProvider） | 問題なし |
+| §8.6 コンテキスト継承 | CLASS_IMPLEMENTATION_SPEC.md §10（その他主要クラス: TaskInheritanceContextProvider） | 問題なし |
 | §8.7 ワークフロー状態管理 | CLASS_IMPLEMENTATION_SPEC.md §2.1（WorkflowFactory停止・再開関連）, DATABASE_SCHEMA_SPEC.md §5（workflow_execution_statesテーブル） | 問題なし |
 | §8.8 実行環境管理（ExecutionEnvironmentManager）| CLASS_IMPLEMENTATION_SPEC.md §6 | 問題なし |
 | §8.9 Middleware機構 | CLASS_IMPLEMENTATION_SPEC.md §5 | 問題なし |
 | §9 Tool管理設計 (MCP) | CLASS_IMPLEMENTATION_SPEC.md §9（MCPClient関連）, AGENT_DEFINITION_SPEC.md §3.2（mcp_serversフィールド） | 問題なし |
 | §10 エラー処理設計 | STANDARD_MR_PROCESSING_FLOW.md §4.3（リトライポリシー）, CLASS_IMPLEMENTATION_SPEC.md §5.4（ErrorHandlingMiddleware） | 問題なし |
-| §11 学習機能（GuidelineLearningAgent）| CLASS_IMPLEMENTATION_SPEC.md §10, DATABASE_SCHEMA_SPEC.md §2.2（user_configsテーブルlearning_*カラム） | 問題なし |
+| §11 学習機能（GuidelineLearningAgent）| CLASS_IMPLEMENTATION_SPEC.md §11, DATABASE_SCHEMA_SPEC.md §2.2（user_configsテーブルlearning_*カラム） | 問題なし |
 | §12 セキュリティ設計 | USER_MANAGEMENT_SPEC.md, DATABASE_SCHEMA_SPEC.md | 問題なし |
 | §13 運用設計 | DATABASE_SCHEMA_SPEC.md §5（workflow_execution_states）, CLASS_IMPLEMENTATION_SPEC.md §2.1（resume_workflow） | 問題なし |
 | §14 設定ファイル定義（config.yaml）| CLASS_IMPLEMENTATION_SPEC.md全体 | 問題なし |
@@ -79,7 +79,9 @@
 | §6 ExecutionEnvironmentManager | AUTOMATA_CODEX_SPEC.md §8.8, STANDARD_MR_PROCESSING_FLOW.md §3 | 問題なし |
 | §7 EnvironmentAnalyzer | AUTOMATA_CODEX_SPEC.md §2.3.3, STANDARD_MR_PROCESSING_FLOW.md §4.1 | 問題なし |
 | §8 PrePlanningManager | AUTOMATA_CODEX_SPEC.md §2.3.3, STANDARD_MR_PROCESSING_FLOW.md §4.1 | 問題なし |
-| §8（重複）その他の主要クラス | AUTOMATA_CODEX_SPEC.md §6（ProgressReporter）, §8.6（TaskInheritanceContextProvider）| **矛盾あり**: CLASS_IMPLEMENTATION_SPEC.md のセクション番号「§8」が二重に存在する（§8: ExecutionEnvironmentManager以降のPrePlanningManagerと§8: その他の主要クラス）。ドキュメント構造の誤り |
+| §8 PrePlanningManager | CLASS_IMPLEMENTATION_SPEC.md §8 | 問題なし |
+| §9 MCPClient関連 | CLASS_IMPLEMENTATION_SPEC.md §9 | 問題なし |
+| §10 その他の主要クラス | AUTOMATA_CODEX_SPEC.md §6（ProgressReporter）, §8.6（TaskInheritanceContextProvider）| 問題なし（修正済み: 旧版では§8が重複していたが、§10に変更して解消） |
 | §9 MCPClient関連 | AUTOMATA_CODEX_SPEC.md §9, CLASS_IMPLEMENTATION_SPEC.md §2.4（MCPClientFactory） | 問題なし |
 | §10 GuidelineLearningAgent | AUTOMATA_CODEX_SPEC.md §11 | 問題なし |
 
@@ -600,26 +602,26 @@
 | `EnvironmentAwareMCPClient` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §9.2, AUTOMATA_CODEX_SPEC.md §9 | ✅ 問題なし |
 | `EnvironmentAwareMCPClient.call_tool(tool_name, arguments)` | CLASS_IMPLEMENTATION_SPEC.md §9.2.3 | ✅ 問題なし |
 
-### その他の主要クラス（CLASS_IMPLEMENTATION_SPEC.md §8（重複セクション番号））
+### その他の主要クラス（CLASS_IMPLEMENTATION_SPEC.md §10）
 
-> **注意**: CLASS_IMPLEMENTATION_SPEC.md のセクション番号「§8」が二重に存在する（§8: PrePlanningManager以降と §8: その他の主要クラス）。これはドキュメント構造の誤りである（矛盾14）。
+> **注意**: 前バージョンでは CLASS_IMPLEMENTATION_SPEC.md のセクション番号「§8」が二重に存在していたが（§8: PrePlanningManager と §8: その他の主要クラス）、本バージョンで §10 に修正済み。
 
 | クラス/メソッド | 記述ドキュメント/章 | 問題 |
 |---------------|-------------------|------|
-| `TodoManagementTool` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.1（その他主要クラス）, AGENT_DEFINITION_SPEC.md §3.2（todo_list MCPサーバー）| ✅ 問題なし（§8.1に詳細設計あり） |
-| `TodoManagementTool.create_todo_list(project_id, mr_iid, todos)` | CLASS_IMPLEMENTATION_SPEC.md §8.1.3 | ✅ 問題なし |
-| `TodoManagementTool.sync_to_gitlab(project_id, mr_iid)` | CLASS_IMPLEMENTATION_SPEC.md §8.1.3 | ✅ 問題なし |
-| `IssueToMRConverter` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.2（その他主要クラス）, AUTOMATA_CODEX_SPEC.md §5.0 | ✅ 問題なし（§8.2に詳細設計あり） |
-| `IssueToMRConverter.convert(issue)` | CLASS_IMPLEMENTATION_SPEC.md §8.2.3 | ✅ 問題なし |
-| `ProgressReporter` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.3（その他主要クラス）, AUTOMATA_CODEX_SPEC.md §6 | ✅ 問題なし |
-| `ProgressReporter.initialize(context, mr_iid)` | CLASS_IMPLEMENTATION_SPEC.md §8.3.3 | ✅ 問題なし |
-| `ProgressReporter.report_progress(context, event, node_id, details)` | CLASS_IMPLEMENTATION_SPEC.md §8.3.3 | ✅ 問題なし |
-| `ProgressReporter.finalize(context, mr_iid, summary)` | CLASS_IMPLEMENTATION_SPEC.md §8.3.3 | ✅ 問題なし |
-| `MermaidGraphRenderer` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.4（その他主要クラス）| ✅ 問題なし |
-| `MermaidGraphRenderer.render(node_states)` | CLASS_IMPLEMENTATION_SPEC.md §8.4.3 | ✅ 問題なし |
-| `ProgressCommentManager` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.5（その他主要クラス）| ✅ 問題なし |
-| `ProgressCommentManager.create_progress_comment(context, mr_iid, node_states)` | CLASS_IMPLEMENTATION_SPEC.md §8.5.3 | ✅ 問題なし |
-| `ProgressCommentManager.update_progress_comment(context, mr_iid, node_states, event_summary, llm_response, error_detail)` | CLASS_IMPLEMENTATION_SPEC.md §8.5.3 | ✅ 問題なし |
+| `TodoManagementTool` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §10.1, AGENT_DEFINITION_SPEC.md §3.2（todo_list MCPサーバー）| ✅ 問題なし |
+| `TodoManagementTool.create_todo_list(project_id, mr_iid, todos)` | CLASS_IMPLEMENTATION_SPEC.md §10.1.3 | ✅ 問題なし |
+| `TodoManagementTool.sync_to_gitlab(project_id, mr_iid)` | CLASS_IMPLEMENTATION_SPEC.md §10.1.3 | ✅ 問題なし |
+| `IssueToMRConverter` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §10.2, AUTOMATA_CODEX_SPEC.md §5.0 | ✅ 問題なし |
+| `IssueToMRConverter.convert(issue)` | CLASS_IMPLEMENTATION_SPEC.md §10.2.3 | ✅ 問題なし |
+| `ProgressReporter` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §10.3, AUTOMATA_CODEX_SPEC.md §6 | ✅ 問題なし |
+| `ProgressReporter.initialize(context, mr_iid)` | CLASS_IMPLEMENTATION_SPEC.md §10.3.3 | ✅ 問題なし |
+| `ProgressReporter.report_progress(context, event, node_id, details)` | CLASS_IMPLEMENTATION_SPEC.md §10.3.3 | ✅ 問題なし |
+| `ProgressReporter.finalize(context, mr_iid, summary)` | CLASS_IMPLEMENTATION_SPEC.md §10.3.3 | ✅ 問題なし |
+| `MermaidGraphRenderer` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §10.4| ✅ 問題なし |
+| `MermaidGraphRenderer.render(node_states)` | CLASS_IMPLEMENTATION_SPEC.md §10.4.3 | ✅ 問題なし |
+| `ProgressCommentManager` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §10.5| ✅ 問題なし |
+| `ProgressCommentManager.create_progress_comment(context, mr_iid, node_states)` | CLASS_IMPLEMENTATION_SPEC.md §10.5.3 | ✅ 問題なし |
+| `ProgressCommentManager.update_progress_comment(context, mr_iid, node_states, event_summary, llm_response, error_detail)` | CLASS_IMPLEMENTATION_SPEC.md §10.5.3 | ✅ 問題なし |
 | `TaskInheritanceContextProvider` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §4.5（Custom Provider群）, AUTOMATA_CODEX_SPEC.md §8.6 | ✅ 問題なし |
 | `TaskInheritanceContextProvider.before_run(...)` | CLASS_IMPLEMENTATION_SPEC.md §4.5.4 | ✅ 問題なし |
 | `TaskInheritanceContextProvider._get_past_tasks_async()` | CLASS_IMPLEMENTATION_SPEC.md §4.5.4 | ✅ 問題なし |
@@ -627,11 +629,11 @@
 | `DefinitionLoader` クラス全体 | AUTOMATA_CODEX_SPEC.md §4.4 | ⚠️ **情報不十分**: AUTOMATA_CODEX_SPEC.md §4.4に処理概要が記載されているが、CLASS_IMPLEMENTATION_SPEC.md に独立した設計章が存在しない |
 | `WorkflowBuilder` クラス全体 | AUTOMATA_CODEX_SPEC.md §2.3.3 | ⚠️ **情報不十分**: AUTOMATA_CODEX_SPEC.md §2.3.3に記載があるが、CLASS_IMPLEMENTATION_SPEC.md に独立した設計章が存在しない |
 
-### GuidelineLearningAgent（CLASS_IMPLEMENTATION_SPEC.md §10）
+### GuidelineLearningAgent（CLASS_IMPLEMENTATION_SPEC.md §11）
 
 | クラス/メソッド | 記述ドキュメント/章 | 問題 |
 |---------------|-------------------|------|
-| `GuidelineLearningAgent` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §10, AUTOMATA_CODEX_SPEC.md §11 | ✅ 問題なし |
+| `GuidelineLearningAgent` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §11, AUTOMATA_CODEX_SPEC.md §11 | ✅ 問題なし |
 
 ### クラス設計情報が存在しないクラス
 
@@ -678,7 +680,7 @@ AUTOMATA_CODEX_SPEC.md 等で言及されているが、CLASS_IMPLEMENTATION_SPE
 
 | # | 矛盾の内容 | 関係するドキュメント |
 |---|-----------|-------------------|
-| 14 | `CLASS_IMPLEMENTATION_SPEC.md` のセクション番号「§8」が二重に存在する（ドキュメント構造の誤り） | CLASS_IMPLEMENTATION_SPEC.md §8（EnvironmentAnalyzer等）, §8（その他の主要クラス） |
+| 14 | `CLASS_IMPLEMENTATION_SPEC.md` のセクション番号「§8」が二重に存在していた（ドキュメント構造の誤り）→ **本バージョンで修正済み**（その他の主要クラスを§10、GuidelineLearningAgentを§11、まとめを§12に変更） | CLASS_IMPLEMENTATION_SPEC.md §8（PrePlanningManager）→§10（その他の主要クラス） |
 | 15 | `PROMPTS.md §2`（コード生成 Planning Agent）のプロンプト本文に誤字「徒底読み」（「徹底的に読み」の誤り） | PROMPTS.md §2 |
 | 16 | `WorkflowFactory._build_nodes()` のシグネチャが AUTOMATA_CODEX_SPEC.md では `user_id` を含む4引数、CLASS_IMPLEMENTATION_SPEC.md では3引数 | AUTOMATA_CODEX_SPEC.md §4.4.2, CLASS_IMPLEMENTATION_SPEC.md §2.1 |
 | 17 | `multi_codegen_mr_processing_agents.json` の `code_generation_reflection.description` が「バグ修正の成果物を検証」のみで、standard版の「コード生成・バグ修正の成果物を検証」と説明が不一致 | multi_codegen_mr_processing_agents.json, standard_mr_processing_agents.json |
@@ -698,9 +700,9 @@ AUTOMATA_CODEX_SPEC.md 等で言及されているが、CLASS_IMPLEMENTATION_SPE
 | S6 | `AGENT_DEFINITION_SPEC.md` §6.5〜§6.7 の章タイトルが誤記（§6.5「Code Review Agent」→実際は「Test Execution & Evaluation Agent」、§6.7「Test Execution Evaluation Agent」→実際は「Execution Reflection Agent群」など）。§6.2.1〜§6.2.4、§6.4.1〜§6.4.4、§6.6.1〜§6.6.2、§6.7.1〜§6.7.3 の詳細が欠落 | 実際の章構造に修正し詳細を追加 |
 | S7 | `GRAPH_DEFINITION_SPEC.md` §3.1、§3.3、§4.2.1、§5〜§6 が完全欠落 | 欠落章を全て追加 |
 | S8 | `PROMPT_DEFINITION_SPEC.md` §3.2、§4.2、§5〜§6 が完全欠落 | 欠落章を全て追加 |
-| S9 | クラス/メソッドの完全性チェックで `MermaidGraphRenderer`（§8.4）、`ProgressCommentManager`（§8.5）、`TodoManagementTool`（§8.1）のメソッド詳細が完全欠落 | 各クラスの全メソッドを追加 |
-| S10 | `IssueToMRConverter` が「設計情報なし（❌）」と誤記されていたが、実際は CLASS_IMPLEMENTATION_SPEC.md §8.2 に詳細設計が存在する | 「✅ 問題なし」に修正し「クラス設計情報が存在しないクラス」リストから除外 |
-| S11 | `TodoManagementTool` が「情報不十分（⚠️）」と分類されていたが、実際は CLASS_IMPLEMENTATION_SPEC.md §8.1 に詳細設計が存在する | 「✅ 問題なし」に修正し「クラス設計情報が存在しないクラス」リストから除外 |
+| S9 | クラス/メソッドの完全性チェックで `MermaidGraphRenderer`（§10.4）、`ProgressCommentManager`（§10.5）、`TodoManagementTool`（§10.1）のメソッド詳細が完全欠落 | 各クラスの全メソッドを追加 |
+| S10 | `IssueToMRConverter` が「設計情報なし（❌）」と誤記されていたが、実際は CLASS_IMPLEMENTATION_SPEC.md §10.2 に詳細設計が存在する | 「✅ 問題なし」に修正し「クラス設計情報が存在しないクラス」リストから除外 |
+| S11 | `TodoManagementTool` が「情報不十分（⚠️）」と分類されていたが、実際は CLASS_IMPLEMENTATION_SPEC.md §10.1 に詳細設計が存在する | 「✅ 問題なし」に修正し「クラス設計情報が存在しないクラス」リストから除外 |
 | S12 | `MCPClient` の全メソッド（connect, list_tools, call_tool, disconnect）と `EnvironmentAwareMCPClient.call_tool()` がチェック対象から完全欠落 | 各メソッドをチェック対象に追加 |
 | S13 | `EnvironmentAnalyzer` と `PrePlanningManager` のメソッド詳細（detect_environment_files, analyze_environment_files, execute, select_execution_environment）がチェック対象から欠落 | 各メソッドをチェック対象に追加 |
 | S14 | `ExecutionEnvironmentManager` の複数メソッド（get_environment, cleanup_environments, load_environment_mapping, start_all_containers, check_containers_exist）がチェック対象から欠落し、既存メソッドのシグネチャも不正確だった | 全メソッドを正確なシグネチャで追加 |
