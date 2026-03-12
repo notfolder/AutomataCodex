@@ -66,7 +66,7 @@
 | test_creation_reflection | テスト作成結果の検証とリトライ判断 | execution_result, plan_result, task_context, todo_list | execution_reflection_result |
 | documentation_reflection | ドキュメント作成結果の検証とリトライ判断 | execution_result, plan_result, task_context, todo_list | execution_reflection_result |
 | test_execution_evaluation | テスト実行・評価（バグ修正タスクのみ） | execution_result, task_context | review_result |
-| **code_review** ★ | コード生成時は3実装を比較し最良を選択; バグ修正・テスト作成時は標準レビュー | execution_result, execution_results, branch_envs, task_context | review_result, selected_implementation |
+| **code_review** ★ | コード生成時は3実装を比較し最良を選択; バグ修正・テスト作成時は標準レビュー | execution_results, branch_envs, task_context | review_result, selected_implementation |
 | documentation_review | ドキュメントレビュー実施 | execution_result, task_context | review_result |
 
 ### 2.1 並列コード生成エージェントの設定比較

@@ -85,22 +85,47 @@
 
 ### USER_MANAGEMENT_SPEC.md
 
+> **注意**: 前バージョンのチェックでは §1〜§7 の章名が実際のドキュメントと全て異なる誤記があった。以下は実際の章構造に基づき修正済み。
+
 | 章 | 関連ドキュメント/章 | 問題 |
 |----|-------------------|------|
-| §1 ユーザー管理概要 | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
-| §2 ユーザーデータモデル | DATABASE_SCHEMA_SPEC.md §2（users, user_configs, user_workflow_settings）| 問題なし |
-| §3 APIエンドポイント設計 | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
-| §4 APIキー管理 | DATABASE_SCHEMA_SPEC.md §2.2（api_key_encrypted）, AUTOMATA_CODEX_SPEC.md §12.2 | 問題なし |
-| §5 プロンプトカスタマイズ | DATABASE_SCHEMA_SPEC.md §3.1（workflow_definitions）, PROMPT_DEFINITION_SPEC.md | 問題なし |
-| §6 ワークフロー定義管理 | DATABASE_SCHEMA_SPEC.md §3.1, GRAPH_DEFINITION_SPEC.md, AGENT_DEFINITION_SPEC.md | 問題なし |
-| §7 Web管理画面設計 | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
+| §1 概要 | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
+| §2 ユーザー登録フロー | DATABASE_SCHEMA_SPEC.md §2.1（usersテーブル）, §2.2（user_configsテーブル）| 問題なし |
+| §3 データベース設計 | DATABASE_SCHEMA_SPEC.md §2 | 問題なし（テーブル詳細はDATABASE_SCHEMA_SPEC.mdに委譲と明記） |
+| §3.1 ユーザーロール | DATABASE_SCHEMA_SPEC.md §2.1（roleカラム）| 問題なし |
+| §3.2 パスワード管理 | AUTOMATA_CODEX_SPEC.md §12.2（暗号化）| 問題なし |
+| §4 APIキー暗号化 | AUTOMATA_CODEX_SPEC.md §12.2, DATABASE_SCHEMA_SPEC.md §2.2（api_key_encrypted）| 問題なし |
+| §5 初期管理者作成ツール | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
+| §5.1 CLIコマンド | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
+| §5.2 実行方法 | — | 問題なし |
+| §5.3 処理フロー | DATABASE_SCHEMA_SPEC.md §2.1（usersテーブル）| 問題なし |
+| §5.4 バリデーション | — | 問題なし |
+| §5.5 デフォルト設定 | DATABASE_SCHEMA_SPEC.md §2.2（user_configsテーブル）| 問題なし |
+| §5.6 エラーハンドリング | — | 問題なし |
+| §5.7 セキュリティ考慮事項 | AUTOMATA_CODEX_SPEC.md §12 | 問題なし |
+| §6 User Config API | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
+| §6.1 ユーザー管理エンドポイント | DATABASE_SCHEMA_SPEC.md §2.2（user_configsテーブルの各カラム）| 問題なし |
+| §6.2 ワークフロー定義管理エンドポイント | DATABASE_SCHEMA_SPEC.md §3.1（workflow_definitionsテーブル）, GRAPH_DEFINITION_SPEC.md, AGENT_DEFINITION_SPEC.md, PROMPT_DEFINITION_SPEC.md | 問題なし |
+| §6.4 ユーザー別ワークフロー設定エンドポイント | DATABASE_SCHEMA_SPEC.md §2.3（user_workflow_settingsテーブル）| **注意**: §6.3が欠番（§6.1→§6.2→§6.4）であるが、ドキュメント内のみの問題であり他ドキュメントとの矛盾ではない |
+| §7 Web管理画面 | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
+| §8 ユーザー別トークン統計処理 | DATABASE_SCHEMA_SPEC.md §7.1（token_usageテーブル）, CLASS_IMPLEMENTATION_SPEC.md §5.3（TokenUsageMiddleware）| 問題なし |
+| §8.1 実装モジュール | CLASS_IMPLEMENTATION_SPEC.md §5.3（TokenUsageMiddleware）| 問題なし |
+| §8.2 Web管理画面での表示 | — | 問題なし |
+| §9 Web管理画面の詳細設計 | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
+| §9.1 技術スタック | — | 問題なし |
+| §9.2 画面一覧（SC-01〜SC-14） | AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
+| §9.3 画面遷移図 | — | 問題なし |
+| §9.4 ワイヤーフレーム（SC-01〜SC-14詳細）| — | 問題なし |
+| §9.5 画面共通仕様（§9.5.1〜§9.5.5）| — | 問題なし |
 
 ### PROMPTS.md
 
+> **注意**: 前バージョンのチェックでは §11〜§16 の章タイトルが実際のドキュメントと異なる順序で誤記されていた。また §17〜§20（multi_codegen専用プロンプト）が完全に欠落していた。以下は実際の章構造に基づき修正済み。
+
 | 章 | 関連ドキュメント/章 | 問題 |
 |----|-------------------|------|
-| §1 Task Classifier Agent | AGENT_DEFINITION_SPEC.md §6.1, standard_mr_processing_prompts.json | **矛盾あり（軽微）**: §2「コード生成 Planning Agent」のプロンプト本文（ステップ1）に「仕様書ファイルを徒底読み」（誤字: 「徹底的に読み」の誤り）が含まれる |
-| §2 コード生成 Planning Agent | AGENT_DEFINITION_SPEC.md §6.2.1, standard_mr_processing_prompts.json | 問題なし（上記誤字を除く） |
+| §1 Task Classifier Agent | AGENT_DEFINITION_SPEC.md §6.1, standard_mr_processing_prompts.json | 問題なし |
+| §2 コード生成 Planning Agent | AGENT_DEFINITION_SPEC.md §6.2.1, standard_mr_processing_prompts.json | **矛盾あり（軽微）**: プロンプト本文（ステップ1）に「仕様書ファイルを徒底読み」（誤字: 「徹底的に読み」の誤り）が含まれる |
 | §3 バグ修正 Planning Agent | AGENT_DEFINITION_SPEC.md §6.2.2, standard_mr_processing_prompts.json | 問題なし |
 | §4 テスト生成 Planning Agent | AGENT_DEFINITION_SPEC.md §6.2.3, standard_mr_processing_prompts.json | 問題なし |
 | §5 ドキュメント生成 Planning Agent | AGENT_DEFINITION_SPEC.md §6.2.4, standard_mr_processing_prompts.json | 問題なし |
@@ -109,12 +134,16 @@
 | §8 Bug Fix Agent | AGENT_DEFINITION_SPEC.md §6.4.2, standard_mr_processing_prompts.json | 問題なし |
 | §9 Documentation Agent | AGENT_DEFINITION_SPEC.md §6.4.3, standard_mr_processing_prompts.json | 問題なし |
 | §10 Test Creation Agent | AGENT_DEFINITION_SPEC.md §6.4.4, standard_mr_processing_prompts.json | 問題なし |
-| §11 Code Generation Reflection Agent | AGENT_DEFINITION_SPEC.md, standard_mr_processing_prompts.json | 問題なし |
-| §12 Test Creation Reflection Agent | AGENT_DEFINITION_SPEC.md, standard_mr_processing_prompts.json | 問題なし |
-| §13 Documentation Reflection Agent | AGENT_DEFINITION_SPEC.md, standard_mr_processing_prompts.json | 問題なし |
-| §14 Code Review Agent | AGENT_DEFINITION_SPEC.md §6.5, standard_mr_processing_prompts.json | 問題なし |
-| §15 Documentation Review Agent | AGENT_DEFINITION_SPEC.md §6.6, standard_mr_processing_prompts.json | 問題なし |
-| §16 Test Execution Evaluation Agent | AGENT_DEFINITION_SPEC.md §6.7, standard_mr_processing_prompts.json | 問題なし |
+| §11 Test Execution & Evaluation Agent | AGENT_DEFINITION_SPEC.md §6.5, standard_mr_processing_prompts.json | 問題なし |
+| §12 Code Review Agent | AGENT_DEFINITION_SPEC.md §6.6.1, standard_mr_processing_prompts.json | 問題なし |
+| §13 Documentation Review Agent | AGENT_DEFINITION_SPEC.md §6.6.2, standard_mr_processing_prompts.json | 問題なし |
+| §14 Code Generation Reflection Agent（標準フロー専用） | AGENT_DEFINITION_SPEC.md §6.7.1, standard_mr_processing_prompts.json | 問題なし |
+| §15 Test Creation Reflection Agent（標準フロー専用） | AGENT_DEFINITION_SPEC.md §6.7.2, standard_mr_processing_prompts.json | 問題なし |
+| §16 Documentation Reflection Agent（標準フロー専用） | AGENT_DEFINITION_SPEC.md §6.7.3, standard_mr_processing_prompts.json | 問題なし |
+| §17 Code Generation Agent（高速モード）- multi_codegen専用 | AGENT_DEFINITION_SPEC.md §4.2, multi_codegen_mr_processing_prompts.json | 問題なし |
+| §18 Code Generation Agent（標準モード）- multi_codegen専用 | AGENT_DEFINITION_SPEC.md §4.2, multi_codegen_mr_processing_prompts.json | 問題なし |
+| §19 Code Generation Agent（創造的モード）- multi_codegen専用 | AGENT_DEFINITION_SPEC.md §4.2, multi_codegen_mr_processing_prompts.json | 問題なし |
+| §20 Code Review Agent（複数実装比較）- multi_codegen専用 | AGENT_DEFINITION_SPEC.md §4.2, multi_codegen_mr_processing_prompts.json | 問題なし |
 
 ### PROMPT_DEFINITION_SPEC.md
 
@@ -123,21 +152,28 @@
 | §1 概要 | AUTOMATA_CODEX_SPEC.md §4.4, DATABASE_SCHEMA_SPEC.md §3.1 | 問題なし |
 | §2 DBへの保存形式 | DATABASE_SCHEMA_SPEC.md §3.1（workflow_definitions.prompt_definition） | 問題なし |
 | §3.1 トップレベル構造 | standard_mr_processing_prompts.json, multi_codegen_mr_processing_prompts.json | 問題なし |
-| §3.2 default_llm_params | standard_mr_processing_prompts.json, USER_MANAGEMENT_SPEC.md（user_configs）| 問題なし |
+| §3.2 デフォルトLLMパラメータ（default_llm_params）| standard_mr_processing_prompts.json, USER_MANAGEMENT_SPEC.md §3.2（user_configs）| 問題なし |
 | §3.3 プロンプト定義（prompts配列）| AGENT_DEFINITION_SPEC.md §3.2（prompt_idフィールド）, PROMPTS.md | 問題なし |
-| §4.1 標準MR処理プロンプト定義（インラインJSON例） | standard_mr_processing_prompts.json | 問題なし（インライン例は説明用の抜粋であり実JSONと同一内容を示す） |
+| §4.1 標準MR処理プロンプト定義（インラインJSON例）| standard_mr_processing_prompts.json | 問題なし（インライン例は説明用の抜粋であり実JSONと同一内容を示す） |
+| §4.2 複数コード生成並列プロンプト定義（multi_codegen）| multi_codegen_mr_processing_prompts.json, PROMPTS.md §17〜§20 | 問題なし |
+| §5 バリデーション仕様 | — | 問題なし |
+| §6 プロンプト適用優先順位 | USER_MANAGEMENT_SPEC.md §6.2（ユーザーカスタムプロンプト設定）, DATABASE_SCHEMA_SPEC.md §3.1 | 問題なし |
 
 ### STANDARD_MR_PROCESSING_FLOW.md
 
 | 章 | 関連ドキュメント/章 | 問題 |
 |----|-------------------|------|
 | §1 概要 | AUTOMATA_CODEX_SPEC.md §1 | 問題なし |
+| §1.1 本ドキュメントの目的 | — | 問題なし |
+| §1.2 説明範囲 | — | 問題なし |
+| §1.3 関連ドキュメント | — | 問題なし |
 | §2 エージェント構成（表） | AGENT_DEFINITION_SPEC.md §4.1, standard_mr_processing_agents.json | **矛盾あり（重大）**: 以下5点の不一致がある |
 | | | ①`code_generation`, `bug_fix`, `test_creation`, `documentation`の出力コンテキストキーを「`execution_results`」（複数）と記載しているが、standard_mr_processing_agents.jsonでは「`execution_result`」（単数）となっている |
 | | | ②`code_review`の入力コンテキストキーを「`execution_results`, `task_context`」と記載しているが、standard_mr_processing_agents.jsonでは「`execution_result`, `task_context`」（単数）となっている |
 | | | ③`test_execution_evaluation`の入力コンテキストキーを「`execution_results`, `task_context`」と記載しているが、standard_mr_processing_agents.jsonでは「`execution_result`, `task_context`」（単数）となっている |
 | | | ④`plan_reflection`の入力コンテキストキーを「`plan_result, todo_list, task_context`」と記載しているが、AGENT_DEFINITION_SPEC.md §4.1では4キー、standard_mr_processing_agents.jsonでは6キーとなっている |
 | | | ⑤`documentation_review`の入力コンテキストキーを「`execution_results`, `task_context`」と記載しているが、standard_mr_processing_agents.jsonでは「`execution_result`, `task_context`」（単数）となっている |
+| §2.1 共通実装ルール | AGENT_DEFINITION_SPEC.md §3（JSON形式の仕様）| 問題なし |
 | §3 MR処理の全体フロー（mermaidフロー図）| standard_mr_processing_graph.json | **矛盾あり（重大）**: 以下2点の不一致がある |
 | | | ①フロー図では `code_generation_reflectionのproceed分岐 → code_review` と示されているが、standard_mr_processing_graph.jsonでは `code_gen_reflection_branch のproceed → execution_type_branch → test_execution_evaluation or code_review` と経由ノードが存在する |
 | | | ②フロー図では `code_review → test_execution_evaluation → plan_reflection` と示されているが、standard_mr_processing_graph.jsonでは `execution_type_branch → test_execution_evaluation → code_review → plan_reflection`（テスト実行評価がコードレビューの前）となっている |
@@ -146,33 +182,76 @@
 | §4.1 計画前情報収集フェーズ | AGENT_DEFINITION_SPEC.md §6.1, AUTOMATA_CODEX_SPEC.md §4.3.1 | 問題なし |
 | §4.2 計画フェーズ | AGENT_DEFINITION_SPEC.md §6.2, standard_mr_processing_agents.json | 問題なし |
 | §4.3 実行フェーズ | AGENT_DEFINITION_SPEC.md §6.4 | 問題なし |
-| §4.4 実行リフレクションフェーズ | standard_mr_processing_agents.json（code_generation_reflection等） | 問題なし |
-| §4.5 レビューフェーズ | AGENT_DEFINITION_SPEC.md §6.5, §6.6, §6.7 | 問題なし |
-| §4.6 リフレクション・再計画フェーズ | AGENT_DEFINITION_SPEC.md §6.3, standard_mr_processing_graph.json（replan_branch）| 問題なし |
+| §4.4 実行リフレクションフェーズ | standard_mr_processing_agents.json（code_generation_reflection等）| 問題なし |
+| §4.5 レビューフェーズ | AGENT_DEFINITION_SPEC.md §6.6.1, §6.6.2 | 問題なし |
+| §4.6 テスト実行・評価フェーズ（コード生成・バグ修正・テスト作成）| AGENT_DEFINITION_SPEC.md §6.5, standard_mr_processing_graph.json（execution_type_branch）| 問題なし |
+| §4.7 リフレクションフェーズ | AGENT_DEFINITION_SPEC.md §6.3, standard_mr_processing_graph.json（replan_branch）| 問題なし |
+| §4.8 差分計画パターン（ユーザーコメント対応）| CLASS_IMPLEMENTATION_SPEC.md §5.2（CommentCheckMiddleware）| 問題なし |
+| §4.8.1 Middleware実装の特徴 | CLASS_IMPLEMENTATION_SPEC.md §5.2 | 問題なし |
+| §4.8.2 コンテキストキーの拡張 | AGENT_DEFINITION_SPEC.md §5（コンテキストキー一覧）| 問題なし |
+| §4.8.3 処理フロー | CLASS_IMPLEMENTATION_SPEC.md §5.2 | 問題なし |
+| §4.8.4 reflection_result出力形式の拡張 | AGENT_DEFINITION_SPEC.md §4.1（plan_reflection output_keys）| 問題なし |
+| §4.8.5 グラフ定義での実装 | GRAPH_DEFINITION_SPEC.md §3.2（metadataフィールド）| 問題なし |
+| §4.8.6 エージェント定義での実装 | AGENT_DEFINITION_SPEC.md §4.1 | 問題なし |
+| §4.8.7 プロンプト定義での実装 | PROMPT_DEFINITION_SPEC.md | 問題なし |
+| §4.8.8 利点 | — | 問題なし |
+| §5 タスク種別別詳細フロー | standard_mr_processing_graph.json | 問題なし |
+| §5.1 コード生成フロー | AGENT_DEFINITION_SPEC.md §6.4.1, standard_mr_processing_graph.json | 問題なし |
+| §5.2 バグ修正フロー | AGENT_DEFINITION_SPEC.md §6.4.2, standard_mr_processing_graph.json | 問題なし |
+| §5.3 ドキュメント生成フロー | AGENT_DEFINITION_SPEC.md §6.4.3, standard_mr_processing_graph.json | 問題なし |
+| §5.4 テスト作成フロー | AGENT_DEFINITION_SPEC.md §6.4.4, standard_mr_processing_graph.json | 問題なし |
+| §6 仕様ファイル管理 | AUTOMATA_CODEX_SPEC.md §4.3.2 | 問題なし |
+| §6.1 仕様ファイル命名規則 | — | 問題なし |
+| §6.2 仕様ファイル作成テンプレート | — | 問題なし |
+| §6.3 自動レビュープロセス | AGENT_DEFINITION_SPEC.md §6.6 | 問題なし |
+| §7 まとめ | — | 問題なし |
+| §7.1 主要な特徴 | — | 問題なし |
+| §7.2 重要なポイント | — | 問題なし |
+| §7.3 関連ドキュメント | — | 問題なし |
 
 ### DATABASE_SCHEMA_SPEC.md
 
+> **注意**: 前バージョンのチェックでは DATABASE_SCHEMA_SPEC.md の章番号が実際のドキュメントと全て異なる誤記があった（§4〜§13が全てずれていた）。また §8〜§13 が完全に欠落していた。以下は実際の章構造に基づき修正済み。
+
 | 章 | 関連ドキュメント/章 | 問題 |
 |----|-------------------|------|
-| §1 概要・ER図 | AUTOMATA_CODEX_SPEC.md §8, USER_MANAGEMENT_SPEC.md | 問題なし |
-| §2.1 usersテーブル | USER_MANAGEMENT_SPEC.md §2 | 問題なし |
-| §2.2 user_configsテーブル | USER_MANAGEMENT_SPEC.md §2, AUTOMATA_CODEX_SPEC.md §3, §11 | 問題なし |
-| §2.3 user_workflow_settingsテーブル | USER_MANAGEMENT_SPEC.md §6, AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
-| §3.1 workflow_definitionsテーブル（JSONB構造例） | GRAPH_DEFINITION_SPEC.md, AGENT_DEFINITION_SPEC.md, PROMPT_DEFINITION_SPEC.md | **矛盾あり（重大）**: JSONB構造の例示が他ドキュメントの仕様と一致しない |
+| §1 概要 | AUTOMATA_CODEX_SPEC.md §8, USER_MANAGEMENT_SPEC.md | 問題なし |
+| §1.1 データベース構成 | AUTOMATA_CODEX_SPEC.md §2.3.4（Runtime Layer）| 問題なし |
+| §1.2 ER図 | 全テーブル | 問題なし |
+| §2.1 usersテーブル | USER_MANAGEMENT_SPEC.md §2, §3 | 問題なし |
+| §2.2 user_configsテーブル | USER_MANAGEMENT_SPEC.md §6.1, AUTOMATA_CODEX_SPEC.md §3, §11 | 問題なし |
+| §2.3 user_workflow_settingsテーブル | USER_MANAGEMENT_SPEC.md §6.4, AUTOMATA_CODEX_SPEC.md §3 | 問題なし |
+| §3.1 workflow_definitionsテーブル（JSONB構造例）| GRAPH_DEFINITION_SPEC.md, AGENT_DEFINITION_SPEC.md, PROMPT_DEFINITION_SPEC.md | **矛盾あり（重大）**: JSONB構造の例示が他ドキュメントの仕様と一致しない |
 | | | ①`graph_definition`例で `executor_type` フィールドを使用しているが、GRAPH_DEFINITION_SPEC.md §3.2では `executor_class` フィールドを使用する |
 | | | ②`agent_definition`例で `tools` フィールドを使用しているが、AGENT_DEFINITION_SPEC.md §3.2では `mcp_servers` フィールドを使用する |
 | | | ③`agent_definition`例で input_keys が `["mr_description", "mr_comments"]` となっているが、実際の仕様は `["task_context"]` 等である |
 | | | ④`prompt_definition`例で `prompt_id` フィールドが使われているが、PROMPT_DEFINITION_SPEC.md §3.3では `id` フィールドを使用する |
-| §4 tasksテーブル | AUTOMATA_CODEX_SPEC.md §8, CLASS_IMPLEMENTATION_SPEC.md §2.1（save_workflow_state）| 問題なし |
-| §5 workflow_execution_statesテーブル | CLASS_IMPLEMENTATION_SPEC.md §2.1（WorkflowFactory停止・再開関連）| 問題なし |
-| §6 docker_environment_mappingsテーブル | CLASS_IMPLEMENTATION_SPEC.md §6（ExecutionEnvironmentManager）| 問題なし |
-| §7 context_messagesテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.1（PostgreSqlChatHistoryProvider）| 問題なし |
-| §8 message_compressionsテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.4（ContextCompressionService）| 問題なし |
-| §9 context_planning_historyテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.2（PlanningContextProvider）| 問題なし |
-| §10 context_metadataテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.1（PostgreSqlChatHistoryProvider）| 問題なし |
-| §11 context_tool_results_metadataテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.3（ToolResultContextProvider）| 問題なし |
-| §12 todosテーブル | AGENT_DEFINITION_SPEC.md §3.2（todo_list仮想MCPサーバー）| 問題なし |
-| §13 token_usageテーブル | AUTOMATA_CODEX_SPEC.md §3, CLASS_IMPLEMENTATION_SPEC.md §5.3（TokenUsageMiddleware）| 問題なし |
+| §4.1 tasksテーブル | AUTOMATA_CODEX_SPEC.md §8, CLASS_IMPLEMENTATION_SPEC.md §2.1（save_workflow_state）| 問題なし |
+| §4.5 ワークフロー実行管理テーブル群 | CLASS_IMPLEMENTATION_SPEC.md §2.1（WorkflowFactory停止・再開関連）| 問題なし |
+| §4.5.1 workflow_execution_statesテーブル | CLASS_IMPLEMENTATION_SPEC.md §2.1（save_workflow_state, load_workflow_state）| 問題なし |
+| §4.5.2 docker_environment_mappingsテーブル | CLASS_IMPLEMENTATION_SPEC.md §6（ExecutionEnvironmentManager）| 問題なし |
+| §5.1 context_messagesテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.1（PostgreSqlChatHistoryProvider）| 問題なし |
+| §5.2 message_compressionsテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.4（ContextCompressionService）| 問題なし |
+| §5.3 context_planning_historyテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.2（PlanningContextProvider）| 問題なし |
+| §5.4 context_metadataテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.1（PostgreSqlChatHistoryProvider）| 問題なし |
+| §5.5 context_tool_results_metadataテーブル | CLASS_IMPLEMENTATION_SPEC.md §4.3（ToolResultContextProvider）| 問題なし |
+| §6.1 todosテーブル | AGENT_DEFINITION_SPEC.md §3.2（todo_list仮想MCPサーバー）| 問題なし |
+| §7.1 token_usageテーブル | AUTOMATA_CODEX_SPEC.md §3, CLASS_IMPLEMENTATION_SPEC.md §5.3（TokenUsageMiddleware）| 問題なし |
+| §8 データ保持期限とクリーンアップ | — | 問題なし |
+| §8.1 自動クリーンアップ対象テーブル | §5〜§7の各テーブル | 問題なし |
+| §8.2 クリーンアップ実行方法 | AUTOMATA_CODEX_SPEC.md §13.3（監視・ログ）| 問題なし |
+| §9 データベース初期化SQL | §2〜§7の各テーブル定義 | 問題なし |
+| §10 データベース設定 | AUTOMATA_CODEX_SPEC.md §13.1（デプロイ構成）| 問題なし |
+| §10.1 接続設定 | AUTOMATA_CODEX_SPEC.md §14.1（config.yaml）| 問題なし |
+| §10.2 パフォーマンスチューニング | — | 問題なし |
+| §10.3 バックアップ設定 | AUTOMATA_CODEX_SPEC.md §13.3 | 問題なし |
+| §11 セキュリティ設定 | AUTOMATA_CODEX_SPEC.md §12, USER_MANAGEMENT_SPEC.md §4 | 問題なし |
+| §11.1 暗号化 | USER_MANAGEMENT_SPEC.md §4（APIキー暗号化）| 問題なし |
+| §11.2 アクセス制御 | AUTOMATA_CODEX_SPEC.md §12.1 | 問題なし |
+| §12 マイグレーション管理 | — | 問題なし |
+| §12.1 スキーマバージョン管理 | — | 問題なし |
+| §12.2 マイグレーションファイル命名規則 | — | 問題なし |
+| §13 まとめ | — | 問題なし |
 
 ### AGENT_DEFINITION_SPEC.md
 
@@ -181,7 +260,9 @@
 | §1 概要 | AUTOMATA_CODEX_SPEC.md §4.4, DATABASE_SCHEMA_SPEC.md §3.1 | 問題なし |
 | §2 DBへの保存形式 | DATABASE_SCHEMA_SPEC.md §3.1 | 問題なし |
 | §3 JSON形式の仕様（mcp_serversフィールド等） | CLASS_IMPLEMENTATION_SPEC.md §2.3（AgentFactory）, §2.4（MCPClientFactory）| 問題なし |
-| §4.1 標準MR処理エージェント定義（インライン定義） | standard_mr_processing_agents.json | **矛盾あり（重大）**: 以下7点の不一致がある |
+| §3.1 トップレベル構造 | — | 問題なし |
+| §3.2 エージェントノード定義（agents）| CLASS_IMPLEMENTATION_SPEC.md §2.3（AgentFactory.create_agent）| 問題なし |
+| §4.1 標準MR処理エージェント定義（インライン定義）| standard_mr_processing_agents.json | **矛盾あり（重大）**: 以下7点の不一致がある |
 | | | ①`task_classifier`の`output_keys`: ドキュメントは`["classification_result", "selected_environment"]`、JSONは`["classification_result"]`のみ |
 | | | ②`code_generation_planning`等の計画エージェントの`input_keys`: ドキュメントは2キー、JSONは6キー（再計画用キー`previous_plan_result`, `replan_reason`, `user_new_comments`, `delta_requirements`を追加） |
 | | | ③`code_generation_planning`等の計画エージェントの`output_keys`: ドキュメントは2キー、JSONは3キー（`plan_metadata`を追加） |
@@ -196,11 +277,24 @@
 | §5 コンテキストキー一覧 | CLASS_IMPLEMENTATION_SPEC.md全体, AUTOMATA_CODEX_SPEC.md §8.2 | 問題なし |
 | §6.1 Task Classifier Agent | STANDARD_MR_PROCESSING_FLOW.md §4.1, PROMPTS.md §1 | 問題なし |
 | §6.2 Planning Agent群 | STANDARD_MR_PROCESSING_FLOW.md §4.2, PROMPTS.md §2〜§5 | 問題なし |
-| §6.3 Plan Reflection Agent | AUTOMATA_CODEX_SPEC.md（reflectionロールはenv_ref省略のみ許容）| **矛盾あり**: AGENT_DEFINITION_SPEC.md §6.3 のplan_reflectionエージェント定義主要設定に `env_ref: "plan"` と記載されているが、AUTOMATA_CODEX_SPEC.md §4.4.2（ConfigurableAgent設計方針）では「reflectionロールはenv_ref省略のみ許容（Docker環境を必要としない）」と明記されており矛盾する。また、standard_mr_processing_graph.jsonの実装でもplan_reflectionにenv_refは設定されていない |
+| §6.2.1 コード生成 Planning Agent ノード | PROMPTS.md §2 | 問題なし |
+| §6.2.2 バグ修正 Planning Agent ノード | PROMPTS.md §3 | 問題なし |
+| §6.2.3 テスト生成 Planning Agent ノード | PROMPTS.md §4 | 問題なし |
+| §6.2.4 ドキュメント生成 Planning Agent ノード | PROMPTS.md §5 | 問題なし |
+| §6.3 Plan Reflection Agent | AUTOMATA_CODEX_SPEC.md §4.4.2（reflectionロールはenv_ref省略のみ許容）| **矛盾あり**: §6.3 のplan_reflectionエージェント定義主要設定に `env_ref: "plan"` と記載されているが、AUTOMATA_CODEX_SPEC.md §4.4.2では「reflectionロールはenv_ref省略のみ許容（Docker環境を必要としない）」と明記されており矛盾する。また、standard_mr_processing_graph.jsonの実装でもplan_reflectionにenv_refは設定されていない |
 | §6.4 Execution Agent群 | STANDARD_MR_PROCESSING_FLOW.md §4.3, PROMPTS.md §7〜§10 | 問題なし |
-| §6.5 Code Review Agent | STANDARD_MR_PROCESSING_FLOW.md §4.5, PROMPTS.md §14 | 問題なし |
-| §6.6 Documentation Review Agent | STANDARD_MR_PROCESSING_FLOW.md §4.5, PROMPTS.md §15 | 問題なし |
-| §6.7 Test Execution Evaluation Agent | STANDARD_MR_PROCESSING_FLOW.md §4.5, PROMPTS.md §16 | 問題なし |
+| §6.4.1 Code Generation Agent ノード | PROMPTS.md §7 | 問題なし |
+| §6.4.2 Bug Fix Agent ノード | PROMPTS.md §8 | 問題なし |
+| §6.4.3 Documentation Agent ノード | PROMPTS.md §9 | 問題なし |
+| §6.4.4 Test Creation Agent ノード | PROMPTS.md §10 | 問題なし |
+| §6.5 Test Execution & Evaluation Agent ノード | STANDARD_MR_PROCESSING_FLOW.md §4.6, PROMPTS.md §11 | 問題なし |
+| §6.6 Review Agent群 | STANDARD_MR_PROCESSING_FLOW.md §4.5 | 問題なし |
+| §6.6.1 Code Review Agent ノード | PROMPTS.md §12 | 問題なし |
+| §6.6.2 Documentation Review Agent ノード | PROMPTS.md §13 | 問題なし |
+| §6.7 Execution Reflection Agent群 | STANDARD_MR_PROCESSING_FLOW.md §4.4 | 問題なし |
+| §6.7.1 Code Generation Reflection Agent ノード | PROMPTS.md §14 | 問題なし |
+| §6.7.2 Test Creation Reflection Agent ノード | PROMPTS.md §15 | 問題なし |
+| §6.7.3 Documentation Reflection Agent ノード | PROMPTS.md §16 | 問題なし |
 
 ### GRAPH_DEFINITION_SPEC.md
 
@@ -209,21 +303,34 @@
 | §1 概要 | AUTOMATA_CODEX_SPEC.md §4.4, DATABASE_SCHEMA_SPEC.md §3.1 | 問題なし |
 | §2 DBへの保存形式 | DATABASE_SCHEMA_SPEC.md §3.1 | 問題なし |
 | §3 JSON形式の仕様（ノード・エッジ定義）| CLASS_IMPLEMENTATION_SPEC.md §3.5（ExecEnvSetupExecutor）, AUTOMATA_CODEX_SPEC.md §4.3.2 | 問題なし |
-| §3.2 metadataフィールド（check_comments_before等）| CLASS_IMPLEMENTATION_SPEC.md §5.2（CommentCheckMiddleware）| 問題なし |
+| §3.1 トップレベル構造 | — | 問題なし |
+| §3.2 ノード定義（nodes）（metadataフィールド含む）| CLASS_IMPLEMENTATION_SPEC.md §5.2（CommentCheckMiddleware）| 問題なし |
+| §3.3 エッジ定義（edges）| — | 問題なし |
 | §4.1 標準MR処理グラフ（インラインJSON）| standard_mr_processing_graph.json | **矛盾あり（重大）**: インラインJSONに以下のノードが欠落している |
 | | | ①`code_generation_reflection`, `code_gen_reflection_branch`ノードが存在しない |
 | | | ②`test_creation_reflection`, `test_reflection_branch`ノードが存在しない |
 | | | ③`documentation_reflection`, `doc_reflection_branch`ノードが存在しない |
 | | | ④エッジが `code_generation → execution_type_branch` と記載されているが、実JSONでは `code_generation → code_generation_reflection → code_gen_reflection_branch → execution_type_branch`（リフレクション経由） |
 | §4.2 複数コード生成並列グラフ（インラインJSON）| multi_codegen_mr_processing_graph.json | **矛盾あり（重大）**: インラインJSONはコード生成の並列分岐に関する一部ノードのみ示されており、bug_fix, test_creation, documentation, replan_branch等の多数のノードとエッジが省略されている。ドキュメントが実JSONを不完全にしか表現していない |
+| §4.2.1 multi_codegen_mr_processingの詳細説明 | multi_codegen_mr_processing_graph.json, MULTI_MR_PROCESSING_FLOW.md | 問題なし |
+| §5 バリデーション仕様 | CLASS_IMPLEMENTATION_SPEC.md §2.1（WorkflowFactory）| 問題なし |
+| §6 定義の取得・更新フロー | USER_MANAGEMENT_SPEC.md §6.2（ワークフロー定義管理エンドポイント）| 問題なし |
 
 ### MULTI_MR_PROCESSING_FLOW.md
 
 | 章 | 関連ドキュメント/章 | 問題 |
 |----|-------------------|------|
 | §1 概要 | AUTOMATA_CODEX_SPEC.md §4.5, STANDARD_MR_PROCESSING_FLOW.md §1 | 問題なし |
+| §1.1 本ドキュメントの目的 | — | 問題なし |
+| §1.2 標準フローとの主な違い | STANDARD_MR_PROCESSING_FLOW.md | 問題なし |
+| §1.3 説明範囲 | — | 問題なし |
+| §1.4 関連ドキュメント | — | 問題なし |
 | §2 エージェント構成（表） | AGENT_DEFINITION_SPEC.md §4.2, multi_codegen_mr_processing_agents.json | **矛盾あり**: `code_review`の入力コンテキストキーを「`execution_result, execution_results, branch_envs, task_context`」と記載しているが、multi_codegen_mr_processing_agents.jsonでは `input_keys: ["branch_envs", "execution_results", "task_context"]`（`execution_result`単数形が含まれない） |
+| §2.1 並列コード生成エージェントの設定比較 | AGENT_DEFINITION_SPEC.md §4.2, multi_codegen_mr_processing_agents.json | 問題なし |
+| §2.2 共通実装ルール | AGENT_DEFINITION_SPEC.md §3（JSON形式の仕様）| 問題なし |
 | §3 MR処理の全体フロー（mermaidフロー図）| multi_codegen_mr_processing_graph.json | 問題なし（概ね一致） |
+| §3.1 主要ノード構成（表）| multi_codegen_mr_processing_graph.json | 問題なし |
+| §3.2 重要なフロー特性 | multi_codegen_mr_processing_graph.json | 問題なし |
 | §4.1 計画前情報収集フェーズ | STANDARD_MR_PROCESSING_FLOW.md §4.1 | 問題なし（「標準フローと同一」と参照） |
 | §4.2 計画フェーズ | STANDARD_MR_PROCESSING_FLOW.md §4.2 | 問題なし |
 | §4.3 並列実行環境セットアップフェーズ | CLASS_IMPLEMENTATION_SPEC.md §3.5（ExecEnvSetupExecutor）, GRAPH_DEFINITION_SPEC.md §3.2（env_count）| 問題なし |
@@ -231,6 +338,13 @@
 | §4.5 比較レビュー・自動選択フェーズ | multi_codegen_mr_processing_agents.json（code_reviewエージェント）| 問題なし |
 | §4.6 ブランチマージフェーズ（BranchMergeExecutor）| AUTOMATA_CODEX_SPEC.md §4.4.2（ExecutorFactory.create_branch_merge）| 問題なし |
 | §4.7 リフレクション・再計画フェーズ | multi_codegen_mr_processing_agents.json（plan_reflection）| 問題なし |
+| §4.8 バグ修正・テスト作成・ドキュメント生成タスク | STANDARD_MR_PROCESSING_FLOW.md §5.2〜§5.4, multi_codegen_mr_processing_graph.json | 問題なし |
+| §5 コード生成タスクの詳細フロー | multi_codegen_mr_processing_graph.json | 問題なし |
+| §6 ブランチ管理 | AUTOMATA_CODEX_SPEC.md §4.5 | 問題なし |
+| §6.1 ブランチ命名規則 | AUTOMATA_CODEX_SPEC.md §4.5.1 | 問題なし |
+| §6.2 ブランチのライフサイクル | AUTOMATA_CODEX_SPEC.md §4.5.2, §4.5.3 | 問題なし |
+| §6.3 ブランチ保持ポリシー | AUTOMATA_CODEX_SPEC.md §4.5.4 | 問題なし |
+| §7 まとめ | — | 問題なし |
 
 ---
 
@@ -447,42 +561,71 @@
 | クラス/メソッド | 記述ドキュメント/章 | 問題 |
 |---------------|-------------------|------|
 | `ExecutionEnvironmentManager` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §6, AUTOMATA_CODEX_SPEC.md §8.8 | ✅ 問題なし |
-| `prepare_plan_environment(environment_name, mr_iid)` | CLASS_IMPLEMENTATION_SPEC.md §6, CLASS_IMPLEMENTATION_SPEC.md §3.4（PlanEnvSetupExecutor）| ✅ 問題なし |
-| `prepare_environments(count, environment_name, mr_iid, node_id)` | CLASS_IMPLEMENTATION_SPEC.md §6, CLASS_IMPLEMENTATION_SPEC.md §3.5（ExecEnvSetupExecutor）| ✅ 問題なし |
-| `clone_repository(node_id, repo_url, branch)` | CLASS_IMPLEMENTATION_SPEC.md §6 | ✅ 問題なし |
-| `execute_command(env_id, command)` | CLASS_IMPLEMENTATION_SPEC.md §6 | ✅ 問題なし |
-| `save_environment_mapping()` | CLASS_IMPLEMENTATION_SPEC.md §2.1（_check_shutdown_between_nodes内で呼び出し）| ⚠️ **情報不十分**: `_check_shutdown_between_nodes()` 内で呼び出しが記載されているが、CLASS_IMPLEMENTATION_SPEC.md §6 に `save_environment_mapping()` のメソッド詳細が記載されていない |
-| `stop_all_containers()` | CLASS_IMPLEMENTATION_SPEC.md §2.1（_check_shutdown_between_nodes内で呼び出し）| ⚠️ **情報不十分**: `_check_shutdown_between_nodes()` 内で呼び出しが記載されているが、CLASS_IMPLEMENTATION_SPEC.md §6 に `stop_all_containers()` のメソッド詳細が記載されていない |
+| `prepare_environments(count, environment_name, mr_iid, node_ids)` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
+| `get_environment(node_id)` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
+| `execute_command(node_id, command)` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
+| `clone_repository(node_id, repo_url, branch)` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
+| `cleanup_environments()` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
+| `save_environment_mapping(execution_id)` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
+| `load_environment_mapping(execution_id)` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
+| `stop_all_containers(execution_id)` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
+| `start_all_containers(execution_id)` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
+| `check_containers_exist(execution_id)` | CLASS_IMPLEMENTATION_SPEC.md §6.3 | ✅ 問題なし |
 
 ### EnvironmentAnalyzer（CLASS_IMPLEMENTATION_SPEC.md §7）
 
 | クラス/メソッド | 記述ドキュメント/章 | 問題 |
 |---------------|-------------------|------|
 | `EnvironmentAnalyzer` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §7, AUTOMATA_CODEX_SPEC.md §2.3.3, STANDARD_MR_PROCESSING_FLOW.md §4.1 | ✅ 問題なし |
+| `detect_environment_files(file_list)` | CLASS_IMPLEMENTATION_SPEC.md §7.3 | ✅ 問題なし |
+| `analyze_environment_files(detected_files)` | CLASS_IMPLEMENTATION_SPEC.md §7.3 | ✅ 問題なし |
 
 ### PrePlanningManager（CLASS_IMPLEMENTATION_SPEC.md §8）
 
 | クラス/メソッド | 記述ドキュメント/章 | 問題 |
 |---------------|-------------------|------|
 | `PrePlanningManager` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8, AUTOMATA_CODEX_SPEC.md §2.3.3 | ✅ 問題なし |
+| `execute()` | CLASS_IMPLEMENTATION_SPEC.md §8.3 | ✅ 問題なし |
+| `select_execution_environment()` | CLASS_IMPLEMENTATION_SPEC.md §8.3 | ✅ 問題なし |
 
 ### MCPClient関連（CLASS_IMPLEMENTATION_SPEC.md §9）
 
 | クラス/メソッド | 記述ドキュメント/章 | 問題 |
 |---------------|-------------------|------|
-| MCP関連クラス群 | CLASS_IMPLEMENTATION_SPEC.md §9, AUTOMATA_CODEX_SPEC.md §9, CLASS_IMPLEMENTATION_SPEC.md §2.4（MCPClientFactory）| ✅ 問題なし |
+| `MCPClient` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §9.1, AUTOMATA_CODEX_SPEC.md §9, CLASS_IMPLEMENTATION_SPEC.md §2.4（MCPClientFactory）| ✅ 問題なし |
+| `MCPClient.connect()` | CLASS_IMPLEMENTATION_SPEC.md §9.1.3 | ✅ 問題なし |
+| `MCPClient.list_tools()` | CLASS_IMPLEMENTATION_SPEC.md §9.1.3 | ✅ 問題なし |
+| `MCPClient.call_tool(tool_name, arguments)` | CLASS_IMPLEMENTATION_SPEC.md §9.1.3 | ✅ 問題なし |
+| `MCPClient.disconnect()` | CLASS_IMPLEMENTATION_SPEC.md §9.1.3 | ✅ 問題なし |
+| `EnvironmentAwareMCPClient` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §9.2, AUTOMATA_CODEX_SPEC.md §9 | ✅ 問題なし |
+| `EnvironmentAwareMCPClient.call_tool(tool_name, arguments)` | CLASS_IMPLEMENTATION_SPEC.md §9.2.3 | ✅ 問題なし |
 
 ### その他の主要クラス（CLASS_IMPLEMENTATION_SPEC.md §8（重複セクション番号））
 
+> **注意**: CLASS_IMPLEMENTATION_SPEC.md のセクション番号「§8」が二重に存在する（§8: PrePlanningManager以降と §8: その他の主要クラス）。これはドキュメント構造の誤りである（矛盾14）。
+
 | クラス/メソッド | 記述ドキュメント/章 | 問題 |
 |---------------|-------------------|------|
-| `ProgressReporter` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8（その他）, AUTOMATA_CODEX_SPEC.md §6 | ✅ 問題なし |
-| `TaskInheritanceContextProvider` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8（その他）, AUTOMATA_CODEX_SPEC.md §8.6 | ✅ 問題なし |
-| `TaskInheritanceContextProvider.before_run(...)` | CLASS_IMPLEMENTATION_SPEC.md §8（その他）| ✅ 問題なし |
-| `TaskInheritanceContextProvider._get_past_tasks_async()` | CLASS_IMPLEMENTATION_SPEC.md §8（その他）| ✅ 問題なし |
-| `TaskInheritanceContextProvider._format_inheritance_data()` | CLASS_IMPLEMENTATION_SPEC.md §8（その他）| ✅ 問題なし |
-| `DefinitionLoader` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8（その他）, AUTOMATA_CODEX_SPEC.md §4.4 | ✅ 問題なし |
-| `WorkflowBuilder` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8（その他）, AUTOMATA_CODEX_SPEC.md §2.3.3 | ✅ 問題なし |
+| `TodoManagementTool` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.1（その他主要クラス）, AGENT_DEFINITION_SPEC.md §3.2（todo_list MCPサーバー）| ✅ 問題なし（§8.1に詳細設計あり） |
+| `TodoManagementTool.create_todo_list(project_id, mr_iid, todos)` | CLASS_IMPLEMENTATION_SPEC.md §8.1.3 | ✅ 問題なし |
+| `TodoManagementTool.sync_to_gitlab(project_id, mr_iid)` | CLASS_IMPLEMENTATION_SPEC.md §8.1.3 | ✅ 問題なし |
+| `IssueToMRConverter` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.2（その他主要クラス）, AUTOMATA_CODEX_SPEC.md §5.0 | ✅ 問題なし（§8.2に詳細設計あり） |
+| `IssueToMRConverter.convert(issue)` | CLASS_IMPLEMENTATION_SPEC.md §8.2.3 | ✅ 問題なし |
+| `ProgressReporter` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.3（その他主要クラス）, AUTOMATA_CODEX_SPEC.md §6 | ✅ 問題なし |
+| `ProgressReporter.initialize(context, mr_iid)` | CLASS_IMPLEMENTATION_SPEC.md §8.3.3 | ✅ 問題なし |
+| `ProgressReporter.report_progress(context, event, node_id, details)` | CLASS_IMPLEMENTATION_SPEC.md §8.3.3 | ✅ 問題なし |
+| `ProgressReporter.finalize(context, mr_iid, summary)` | CLASS_IMPLEMENTATION_SPEC.md §8.3.3 | ✅ 問題なし |
+| `MermaidGraphRenderer` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.4（その他主要クラス）| ✅ 問題なし |
+| `MermaidGraphRenderer.render(node_states)` | CLASS_IMPLEMENTATION_SPEC.md §8.4.3 | ✅ 問題なし |
+| `ProgressCommentManager` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §8.5（その他主要クラス）| ✅ 問題なし |
+| `ProgressCommentManager.create_progress_comment(context, mr_iid, node_states)` | CLASS_IMPLEMENTATION_SPEC.md §8.5.3 | ✅ 問題なし |
+| `ProgressCommentManager.update_progress_comment(context, mr_iid, node_states, event_summary, llm_response, error_detail)` | CLASS_IMPLEMENTATION_SPEC.md §8.5.3 | ✅ 問題なし |
+| `TaskInheritanceContextProvider` クラス全体 | CLASS_IMPLEMENTATION_SPEC.md §4.5（Custom Provider群）, AUTOMATA_CODEX_SPEC.md §8.6 | ✅ 問題なし |
+| `TaskInheritanceContextProvider.before_run(...)` | CLASS_IMPLEMENTATION_SPEC.md §4.5.4 | ✅ 問題なし |
+| `TaskInheritanceContextProvider._get_past_tasks_async()` | CLASS_IMPLEMENTATION_SPEC.md §4.5.4 | ✅ 問題なし |
+| `TaskInheritanceContextProvider._format_inheritance_data()` | CLASS_IMPLEMENTATION_SPEC.md §4.5.4 | ✅ 問題なし |
+| `DefinitionLoader` クラス全体 | AUTOMATA_CODEX_SPEC.md §4.4 | ⚠️ **情報不十分**: AUTOMATA_CODEX_SPEC.md §4.4に処理概要が記載されているが、CLASS_IMPLEMENTATION_SPEC.md に独立した設計章が存在しない |
+| `WorkflowBuilder` クラス全体 | AUTOMATA_CODEX_SPEC.md §2.3.3 | ⚠️ **情報不十分**: AUTOMATA_CODEX_SPEC.md §2.3.3に記載があるが、CLASS_IMPLEMENTATION_SPEC.md に独立した設計章が存在しない |
 
 ### GuidelineLearningAgent（CLASS_IMPLEMENTATION_SPEC.md §10）
 
@@ -498,13 +641,11 @@ AUTOMATA_CODEX_SPEC.md 等で言及されているが、CLASS_IMPLEMENTATION_SPE
 |-------|-------------------|------|
 | `BranchMergeExecutor` | AUTOMATA_CODEX_SPEC.md §4.4.2, MULTI_MR_PROCESSING_FLOW.md §4.6 | ❌ **設計情報なし**: 機能の概要説明のみで、CLASS_IMPLEMENTATION_SPEC.md にクラス設計章が存在しない |
 | `TaskHandler` | AUTOMATA_CODEX_SPEC.md §2.2.2 | ❌ **設計情報なし**: `handle()`, `_should_convert_issue_to_mr()`, `_convert_issue_to_mr()` 等のメソッドが言及されているが、CLASS_IMPLEMENTATION_SPEC.md に設計章が存在しない |
-| `IssueToMRConverter` | AUTOMATA_CODEX_SPEC.md §2.3.2, §5.0 | ❌ **設計情報なし**: IssueToMRConversionStrategyとして処理概要が記載されるが、CLASS_IMPLEMENTATION_SPEC.md に詳細設計が存在しない |
 | `TaskDBManager` | AUTOMATA_CODEX_SPEC.md §2.3.4 | ❌ **設計情報なし**: DB記録・重複排除の責務が記載されているが、CLASS_IMPLEMENTATION_SPEC.md に設計章が存在しない |
 | `GitLabClient` | AUTOMATA_CODEX_SPEC.md §7.2 | ⚠️ **情報不十分**: §7.2 に責務と主要メソッドグループの概要が記載されているが、CLASS_IMPLEMENTATION_SPEC.md に詳細な処理フローが存在しない |
 | `Producer（producer.py）` | AUTOMATA_CODEX_SPEC.md §4.3（Producer）, §2.2.1 | ⚠️ **情報不十分**: 処理フローが記載されているが、CLASS_IMPLEMENTATION_SPEC.md に設計章が存在しない |
 | `Consumer（consumer.py）` | AUTOMATA_CODEX_SPEC.md §4.3（Consumer）, §2.2.2 | ⚠️ **情報不十分**: 処理フローが記載されているが、CLASS_IMPLEMENTATION_SPEC.md に設計章が存在しない |
 | `ConfigManager` | AUTOMATA_CODEX_SPEC.md §14.2（設定管理クラス設計）| ⚠️ **情報不十分**: §14.2 に概要と主要メソッドが記載されているが、CLASS_IMPLEMENTATION_SPEC.md に詳細処理フローが存在しない |
-| `TodoManagementTool`（FunctionTool群）| CLASS_IMPLEMENTATION_SPEC.md §2.3（AgentFactory）, AGENT_DEFINITION_SPEC.md §3.2 | ⚠️ **情報不十分**: AgentFactory.create_agent() の説明で `create_todo_list`, `get_todo_list`, `update_todo_status` が言及されているが、これらの FunctionTool の詳細実装仕様が CLASS_IMPLEMENTATION_SPEC.md に存在しない |
 
 ---
 
@@ -542,3 +683,24 @@ AUTOMATA_CODEX_SPEC.md 等で言及されているが、CLASS_IMPLEMENTATION_SPE
 | 16 | `WorkflowFactory._build_nodes()` のシグネチャが AUTOMATA_CODEX_SPEC.md では `user_id` を含む4引数、CLASS_IMPLEMENTATION_SPEC.md では3引数 | AUTOMATA_CODEX_SPEC.md §4.4.2, CLASS_IMPLEMENTATION_SPEC.md §2.1 |
 | 17 | `multi_codegen_mr_processing_agents.json` の `code_generation_reflection.description` が「バグ修正の成果物を検証」のみで、standard版の「コード生成・バグ修正の成果物を検証」と説明が不一致 | multi_codegen_mr_processing_agents.json, standard_mr_processing_agents.json |
 | 18 | `MULTI_MR_PROCESSING_FLOW.md §2` の `code_review` 入力キーに `execution_result`（単数）が記載されているが、実JSONには存在しない | MULTI_MR_PROCESSING_FLOW.md §2, multi_codegen_mr_processing_agents.json |
+
+### SPEC_CHECK.md 自体の誤記（前バージョンから修正済み）
+
+前バージョンのチェックレポート自体に以下の誤記が存在した。本バージョンで修正済み。
+
+| # | 誤記の内容 | 修正内容 |
+|---|-----------|---------|
+| S1 | `USER_MANAGEMENT_SPEC.md` の §1〜§7 章名が全て誤記（例: §1「ユーザー管理概要」→実際は「概要」、§2「ユーザーデータモデル」→実際は「ユーザー登録フロー」など）。また §8〜§9 が完全欠落 | 実際の章構造（§1〜§9）に基づき修正済み |
+| S2 | `DATABASE_SCHEMA_SPEC.md` の章番号が全てずれており誤記（§4を「tasksテーブル」と記載したが実際は§4.1、§5を「workflow_execution_states」と記載したが実際は§4.5.1など）。§8〜§13が完全欠落 | 実際の章番号（§4.1, §4.5.1, §4.5.2, §5.1〜§5.5, §6.1, §7.1, §8〜§13）に修正し欠落章を追加 |
+| S3 | `PROMPTS.md` §11〜§16 の章タイトルが実際のドキュメントと異なる順序で誤記（§11「Code Generation Reflection」→実際は「Test Execution & Evaluation Agent」、§14「Code Review Agent」→実際は「Code Generation Reflection Agent」など）。§17〜§20（multi_codegen専用プロンプト）が完全欠落 | 実際の章順序に修正し §17〜§20 を追加 |
+| S4 | `STANDARD_MR_PROCESSING_FLOW.md` の §1.1〜§1.3、§2.1、§4.6〜§4.8（§4.8.1〜§4.8.8含む）、§5〜§7 が完全欠落 | 欠落章を全て追加 |
+| S5 | `MULTI_MR_PROCESSING_FLOW.md` の §1.1〜§1.4、§2.1〜§2.2、§3.1〜§3.2、§4.8、§5〜§7 が完全欠落 | 欠落章を全て追加 |
+| S6 | `AGENT_DEFINITION_SPEC.md` §6.5〜§6.7 の章タイトルが誤記（§6.5「Code Review Agent」→実際は「Test Execution & Evaluation Agent」、§6.7「Test Execution Evaluation Agent」→実際は「Execution Reflection Agent群」など）。§6.2.1〜§6.2.4、§6.4.1〜§6.4.4、§6.6.1〜§6.6.2、§6.7.1〜§6.7.3 の詳細が欠落 | 実際の章構造に修正し詳細を追加 |
+| S7 | `GRAPH_DEFINITION_SPEC.md` §3.1、§3.3、§4.2.1、§5〜§6 が完全欠落 | 欠落章を全て追加 |
+| S8 | `PROMPT_DEFINITION_SPEC.md` §3.2、§4.2、§5〜§6 が完全欠落 | 欠落章を全て追加 |
+| S9 | クラス/メソッドの完全性チェックで `MermaidGraphRenderer`（§8.4）、`ProgressCommentManager`（§8.5）、`TodoManagementTool`（§8.1）のメソッド詳細が完全欠落 | 各クラスの全メソッドを追加 |
+| S10 | `IssueToMRConverter` が「設計情報なし（❌）」と誤記されていたが、実際は CLASS_IMPLEMENTATION_SPEC.md §8.2 に詳細設計が存在する | 「✅ 問題なし」に修正し「クラス設計情報が存在しないクラス」リストから除外 |
+| S11 | `TodoManagementTool` が「情報不十分（⚠️）」と分類されていたが、実際は CLASS_IMPLEMENTATION_SPEC.md §8.1 に詳細設計が存在する | 「✅ 問題なし」に修正し「クラス設計情報が存在しないクラス」リストから除外 |
+| S12 | `MCPClient` の全メソッド（connect, list_tools, call_tool, disconnect）と `EnvironmentAwareMCPClient.call_tool()` がチェック対象から完全欠落 | 各メソッドをチェック対象に追加 |
+| S13 | `EnvironmentAnalyzer` と `PrePlanningManager` のメソッド詳細（detect_environment_files, analyze_environment_files, execute, select_execution_environment）がチェック対象から欠落 | 各メソッドをチェック対象に追加 |
+| S14 | `ExecutionEnvironmentManager` の複数メソッド（get_environment, cleanup_environments, load_environment_mapping, start_all_containers, check_containers_exist）がチェック対象から欠落し、既存メソッドのシグネチャも不正確だった | 全メソッドを正確なシグネチャで追加 |

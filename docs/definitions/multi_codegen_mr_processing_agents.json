@@ -252,7 +252,7 @@
       "prompt_id": "code_generation_reflection",
       "max_iterations": 10,
       "timeout_seconds": 300,
-      "description": "バグ修正の成果物を検証し、品質・仕様準拠・再実装判定を行う"
+      "description": "コード生成・バグ修正の成果物を検証し、品質・仕様準拠・再実装判定を行う"
     },
     {
       "id": "test_creation_reflection",

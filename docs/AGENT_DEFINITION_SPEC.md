@@ -74,7 +74,7 @@
       "id": "task_classifier",
       "role": "planning",
       "input_keys": ["task_context"],
-      "output_keys": ["classification_result", "selected_environment"],
+      "output_keys": ["classification_result"],
       "mcp_servers": ["text_editor"],
       "prompt_id": "task_classifier",
       "max_iterations": 5,
@@ -84,8 +84,8 @@
     {
       "id": "code_generation_planning",
       "role": "planning",
-      "input_keys": ["task_context", "classification_result"],
-      "output_keys": ["plan_result", "todo_list"],
+      "input_keys": ["task_context", "classification_result", "previous_plan_result", "replan_reason", "user_new_comments", "delta_requirements"],
+      "output_keys": ["plan_result", "todo_list", "plan_metadata"],
       "mcp_servers": ["text_editor", "todo_list"],
       "prompt_id": "code_generation_planning",
       "max_iterations": 15,
@@ -95,8 +95,8 @@
     {
       "id": "bug_fix_planning",
       "role": "planning",
-      "input_keys": ["task_context", "classification_result"],
-      "output_keys": ["plan_result", "todo_list"],
+      "input_keys": ["task_context", "classification_result", "previous_plan_result", "replan_reason", "user_new_comments", "delta_requirements"],
+      "output_keys": ["plan_result", "todo_list", "plan_metadata"],
       "mcp_servers": ["text_editor", "todo_list"],
       "prompt_id": "bug_fix_planning",
       "max_iterations": 15,
@@ -106,8 +106,8 @@
     {
       "id": "test_creation_planning",
       "role": "planning",
-      "input_keys": ["task_context", "classification_result"],
-      "output_keys": ["plan_result", "todo_list"],
+      "input_keys": ["task_context", "classification_result", "previous_plan_result", "replan_reason", "user_new_comments", "delta_requirements"],
+      "output_keys": ["plan_result", "todo_list", "plan_metadata"],
       "mcp_servers": ["text_editor", "todo_list"],
       "prompt_id": "test_creation_planning",
       "max_iterations": 15,
@@ -117,8 +117,8 @@
     {
       "id": "documentation_planning",
       "role": "planning",
-      "input_keys": ["task_context", "classification_result"],
-      "output_keys": ["plan_result", "todo_list"],
+      "input_keys": ["task_context", "classification_result", "previous_plan_result", "replan_reason", "user_new_comments", "delta_requirements"],
+      "output_keys": ["plan_result", "todo_list", "plan_metadata"],
       "mcp_servers": ["text_editor", "todo_list"],
       "prompt_id": "documentation_planning",
       "max_iterations": 15,
@@ -128,13 +128,13 @@
     {
       "id": "plan_reflection",
       "role": "reflection",
-      "input_keys": ["plan_result", "todo_list", "task_context", "review_result"],
-      "output_keys": ["reflection_result"],
+      "input_keys": ["plan_result", "todo_list", "task_context", "review_result", "user_new_comments", "execution_result"],
+      "output_keys": ["reflection_result", "replan_mode", "replan_reason", "delta_requirements", "affected_todos", "new_requirements", "conflicts", "comment_response"],
       "mcp_servers": ["text_editor", "todo_list"],
       "prompt_id": "plan_reflection",
       "max_iterations": 10,
       "timeout_seconds": 180,
-      "description": "プランを検証し、問題点と改善案を提示する"
+      "description": "プランを検証し、問題点と改善案を提示する。ユーザーコメントを解析して差分計画またはフル再計画を判定する"
     },
     {
       "id": "code_generation",
@@ -311,13 +311,13 @@
     {
       "id": "plan_reflection",
       "role": "reflection",
-      "input_keys": ["review_result", "task_context"],
-      "output_keys": ["reflection_result"],
-      "mcp_servers": ["text_editor"],
+      "input_keys": ["plan_result", "todo_list", "task_context", "review_result", "user_new_comments", "execution_result"],
+      "output_keys": ["reflection_result", "replan_mode", "replan_reason", "delta_requirements", "affected_todos", "new_requirements", "conflicts", "comment_response"],
+      "mcp_servers": ["text_editor", "todo_list"],
       "prompt_id": "plan_reflection",
       "max_iterations": 10,
       "timeout_seconds": 180,
-      "description": "レビュー結果を評価し再計画の要否を判断する"
+      "description": "レビュー結果を評価し再計画の要否を判断する。ユーザーコメントを解析して差分計画またはフル再計画を判定する"
     }
   ]
 }
@@ -521,8 +521,8 @@
 
 **エージェント定義の主要設定**:
 - `role`: "reflection"
-- `input_keys`: ["plan_result", "todo_list", "task_context", "review_result"]
-- `output_keys`: ["reflection_result"]
+- `input_keys`: ["plan_result", "todo_list", "task_context", "review_result", "user_new_comments", "execution_result"]
+- `output_keys`: ["reflection_result", "replan_mode", "replan_reason", "delta_requirements", "affected_todos", "new_requirements", "conflicts", "comment_response"]
 - `mcp_servers`: ["text_editor", "todo_list"]
 - グラフ定義の `env_ref`: "plan"（グラフ定義ノードで設定）
 

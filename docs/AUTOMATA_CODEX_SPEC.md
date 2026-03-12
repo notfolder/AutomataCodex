@@ -821,7 +821,7 @@ flowchart TD
 7. **mcp_serversとroleの整合性**:
    - `env_ref`値が有効か（"plan"、"1"〜"N"の整数文字列、または省略）
    - "planning"ロールは`env_ref: "plan"`または省略のみ許容（planningエージェントはplan環境またはDocker環境不要のいずれかで動作する）
-   - "reflection"ロールは`env_ref`省略のみ許容（リフレクションエージェントはDocker環境を必要としない）
+   - "reflection"ロールの`env_ref`は省略・`"plan"`・整数文字列いずれも許容（plan_reflectionは`"plan"`、実行リフレクションエージェントは実行環境の`env_ref`を使用する）
    - "execution"ロールは`env_ref: "1"`以上の整数文字列を指定する（新規実行環境が必要）
    - "review"ロールは`env_ref: "1"`以上の整数文字列を指定する（実行エージェントと同じ実行環境を共有）
 

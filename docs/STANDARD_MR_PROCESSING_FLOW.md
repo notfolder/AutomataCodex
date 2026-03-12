@@ -127,27 +127,31 @@ flowchart TD
     CodeGenRef --> CodeGenRefBranch{コード生成<br/>リフレクション判断}
     CodeGenRefBranch -->|re_execute code_generation| CodeGen
     CodeGenRefBranch -->|re_execute bug_fix| BugFix
-    CodeGenRefBranch -->|proceed| CodeReview[ConfigurableAgent<br/>code_review]
+    CodeGenRefBranch -->|proceed| ExecTypeBranch{実行タイプ分岐<br/>execution_type_branch}
 
     TestGen --> TestRef[ConfigurableAgent<br/>test_creation_reflection]
     TestRef --> TestRefBranch{テスト<br/>リフレクション判断}
     TestRefBranch -->|re_execute| TestGen
-    TestRefBranch -->|proceed| CodeReview
+    TestRefBranch -->|proceed| ExecTypeBranch
 
     DocGen --> DocRef[ConfigurableAgent<br/>documentation_reflection]
     DocRef --> DocRefBranch{ドキュメント<br/>リフレクション判断}
     DocRefBranch -->|re_execute| DocGen
-    DocRefBranch -->|proceed| DocReview[ConfigurableAgent<br/>documentation_review]
+    DocRefBranch -->|proceed| ExecTypeBranch
 
-    CodeReview --> TestExec[ConfigurableAgent<br/>test_execution_evaluation]
-    TestExec --> Reflection[ConfigurableAgent<br/>plan_reflection]
+    ExecTypeBranch -->|code_generation/bug_fix| TestExec[ConfigurableAgent<br/>test_execution_evaluation]
+    ExecTypeBranch -->|test_creation| CodeReview[ConfigurableAgent<br/>code_review]
+    ExecTypeBranch -->|documentation| DocReview[ConfigurableAgent<br/>documentation_review]
+
+    TestExec --> CodeReview
+    CodeReview --> Reflection[ConfigurableAgent<br/>plan_reflection]
     DocReview --> Reflection
     
     Reflection --> ReplanCheck{再計画必要?}
     ReplanCheck -->|Yes 重大な問題| TaskType
     ReplanCheck -->|No 問題なし/軽微| Complete{完了?}
     
-    Complete -->|No 追加作業| CodeGen
+    Complete -->|No 追加作業| ExecTypeBranch
     Complete -->|Yes| Finish[タスク完了]
     
     Finish --> End([終了])
@@ -587,18 +591,11 @@ flowchart TD
     CodeGen --> CodeGenRefl[ConfigurableAgent<br/>code_generation_reflection<br/>実行リフレクション]
     CodeGenRefl --> ReflBranch{リフレクション判断}
     ReflBranch -->|re_execute| CodeGen
-    ReflBranch -->|proceed| CodeReview[ConfigurableAgent<br/>code_review<br/>コードレビュー]
+    ReflBranch -->|proceed| TestExec[ConfigurableAgent<br/>test_execution_evaluation<br/>テスト実行・評価]
     
-    CodeReview --> TestExec[ConfigurableAgent<br/>test_execution_evaluation<br/>テスト実行・評価]
+    TestExec --> CodeReview[ConfigurableAgent<br/>code_review<br/>コードレビュー]
     
-    TestExec --> TestResult{テスト結果}
-    TestResult -->|成功| Reflection[ConfigurableAgent<br/>plan_reflection]
-    TestResult -->|失敗| TestReflection[ConfigurableAgent<br/>plan_reflection<br/>テスト失敗分析]
-    
-    TestReflection --> TestReplan{再計画必要?}
-    TestReplan -->|Yes 実装の問題| CodeGen
-    TestReplan -->|テストの問題| TestCreate[ConfigurableAgent<br/>test_creation<br/>テスト修正]
-    TestCreate --> TestExec
+    CodeReview --> Reflection[ConfigurableAgent<br/>plan_reflection]
     
     Reflection --> ReplanCheck{再計画必要?}
     ReplanCheck -->|Yes 重大な問題| Planning
@@ -648,18 +645,11 @@ flowchart TD
     BugFix --> BugFixRefl[ConfigurableAgent<br/>code_generation_reflection<br/>実行リフレクション]
     BugFixRefl --> BugReflBranch{リフレクション判断}
     BugReflBranch -->|re_execute| BugFix
-    BugReflBranch -->|proceed| CodeReview[ConfigurableAgent<br/>code_review<br/>コードレビュー]
+    BugReflBranch -->|proceed| TestExec[ConfigurableAgent<br/>test_execution_evaluation<br/>テスト実行・評価]
     
-    CodeReview --> TestExec[ConfigurableAgent<br/>test_execution_evaluation<br/>テスト実行・評価]
+    TestExec --> CodeReview[ConfigurableAgent<br/>code_review<br/>コードレビュー]
     
-    TestExec --> TestResult{テスト結果}
-    TestResult -->|成功| Reflection[ConfigurableAgent<br/>plan_reflection]
-    TestResult -->|失敗| TestReflection[ConfigurableAgent<br/>plan_reflection<br/>テスト失敗分析]
-    
-    TestReflection --> TestReplan{再計画必要?}
-    TestReplan -->|Yes 修正の問題| BugFix
-    TestReplan -->|テストの問題| TestCreate[ConfigurableAgent<br/>test_creation<br/>テスト修正]
-    TestCreate --> TestExec
+    CodeReview --> Reflection[ConfigurableAgent<br/>plan_reflection]
     
     Reflection --> ReplanCheck{再計画必要?}
     ReplanCheck -->|Yes 重大な問題| Planning
@@ -746,8 +736,7 @@ flowchart TD
     TestReflBranch -->|re_execute| TestCreate
     TestReflBranch -->|proceed| CodeReview[ConfigurableAgent<br/>code_review<br/>コードレビュー]
     
-    CodeReview --> TestExec[ConfigurableAgent<br/>test_execution_evaluation<br/>テスト実行・評価]
-    TestExec --> Reflection[ConfigurableAgent<br/>plan_reflection]
+    CodeReview --> Reflection[ConfigurableAgent<br/>plan_reflection]
     Reflection --> ReplanCheck{再計画必要?}
     ReplanCheck -->|Yes 重大な問題| Planning
     ReplanCheck -->|No 軽微な修正| Complete{完了?}
