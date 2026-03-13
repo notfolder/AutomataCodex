@@ -424,3 +424,40 @@ class TestUpdateUserWorkflowSetting:
 
         assert result is not None
         assert result["workflow_definition_id"] == 2
+
+
+class TestDeleteUserWorkflowSetting:
+    """delete_user_workflow_setting のテスト"""
+
+    async def test_delete_existing_setting(self):
+        """存在するワークフロー設定を削除できることを検証する"""
+        pool, conn = _make_pool()
+        conn.execute = AsyncMock(return_value="DELETE 1")
+
+        repo = UserRepository(pool)
+        result = await repo.delete_user_workflow_setting("user@example.com")
+
+        assert result is True
+        conn.execute.assert_awaited_once()
+
+    async def test_delete_nonexistent_setting(self):
+        """存在しないワークフロー設定の削除はFalseを返すことを検証する"""
+        pool, conn = _make_pool()
+        conn.execute = AsyncMock(return_value="DELETE 0")
+
+        repo = UserRepository(pool)
+        result = await repo.delete_user_workflow_setting("notfound@example.com")
+
+        assert result is False
+
+    async def test_email_is_normalized(self):
+        """メールアドレスが小文字に正規化されてからDELETEされることを検証する"""
+        pool, conn = _make_pool()
+        conn.execute = AsyncMock(return_value="DELETE 1")
+
+        repo = UserRepository(pool)
+        await repo.delete_user_workflow_setting("UPPER@Example.COM")
+
+        call_args = conn.execute.call_args
+        # インデックス1（位置引数の2番目）が小文字に正規化されていることを確認する
+        assert call_args.args[1] == "upper@example.com"

@@ -630,3 +630,22 @@ class UserRepository:
                 user_email.lower(),
             )
         return dict(row) if row else None
+
+    async def delete_user_workflow_setting(self, user_email: str) -> bool:
+        """
+        ユーザーのワークフロー設定を削除する。
+
+        ユーザーが選択中のワークフロー定義との関連付けを解除する。
+
+        Args:
+            user_email: 削除対象のメールアドレス
+
+        Returns:
+            削除に成功した場合はTrue、対象が存在しない場合はFalse。
+        """
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(
+                "DELETE FROM user_workflow_settings WHERE user_email = $1",
+                user_email.lower(),
+            )
+        return result == "DELETE 1"

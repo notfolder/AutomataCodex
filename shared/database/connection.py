@@ -197,6 +197,20 @@ async def run_migration(
         logger.info("マイグレーション %s を適用します", version)
         async with conn.transaction():
             await conn.execute(sql)
+            # マイグレーション適用後にschema_versionsへバージョンを記録する。
+            # マイグレーションSQLファイル側でも同一INSERTを含む場合があるが、
+            # ON CONFLICT DO NOTHING により重複挿入は無害となる。
+            # Pythonコード側でも記録することで、将来のSQLファイルがINSERT文を
+            # 含まない場合にもバージョン管理が正しく機能することを保証する。
+            await conn.execute(
+                """
+                INSERT INTO schema_versions (version, description)
+                VALUES ($1, $2)
+                ON CONFLICT (version) DO NOTHING
+                """,
+                version,
+                migration_file.stem,
+            )
 
     logger.info("マイグレーション %s を適用しました", version)
 
