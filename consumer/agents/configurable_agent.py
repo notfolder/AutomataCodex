@@ -178,14 +178,7 @@ class ConfigurableAgent(BaseExecutor):
             }
 
             # ステップ 3: 進捗報告（開始）
-            if hasattr(self.progress_reporter, "report_progress"):
-                await self.progress_reporter.report_progress(
-                    task_iid=task_iid,
-                    event="start",
-                    agent_definition_id=self.config.id,
-                    node_id=self.config.id,
-                    details={},
-                )
+            await self.report_progress(task_iid=task_iid, event="start", details={})
 
             # ステップ 4: プロンプト生成
             # input_data の各キーを {key} プレースホルダーとして置換する
@@ -198,9 +191,7 @@ class ConfigurableAgent(BaseExecutor):
             # ステップ 5: Agent.run() 呼び出し
             response: Any
             if hasattr(self.agent, "run"):
-                response = await self.agent.run(
-                    [{"role": "user", "content": prompt}]
-                )
+                response = await self.agent.run([{"role": "user", "content": prompt}])
             else:
                 response = None
 
@@ -215,14 +206,11 @@ class ConfigurableAgent(BaseExecutor):
 
             # ステップ 7: 進捗報告（LLM 応答）
             response_summary: str = response_text[:200]
-            if hasattr(self.progress_reporter, "report_progress"):
-                await self.progress_reporter.report_progress(
-                    task_iid=task_iid,
-                    event="llm_response",
-                    agent_definition_id=self.config.id,
-                    node_id=self.config.id,
-                    details={"summary": response_summary},
-                )
+            await self.report_progress(
+                task_iid=task_iid,
+                event="llm_response",
+                details={"summary": response_summary},
+            )
 
             # ステップ 8: ツール呼び出し処理
             # Agent Framework が MCPStdioTool を自動的に呼び出すため、明示的な実装は不要。
@@ -233,14 +221,9 @@ class ConfigurableAgent(BaseExecutor):
             await self._handle_role_specific(self.config.role, response_text, ctx)
 
             # ステップ 10: 進捗報告（完了）
-            if hasattr(self.progress_reporter, "report_progress"):
-                await self.progress_reporter.report_progress(
-                    task_iid=task_iid,
-                    event="complete",
-                    agent_definition_id=self.config.id,
-                    node_id=self.config.id,
-                    details=output_data,
-                )
+            await self.report_progress(
+                task_iid=task_iid, event="complete", details=output_data
+            )
 
             # ステップ 11: 出力データ保存
             # response_text から出力を抽出し、output_keys に対して ctx.set_state() を呼び出す
@@ -254,17 +237,14 @@ class ConfigurableAgent(BaseExecutor):
                 "エージェントノード '%s' の処理中にエラーが発生しました。",
                 self.config.id,
             )
-            if hasattr(self.progress_reporter, "report_progress"):
-                try:
-                    await self.progress_reporter.report_progress(
-                        task_iid=None,
-                        event="error",
-                        agent_definition_id=self.config.id,
-                        node_id=self.config.id,
-                        details={"error": str(exc)},
-                    )
-                except Exception:
-                    logger.exception("エラー進捗報告中に追加エラーが発生しました。")
+            try:
+                await self.report_progress(
+                    task_iid=None,
+                    event="error",
+                    details={"error": str(exc)},
+                )
+            except Exception:
+                logger.exception("エラー進捗報告中に追加エラーが発生しました。")
             raise
 
         # ステップ 12: output_data を返す
@@ -438,12 +418,15 @@ class ConfigurableAgent(BaseExecutor):
         """
         resolved_details: dict[str, Any] = details or {}
 
+        # node_id はグラフ配置時に設定される。未設定の場合は agent_definition_id （id）で代替する
+        resolved_node_id: str = self.config.node_id or self.config.id
+
         if hasattr(self.progress_reporter, "report_progress"):
             await self.progress_reporter.report_progress(
                 task_iid=task_iid,
                 event=event,
                 agent_definition_id=self.config.id,
-                node_id=self.config.id,
+                node_id=resolved_node_id,
                 details=resolved_details,
             )
         else:
@@ -451,6 +434,6 @@ class ConfigurableAgent(BaseExecutor):
                 "進捗報告: task_iid=%s, event=%s, node_id=%s, details=%s",
                 task_iid,
                 event,
-                self.config.id,
+                resolved_node_id,
                 resolved_details,
             )
