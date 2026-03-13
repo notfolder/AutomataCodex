@@ -139,10 +139,188 @@ class TestTodoManagementTool:
         assert "[ ]" in posted_body
         assert result["status"] == "success"
 
+    async def test_todo_management_get_todo_list(
+        self,
+        mock_db_connection: MagicMock,
+    ) -> None:
+        """get_todo_listがDBからTodoを取得して返すことを確認する"""
+        tool = TodoManagementTool(
+            db_connection=mock_db_connection,
+            gitlab_client=MagicMock(),
+            task_uuid="task-uuid-001",
+        )
 
-# ========================================
-# TestIssueToMRConverter
-# ========================================
+        mock_rows = [
+            {"id": 1, "title": "タスク1", "description": "", "status": "completed",
+             "parent_todo_id": None, "order_index": 0},
+            {"id": 2, "title": "タスク2", "description": "", "status": "not-started",
+             "parent_todo_id": None, "order_index": 1},
+        ]
+        mock_db_connection.fetch.return_value = mock_rows
+
+        result = await tool.get_todo_list(project_id=10, mr_iid=5)
+
+        assert result["status"] == "success"
+        assert len(result["todos"]) == 2
+        assert result["todos"][0]["title"] == "タスク1"
+        mock_db_connection.fetch.assert_called_once()
+
+    async def test_todo_management_update_todo_status(
+        self,
+        mock_db_connection: MagicMock,
+    ) -> None:
+        """update_todo_statusがDBのUPDATEを実行して正しい結果を返すことを確認する"""
+        mock_db_connection.execute = AsyncMock(return_value="UPDATE 1")
+        mock_db_connection.fetch = AsyncMock(return_value=[])
+
+        tool = TodoManagementTool(
+            db_connection=mock_db_connection,
+            gitlab_client=MagicMock(),
+            task_uuid="task-uuid-001",
+        )
+
+        result = await tool.update_todo_status(todo_id=1, status="completed")
+
+        assert result["status"] == "success"
+        assert result["todo_id"] == 1
+        assert result["new_status"] == "completed"
+        mock_db_connection.execute.assert_called_once()
+
+    async def test_todo_management_update_todo_status_emits_todo_changed(
+        self,
+        mock_db_connection: MagicMock,
+    ) -> None:
+        """update_todo_statusにcontextを渡すとtodo_changedイベントが呈出されることを確認する"""
+        mock_db_connection.execute = AsyncMock(return_value="UPDATE 1")
+        # _get_todo_markdownで使われるfetchモック
+        mock_db_connection.fetch = AsyncMock(return_value=[
+            {"id": 1, "title": "タスク1", "status": "completed", "parent_todo_id": None},
+        ])
+
+        mock_progress_reporter = MagicMock()
+        mock_progress_reporter.report_progress = AsyncMock()
+
+        tool = TodoManagementTool(
+            db_connection=mock_db_connection,
+            gitlab_client=MagicMock(),
+            task_uuid="task-uuid-001",
+            progress_reporter=mock_progress_reporter,
+        )
+
+        mock_ctx = MagicMock()
+        result = await tool.update_todo_status(todo_id=1, status="completed", context=mock_ctx)
+
+        assert result["status"] == "success"
+        # todo_changed イベントが ProgressReporter に呈出されることを確認する
+        mock_progress_reporter.report_progress.assert_called_once()
+        call_kwargs = mock_progress_reporter.report_progress.call_args.kwargs
+        assert call_kwargs["event"] == "todo_changed"
+        assert "todo_markdown" in call_kwargs["details"]
+
+    async def test_todo_management_add_todo(
+        self,
+        mock_db_connection: MagicMock,
+    ) -> None:
+        """add_todoがDBにINSERTして新しいtodo_idを返すことを確認する"""
+        mock_db_connection.fetchrow = AsyncMock(side_effect=[
+            {"max_idx": 1},  # MAX(order_index) クエリ
+            {"id": 10},      # INSERT クエリ
+        ])
+        mock_db_connection.fetch = AsyncMock(return_value=[])
+
+        tool = TodoManagementTool(
+            db_connection=mock_db_connection,
+            gitlab_client=MagicMock(),
+            task_uuid="task-uuid-001",
+        )
+
+        result = await tool.add_todo(
+            project_id=10,
+            mr_iid=5,
+            title="新しいTodo",
+            description="説明",
+        )
+
+        assert result["status"] == "success"
+        assert result["todo_id"] == 10
+        # fetchrowが2回呼ばれる（MAX取得 + INSERT）
+        assert mock_db_connection.fetchrow.call_count == 2
+
+    async def test_todo_management_delete_todo(
+        self,
+        mock_db_connection: MagicMock,
+    ) -> None:
+        """delete_todoがDBのDELETEを実行して正しい結果を返すことを確認する"""
+        mock_db_connection.execute = AsyncMock(return_value="DELETE 1")
+        mock_db_connection.fetch = AsyncMock(return_value=[])
+
+        tool = TodoManagementTool(
+            db_connection=mock_db_connection,
+            gitlab_client=MagicMock(),
+            task_uuid="task-uuid-001",
+        )
+
+        result = await tool.delete_todo(todo_id=5)
+
+        assert result["status"] == "success"
+        assert result["todo_id"] == 5
+        mock_db_connection.execute.assert_called_once()
+
+    async def test_todo_management_reorder_todos(
+        self,
+        mock_db_connection: MagicMock,
+    ) -> None:
+        """reorder_todosがすべてのtodo_idのorder_indexを更新することを確認する"""
+        mock_db_connection.execute = AsyncMock(return_value="UPDATE 1")
+        mock_db_connection.fetch = AsyncMock(return_value=[])
+
+        tool = TodoManagementTool(
+            db_connection=mock_db_connection,
+            gitlab_client=MagicMock(),
+            task_uuid="task-uuid-001",
+        )
+
+        todo_ids = [3, 1, 2]
+        result = await tool.reorder_todos(todo_ids=todo_ids)
+
+        assert result["status"] == "success"
+        assert result["reordered_count"] == 3
+        # 3件のUPDATEが実行されることを確認する
+        assert mock_db_connection.execute.call_count == 3
+
+    async def test_todo_management_create_todo_list_emits_todo_changed(
+        self,
+        mock_db_connection: MagicMock,
+    ) -> None:
+        """create_todo_listにcontextを渡すとtodo_changedイベントが呈出されることを確認する"""
+        mock_db_connection.fetchrow = AsyncMock(return_value={"id": 1})
+        mock_db_connection.fetch = AsyncMock(return_value=[
+            {"id": 1, "title": "タスク1", "status": "not-started", "parent_todo_id": None},
+        ])
+
+        mock_progress_reporter = MagicMock()
+        mock_progress_reporter.report_progress = AsyncMock()
+
+        tool = TodoManagementTool(
+            db_connection=mock_db_connection,
+            gitlab_client=MagicMock(),
+            task_uuid="task-uuid-001",
+            progress_reporter=mock_progress_reporter,
+        )
+
+        mock_ctx = MagicMock()
+        result = await tool.create_todo_list(
+            project_id=10,
+            mr_iid=5,
+            todos=[{"title": "タスク1"}],
+            context=mock_ctx,
+        )
+
+        assert result["status"] == "success"
+        # todo_changed イベントが呈出されることを確認する
+        mock_progress_reporter.report_progress.assert_called_once()
+        call_kwargs = mock_progress_reporter.report_progress.call_args.kwargs
+        assert call_kwargs["event"] == "todo_changed"
 
 
 class TestIssueToMRConverter:
