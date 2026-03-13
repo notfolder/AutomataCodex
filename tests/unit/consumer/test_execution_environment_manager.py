@@ -252,3 +252,170 @@ class TestSaveLoadEnvironmentMapping:
         assert env_manager.node_to_env_map == {"node1": "env-001"}
         assert "env-001" in env_manager.environment_pool
         assert env_manager.selected_environment_name == "python"
+
+
+# ========================================
+# TestExecuteCommand
+# ========================================
+
+
+class TestExecuteCommand:
+    """execute_command()のテスト"""
+
+    def test_コマンドを実行してexit_codeとoutputを返す(
+        self,
+        env_manager: ExecutionEnvironmentManager,
+        mock_docker_client: MagicMock,
+    ) -> None:
+        """execute_command()がコンテナ内でコマンドを実行し(exit_code, output)を返すことを確認する"""
+        env_manager.environment_pool = ["codeagent-python-mr1-node1"]
+        env_manager.node_to_env_map["node1"] = "codeagent-python-mr1-node1"
+        mock_container = mock_docker_client.containers.get.return_value
+        mock_container.exec_run.return_value = (0, b"hello world")
+
+        exit_code, output = env_manager.execute_command("node1", "echo hello world")
+
+        assert exit_code == 0
+        assert output == b"hello world"
+        mock_container.exec_run.assert_called_once_with("echo hello world")
+
+    def test_clone_repositoryが成功する(
+        self,
+        env_manager: ExecutionEnvironmentManager,
+        mock_docker_client: MagicMock,
+    ) -> None:
+        """clone_repository()がgit cloneコマンドを実行することを確認する"""
+        env_manager.environment_pool = ["codeagent-python-mr1-node1"]
+        env_manager.node_to_env_map["node1"] = "codeagent-python-mr1-node1"
+        mock_container = mock_docker_client.containers.get.return_value
+        mock_container.exec_run.return_value = (0, b"Cloning into '/workspace'...")
+
+        # 例外が発生しないことを確認する
+        env_manager.clone_repository("node1", "https://example.com/repo.git", "main")
+
+        call_args = mock_container.exec_run.call_args[0][0]
+        assert "git clone" in call_args
+        assert "main" in call_args
+        assert "/workspace" in call_args
+
+    def test_clone_repositoryが失敗時にRuntimeErrorをスローする(
+        self,
+        env_manager: ExecutionEnvironmentManager,
+        mock_docker_client: MagicMock,
+    ) -> None:
+        """git cloneが失敗した場合にRuntimeErrorが発生することを確認する"""
+        env_manager.environment_pool = ["codeagent-python-mr1-node1"]
+        env_manager.node_to_env_map["node1"] = "codeagent-python-mr1-node1"
+        mock_container = mock_docker_client.containers.get.return_value
+        mock_container.exec_run.return_value = (1, b"fatal: repository not found")
+
+        with pytest.raises(RuntimeError, match="git cloneに失敗"):
+            env_manager.clone_repository(
+                "node1", "https://example.com/invalid.git", "main"
+            )
+
+
+# ========================================
+# TestContainerLifecycle
+# ========================================
+
+
+class TestContainerLifecycle:
+    """stop_all_containers / start_all_containers / check_containers_existのテスト"""
+
+    @pytest.mark.asyncio
+    async def test_stop_all_containersが全コンテナを停止しDBを更新する(
+        self,
+        env_manager: ExecutionEnvironmentManager,
+        mock_docker_client: MagicMock,
+        mock_db_pool: MagicMock,
+    ) -> None:
+        """stop_all_containers()がcontainer.stop()を呼び出しDBを'stopped'に更新することを確認する"""
+        env_manager.environment_pool = ["env-001", "env-002"]
+        mock_container = mock_docker_client.containers.get.return_value
+        mock_conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+
+        await env_manager.stop_all_containers("exec-uuid-001")
+
+        # 各コンテナのstop()が呼ばれていることを確認する
+        assert mock_container.stop.call_count == 2
+        # DBのUPDATEが呼ばれていることを確認する
+        call_args_str = str(mock_conn.execute.call_args_list)
+        assert "UPDATE" in call_args_str
+        assert "stopped" in call_args_str
+
+    @pytest.mark.asyncio
+    async def test_start_all_containersが全コンテナを起動しDBを更新する(
+        self,
+        env_manager: ExecutionEnvironmentManager,
+        mock_docker_client: MagicMock,
+        mock_db_pool: MagicMock,
+    ) -> None:
+        """start_all_containers()がcontainer.start()を呼び出しDBを'running'に更新することを確認する"""
+        env_manager.environment_pool = ["env-001"]
+        mock_container = mock_docker_client.containers.get.return_value
+        mock_conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+
+        await env_manager.start_all_containers("exec-uuid-001")
+
+        mock_container.start.assert_called_once()
+        call_args_str = str(mock_conn.execute.call_args_list)
+        assert "UPDATE" in call_args_str
+        assert "running" in call_args_str
+
+    @pytest.mark.asyncio
+    async def test_check_containers_existが全コンテナ存在時にTrueを返す(
+        self,
+        env_manager: ExecutionEnvironmentManager,
+        mock_docker_client: MagicMock,
+        mock_db_pool: MagicMock,
+    ) -> None:
+        """全コンテナがDockerに存在する場合にTrueを返すことを確認する"""
+        # DBから "env-001" を返す
+        mock_row = MagicMock()
+        mock_row.__getitem__ = lambda self, key: {"container_id": "env-001"}[key]
+        mock_conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetch = AsyncMock(return_value=[mock_row])
+
+        # containers.list(all=True) が "env-001" を持つコンテナを返す
+        mock_container = MagicMock()
+        mock_container.name = "env-001"
+        mock_docker_client.containers.list.return_value = [mock_container]
+
+        result = await env_manager.check_containers_exist("exec-uuid-001")
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_check_containers_existがコンテナ不存在時にFalseを返す(
+        self,
+        env_manager: ExecutionEnvironmentManager,
+        mock_docker_client: MagicMock,
+        mock_db_pool: MagicMock,
+    ) -> None:
+        """コンテナが1つでも存在しない場合にFalseを返すことを確認する"""
+        mock_row = MagicMock()
+        mock_row.__getitem__ = lambda self, key: {"container_id": "env-missing"}[key]
+        mock_conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetch = AsyncMock(return_value=[mock_row])
+
+        # containers.list が空を返す（コンテナが存在しない）
+        mock_docker_client.containers.list.return_value = []
+
+        result = await env_manager.check_containers_exist("exec-uuid-001")
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_containers_existがDBにレコードなしの場合にFalseを返す(
+        self,
+        env_manager: ExecutionEnvironmentManager,
+        mock_db_pool: MagicMock,
+    ) -> None:
+        """execution_idに対応するDBレコードがない場合にFalseを返すことを確認する"""
+        mock_conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetch = AsyncMock(return_value=[])
+
+        result = await env_manager.check_containers_exist("nonexistent-exec-id")
+
+        assert result is False

@@ -235,3 +235,87 @@ class TestConfigurableAgentMethods:
         # contextに保存されていることを確認する
         saved_value = await mock_ctx.get_state("planning_result")
         assert saved_value == "生成されたプラン"
+
+
+# ========================================
+# TestConfigurableAgentContextMethods
+# ========================================
+
+
+class TestConfigurableAgentContextMethods:
+    """ConfigurableAgentのコンテキスト関連メソッドのテスト"""
+
+    @pytest.mark.asyncio
+    async def test_get_contextが複数キーの値を返す(
+        self,
+        configurable_agent: ConfigurableAgent,
+        mock_ctx: _ConcreteWorkflowContext,
+    ) -> None:
+        """get_context()が指定したキー一覧のコンテキスト値をまとめて返すことを確認する"""
+        mock_ctx._state["key1"] = "value1"
+        mock_ctx._state["key2"] = "value2"
+
+        result = await configurable_agent.get_context(["key1", "key2"], mock_ctx)
+
+        assert result == {"key1": "value1", "key2": "value2"}
+
+    @pytest.mark.asyncio
+    async def test_get_contextが存在しないキーはNoneを返す(
+        self,
+        configurable_agent: ConfigurableAgent,
+        mock_ctx: _ConcreteWorkflowContext,
+    ) -> None:
+        """get_context()で存在しないキーはNoneを返すことを確認する"""
+        result = await configurable_agent.get_context(["nonexistent_key"], mock_ctx)
+
+        assert result["nonexistent_key"] is None
+
+    @pytest.mark.asyncio
+    async def test_get_chat_historyがproviderからメッセージを取得する(
+        self,
+        agent_config: AgentNodeConfig,
+        mock_agent: MagicMock,
+    ) -> None:
+        """get_chat_history()がprogress_reporter.chat_history_providerのget_messages()を呼び出すことを確認する"""
+        mock_messages = [{"role": "user", "content": "テスト"}]
+        mock_history_provider = MagicMock()
+        mock_history_provider.get_messages = AsyncMock(return_value=mock_messages)
+
+        mock_reporter = MagicMock()
+        mock_reporter.chat_history_provider = mock_history_provider
+
+        agent = ConfigurableAgent(
+            config=agent_config,
+            agent=mock_agent,
+            prompt_content="テスト",
+            progress_reporter=mock_reporter,
+        )
+
+        result = await agent.get_chat_history("test-session-id")
+
+        assert result == mock_messages
+        mock_history_provider.get_messages.assert_called_once_with("test-session-id")
+
+    @pytest.mark.asyncio
+    async def test_get_chat_historyがproviderない場合は空リストを返す(
+        self,
+        agent_config: AgentNodeConfig,
+    ) -> None:
+        """get_chat_history()でchat_history_providerが存在しない場合に空リストを返すことを確認する"""
+        mock_reporter = MagicMock()
+        # chat_history_providerをNoneに設定してproviderがない状態を再現する
+        mock_reporter.chat_history_provider = None
+        # agentもhistory_providerなしに設定する
+        mock_agent_no_provider = MagicMock()
+        mock_agent_no_provider.history_provider = None
+
+        agent = ConfigurableAgent(
+            config=agent_config,
+            agent=mock_agent_no_provider,
+            prompt_content="テスト",
+            progress_reporter=mock_reporter,
+        )
+
+        result = await agent.get_chat_history("test-session-id")
+
+        assert result == []

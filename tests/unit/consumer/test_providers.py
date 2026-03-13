@@ -3,11 +3,13 @@
 
 PostgreSqlChatHistoryProvider・PlanningContextProvider・
 ToolResultContextProvider・ContextCompressionService・
-ContextStorageManagerのDB操作・ファイル操作をモックして動作を検証する。
+TaskInheritanceContextProvider・ContextStorageManagerの
+DB操作・ファイル操作をモックして動作を検証する。
 """
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,6 +18,7 @@ from providers.chat_history_provider import PostgreSqlChatHistoryProvider
 from providers.planning_context_provider import PlanningContextProvider
 from providers.tool_result_context_provider import ToolResultContextProvider
 from providers.context_compression_service import ContextCompressionService
+from providers.task_inheritance_context_provider import TaskInheritanceContextProvider
 from providers.context_storage_manager import ContextStorageManager
 
 
@@ -323,3 +326,258 @@ class TestContextStorageManager:
 
         # record_token_usageが呼ばれていることを確認する
         mock_token_repo.record_token_usage.assert_called_once()
+
+
+# ========================================
+# TestTaskInheritanceContextProvider
+# ========================================
+
+
+class TestTaskInheritanceContextProvider:
+    """TaskInheritanceContextProviderのテスト"""
+
+    @pytest.mark.asyncio
+    async def test_before_runがdisable_inheritanceの場合はNoneを返す(self) -> None:
+        """disable_inheritance=Trueの場合にNoneを返すことを確認する"""
+        metadata = json.dumps({"disable_inheritance": True})
+        task_row = MagicMock()
+        task_row.__getitem__ = lambda self, key: {"metadata": metadata}[key]
+        pool = _make_mock_pool()
+        mock_conn = pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetchrow = AsyncMock(return_value=task_row)
+
+        provider = TaskInheritanceContextProvider(db_pool=pool)
+        result = await provider.before_run(task_uuid="test-uuid")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_before_runがタスク未発見の場合はNoneを返す(self) -> None:
+        """tasksテーブルにtask_uuidが存在しない場合にNoneを返すことを確認する"""
+        pool = _make_mock_pool()
+        mock_conn = pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetchrow = AsyncMock(return_value=None)
+
+        provider = TaskInheritanceContextProvider(db_pool=pool)
+        result = await provider.before_run(task_uuid="nonexistent-uuid")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_before_runが過去タスクない場合はNoneを返す(self) -> None:
+        """過去の成功タスクが存在しない場合にNoneを返すことを確認する"""
+        metadata = json.dumps({
+            "task_identifier": "issue-123",
+            "repository": "owner/repo",
+        })
+        task_row = MagicMock()
+        task_row.__getitem__ = lambda self, key: {"metadata": metadata}[key]
+        pool = _make_mock_pool(fetch_return=[])
+        mock_conn = pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetchrow = AsyncMock(return_value=task_row)
+
+        provider = TaskInheritanceContextProvider(db_pool=pool)
+        result = await provider.before_run(task_uuid="test-uuid")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_before_runが過去タスクのMarkdownを返す(self) -> None:
+        """過去タスクが存在する場合にMarkdown形式の継承データを返すことを確認する"""
+        from unittest.mock import patch as mock_patch
+
+        metadata = json.dumps({
+            "task_identifier": "issue-123",
+            "repository": "owner/repo",
+        })
+        past_metadata_str = json.dumps({
+            "inheritance_data": {
+                "final_summary": "実装完了",
+                "planning_history": [],
+                "implementation_patterns": [],
+                "key_decisions": ["pytestを使用"],
+            }
+        })
+        task_row = MagicMock()
+        task_row.__getitem__ = lambda self, key: {"metadata": metadata}[key]
+
+        pool = _make_mock_pool()
+        mock_conn = pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetchrow = AsyncMock(return_value=task_row)
+
+        # _get_past_tasks_asyncをパッチして期待する辞書を返す
+        past_task_dict = {
+            "task_uuid": "past-uuid",
+            "metadata": past_metadata_str,
+            "completed_at": "2024-01-01",
+        }
+
+        provider = TaskInheritanceContextProvider(db_pool=pool)
+        with mock_patch.object(
+            provider, "_get_past_tasks_async", AsyncMock(return_value=past_task_dict)
+        ):
+            result = await provider.before_run(task_uuid="test-uuid")
+
+        assert result is not None
+        assert "Previous Task Context" in result
+        assert "pytestを使用" in result
+
+    def test_format_inheritance_dataがMarkdownを生成する(self) -> None:
+        """_format_inheritance_data()が期待するMarkdown形式を返すことを確認する"""
+        provider = TaskInheritanceContextProvider(db_pool=MagicMock())
+        inheritance_data = {
+            "final_summary": "テスト完了",
+            "planning_history": [
+                {"phase": "planning", "node_id": "node1", "plan": "計画", "created_at": "2024-01-01"}
+            ],
+            "implementation_patterns": [
+                {"pattern_type": "test", "description": "pytestを使用"}
+            ],
+            "key_decisions": ["決定1", "決定2"],
+        }
+
+        result = provider._format_inheritance_data(inheritance_data)
+
+        assert "Previous Task Context" in result
+        assert "テスト完了" in result
+        assert "Planning History" in result
+        assert "pytestを使用" in result
+        assert "決定1" in result
+
+    @pytest.mark.asyncio
+    async def test_after_runが何もしない(self) -> None:
+        """after_run()が例外なく完了することを確認する（本Providerは何もしない）"""
+        pool = _make_mock_pool()
+        provider = TaskInheritanceContextProvider(db_pool=pool)
+        # 例外が発生しないことを確認する
+        result = await provider.after_run(task_uuid="test-uuid")
+        assert result is None
+
+
+# ========================================
+# TestContextCompressionServiceMethods
+# ========================================
+
+
+class TestContextCompressionServiceMethods:
+    """ContextCompressionServiceの詳細メソッドのテスト"""
+
+    @pytest.mark.asyncio
+    async def test_compress_messages_asyncが要約テキストを返す(self) -> None:
+        """compress_messages_async()がLLMを呼び出し(summary, token_count)タプルを返すことを確認する"""
+        mock_row = MagicMock()
+        mock_row.__getitem__ = lambda self, key: {"role": "user", "content": "テストコンテンツ"}[key]
+        pool = _make_mock_pool(fetch_return=[mock_row])
+
+        mock_llm = MagicMock()
+        mock_llm.generate = AsyncMock(return_value="要約テキスト")
+        mock_config = MagicMock()
+
+        service = ContextCompressionService(
+            db_pool=pool,
+            llm_client=mock_llm,
+            config=mock_config,
+        )
+
+        summary, token_count = await service.compress_messages_async(
+            task_uuid="test-uuid", start_seq=0, end_seq=5
+        )
+
+        assert summary == "要約テキスト"
+        assert isinstance(token_count, int)
+        assert token_count > 0
+        mock_llm.generate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_replace_with_summary_asyncがトランザクションを実行する(self) -> None:
+        """replace_with_summary_async()がDELETE・INSERT・UPDATE・INSERTをトランザクション内で実行することを確認する"""
+        pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock()
+        # conn.transaction()は同期メソッドとして非同期コンテキストマネージャを返す
+        mock_txn_cm = MagicMock()
+        mock_txn_cm.__aenter__ = AsyncMock(return_value=None)
+        mock_txn_cm.__aexit__ = AsyncMock(return_value=False)
+        mock_conn.transaction = MagicMock(return_value=mock_txn_cm)
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_config = MagicMock()
+        service = ContextCompressionService(
+            db_pool=pool,
+            llm_client=MagicMock(),
+            config=mock_config,
+        )
+
+        await service.replace_with_summary_async(
+            task_uuid="test-uuid",
+            summary="要約テキスト",
+            start_seq=0,
+            end_seq=5,
+            original_tokens=100,
+            compressed_tokens=30,
+        )
+
+        # execute が複数回呼ばれていることを確認する（DELETE・INSERT・UPDATE・INSERT）
+        assert mock_conn.execute.call_count >= 4
+        call_args_str = str(mock_conn.execute.call_args_list)
+        assert "DELETE" in call_args_str
+        assert "INSERT" in call_args_str
+        assert "UPDATE" in call_args_str
+
+
+# ========================================
+# TestContextStorageManagerSaveError
+# ========================================
+
+
+class TestContextStorageManagerSaveError:
+    """ContextStorageManager.save_error()のテスト"""
+
+    @pytest.mark.asyncio
+    async def test_save_errorがtask_repositoryを呼び出す(self) -> None:
+        """save_error()がtask_repository.update_task_status()を呼び出すことを確認する"""
+        mock_task_repo = AsyncMock()
+        mock_task_repo.update_task_status = AsyncMock()
+
+        manager = ContextStorageManager(
+            chat_history_provider=MagicMock(),
+            token_usage_repository=MagicMock(),
+            context_repository=MagicMock(),
+            task_repository=mock_task_repo,
+        )
+
+        await manager.save_error(
+            task_uuid="test-uuid",
+            node_id="node1",
+            error_category="transient",
+            error_message="テストエラー",
+            stack_trace="Traceback ...",
+        )
+
+        mock_task_repo.update_task_status.assert_called_once_with(
+            "test-uuid",
+            "failed",
+            error_message="テストエラー",
+        )
+
+    @pytest.mark.asyncio
+    async def test_save_errorがtask_repositoryなしでも例外を出さない(self) -> None:
+        """task_repositoryにupdate_task_statusがない場合でも例外なく完了することを確認する"""
+        mock_task_repo = MagicMock(spec=[])  # specに空リストを渡してメソッドなしにする
+
+        manager = ContextStorageManager(
+            chat_history_provider=MagicMock(),
+            token_usage_repository=MagicMock(),
+            context_repository=MagicMock(),
+            task_repository=mock_task_repo,
+        )
+
+        # 例外が発生しないことを確認する
+        await manager.save_error(
+            task_uuid="test-uuid",
+            node_id="node1",
+            error_category="implementation",
+            error_message="テストエラー",
+            stack_trace="",
+        )
