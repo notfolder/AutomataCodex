@@ -148,7 +148,9 @@ class TaskInheritanceContextProvider(BaseContextProvider):
         同一task_identifier・repositoryを持つ成功済み過去タスクを取得する。
 
         expiry_days以内に完了し、エラーなしで完了したタスクを最大5件取得する。
-        最新のcompleted_atを持つタスクを選択して返す。
+        複数件ある場合はmetadata['inheritance_data']['implementation_patterns']の
+        要素数が最も多いタスクを優先して選択する（CLASS_IMPLEMENTATION_SPEC.md § 4.5.4に準拠）。
+        要素数が同じ場合は最新のcompleted_atを持つタスクを選択する。
 
         Args:
             task_identifier: タスク識別子（例: Issue IID）
@@ -157,6 +159,8 @@ class TaskInheritanceContextProvider(BaseContextProvider):
         Returns:
             選択された過去タスクの辞書。見つからない場合はNone。
         """
+        import json as _json
+
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """
@@ -178,8 +182,27 @@ class TaskInheritanceContextProvider(BaseContextProvider):
         if not rows:
             return None
 
-        # 最新のcompleted_atを持つタスクを返す（ORDER BY DESC LIMIT 5の先頭）
-        return dict(rows[0])
+        # implementation_patternsの要素数が多いタスクを優先して選択する
+        # 同数の場合はORDER BY completed_at DESC順（先頭）を使用する
+        best_row = rows[0]
+        best_count = 0
+
+        for row in rows:
+            metadata_raw = row["metadata"]
+            if isinstance(metadata_raw, str):
+                metadata: dict[str, Any] = _json.loads(metadata_raw)
+            elif metadata_raw is not None:
+                metadata = dict(metadata_raw)
+            else:
+                metadata = {}
+
+            inheritance_data: dict[str, Any] = metadata.get("inheritance_data", {})
+            pattern_count = len(inheritance_data.get("implementation_patterns", []))
+            if pattern_count > best_count:
+                best_count = pattern_count
+                best_row = row
+
+        return dict(best_row)
 
     def _format_inheritance_data(
         self, inheritance_data: dict[str, Any]

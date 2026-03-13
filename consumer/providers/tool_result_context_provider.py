@@ -24,6 +24,16 @@ logger = logging.getLogger(__name__)
 _RESULT_PREVIEW_MAX_CHARS = 500
 # 取得するメタデータの最大件数
 _METADATA_FETCH_LIMIT = 10
+# ファイルアクセス系ツール名の明示的なセット（total_file_readsとして集計する）
+_FILE_READ_TOOL_NAMES: frozenset[str] = frozenset({
+    "text_editor",
+    "text-editor",
+    "read_file",
+    "write_file",
+    "list_files",
+    "file_reader",
+    "file_writer",
+})
 
 
 class ToolResultContextProvider(BaseContextProvider):
@@ -156,7 +166,8 @@ class ToolResultContextProvider(BaseContextProvider):
 
         タイムスタンプ付きファイル名でJSONファイルを生成し、
         {file_storage_base_dir}/{task_uuid}/ ディレクトリに保存する。
-        その後、context_tool_results_metadataテーブルへメタデータをINSERTする。
+        その後、context_tool_results_metadataテーブルへメタデータをINSERTし、
+        metadata.jsonを更新する（CLASS_IMPLEMENTATION_SPEC.md § 4.3.4 手順6に準拠）。
 
         Args:
             task_uuid: タスクUUID
@@ -212,3 +223,54 @@ class ToolResultContextProvider(BaseContextProvider):
             tool_name,
             file_path,
         )
+
+        # metadata.jsonを更新する（CLASS_IMPLEMENTATION_SPEC.md § 4.3.4 手順6）
+        # total_file_reads / total_command_executions 等の集計カウンターを更新する
+        self._update_metadata_json(file_dir, tool_name)
+
+    def _update_metadata_json(self, file_dir: Path, tool_name: str) -> None:
+        """
+        metadata.jsonを読み込み、集計カウンターを更新して書き戻す。
+
+        ファイルが存在しない場合は新規作成する。
+        ファイルアクセス系ツール（_FILE_READ_TOOL_NAMES）はtotal_file_readsを、
+        それ以外はtotal_command_executionsをインクリメントし、total_tool_callsも加算する。
+        読み書きに失敗した場合はログのみ出力して主処理には影響を与えない。
+
+        Args:
+            file_dir: タスクのファイルストレージディレクトリ
+            tool_name: 呼び出されたツール名
+        """
+        metadata_path = file_dir / "metadata.json"
+        try:
+            if metadata_path.exists():
+                meta: dict[str, Any] = json.loads(
+                    metadata_path.read_text(encoding="utf-8")
+                )
+            else:
+                meta = {
+                    "total_tool_calls": 0,
+                    "total_file_reads": 0,
+                    "total_command_executions": 0,
+                }
+
+            meta["total_tool_calls"] = meta.get("total_tool_calls", 0) + 1
+            # ファイルアクセス系ツールと実行系ツールを明示的なセットで分類する
+            if tool_name in _FILE_READ_TOOL_NAMES:
+                meta["total_file_reads"] = meta.get("total_file_reads", 0) + 1
+            else:
+                meta["total_command_executions"] = (
+                    meta.get("total_command_executions", 0) + 1
+                )
+
+            metadata_path.write_text(
+                json.dumps(meta, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            logger.debug("metadata.json更新完了: %s", metadata_path)
+        except Exception as exc:
+            logger.warning(
+                "metadata.json更新中にエラーが発生しました（無視して継続）: path=%s, error=%s",
+                metadata_path,
+                exc,
+            )

@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import asyncpg
+
+if TYPE_CHECKING:
+    from consumer.providers.context_compression_service import ContextCompressionService
 
 logger = logging.getLogger(__name__)
 
@@ -46,19 +49,28 @@ class PostgreSqlChatHistoryProvider(BaseHistoryProvider):
 
     LLM会話履歴をPostgreSQLのcontext_messagesテーブルに永続化する。
     session_idをtask_uuidとして使用してメッセージを取得・保存する。
+    メッセージ保存後にContextCompressionServiceを呼び出してトークン数を監視し、
+    閾値超過時に自動圧縮を行う（CLASS_IMPLEMENTATION_SPEC.md § 4.1.5 手順5に準拠）。
 
     Attributes:
         _pool: asyncpg接続プール
+        _compression_service: コンテキスト圧縮サービス（省略可能）
     """
 
-    def __init__(self, db_pool: asyncpg.Pool) -> None:
+    def __init__(
+        self,
+        db_pool: asyncpg.Pool,
+        compression_service: "ContextCompressionService | None" = None,
+    ) -> None:
         """
         PostgreSqlChatHistoryProviderを初期化する。
 
         Args:
             db_pool: asyncpg接続プール
+            compression_service: コンテキスト圧縮サービス（省略時は圧縮なし）
         """
         self._pool = db_pool
+        self._compression_service = compression_service
 
     async def get_messages(
         self, session_id: str, **kwargs: Any
@@ -111,11 +123,14 @@ class PostgreSqlChatHistoryProvider(BaseHistoryProvider):
 
         既存のメッセージ数を取得し、差分（新規追加分）のみをINSERTする。
         トークン数はlen(content.split()) * 1.3の近似値を使用する。
+        保存後、compression_serviceが設定されておりkwargsにuser_emailが含まれている場合は
+        ContextCompressionService.check_and_compress_async()を呼び出してトークン数を監視する。
+        （CLASS_IMPLEMENTATION_SPEC.md § 4.1.5 手順5に準拠）
 
         Args:
             session_id: タスクUUID（セッションID）
             messages: 保存するメッセージのリスト（role、contentを含む辞書）
-            **kwargs: 追加引数（未使用）
+            **kwargs: 追加引数。user_email（str）を含む場合にコンテキスト圧縮チェックを実行する。
         """
         task_uuid = session_id
 
@@ -158,3 +173,23 @@ class PostgreSqlChatHistoryProvider(BaseHistoryProvider):
             task_uuid,
             len(new_messages),
         )
+
+        # コンテキスト圧縮チェックを実行する（CLASS_IMPLEMENTATION_SPEC.md § 4.1.5 手順5）
+        # compression_serviceが設定されており、user_emailが非空文字列で提供されている場合のみ実行する
+        # None・空文字列・未指定の場合はすべてスキップする
+        user_email: str | None = kwargs.get("user_email")
+        if (
+            self._compression_service is not None
+            and isinstance(user_email, str)
+            and user_email
+        ):
+            try:
+                await self._compression_service.check_and_compress_async(
+                    task_uuid, user_email
+                )
+            except Exception:
+                # 圧縮失敗はログのみとして主処理を継続する
+                logger.warning(
+                    "コンテキスト圧縮チェック中にエラーが発生しました（無視して継続）: task_uuid=%s",
+                    task_uuid,
+                )

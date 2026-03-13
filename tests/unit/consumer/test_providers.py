@@ -95,6 +95,46 @@ class TestPostgreSqlChatHistoryProvider:
         call_args_str = str(mock_conn.execute.call_args_list)
         assert "INSERT" in call_args_str
 
+    @pytest.mark.asyncio
+    async def test_save_messagesがcompression_serviceを呼び出す(self) -> None:
+        """compression_serviceとuser_emailが設定されている場合にcheck_and_compress_asyncが呼ばれることを確認する"""
+        pool = _make_mock_pool(fetchval_return=0)
+
+        # 圧縮サービスのモックを作成する
+        mock_compression = MagicMock()
+        mock_compression.check_and_compress_async = AsyncMock(return_value=False)
+
+        provider = PostgreSqlChatHistoryProvider(
+            db_pool=pool, compression_service=mock_compression
+        )
+        messages = [{"role": "user", "content": "新規メッセージ"}]
+        await provider.save_messages(
+            "test-uuid", messages, user_email="user@example.com"
+        )
+
+        # check_and_compress_asyncが呼ばれていることを確認する
+        mock_compression.check_and_compress_async.assert_called_once_with(
+            "test-uuid", "user@example.com"
+        )
+
+    @pytest.mark.asyncio
+    async def test_save_messagesがuser_emailなしの場合は圧縮を呼ばない(self) -> None:
+        """user_emailが提供されない場合はcheck_and_compress_asyncを呼ばないことを確認する"""
+        pool = _make_mock_pool(fetchval_return=0)
+
+        mock_compression = MagicMock()
+        mock_compression.check_and_compress_async = AsyncMock(return_value=False)
+
+        provider = PostgreSqlChatHistoryProvider(
+            db_pool=pool, compression_service=mock_compression
+        )
+        messages = [{"role": "user", "content": "新規メッセージ"}]
+        # user_emailを渡さない
+        await provider.save_messages("test-uuid", messages)
+
+        # check_and_compress_asyncが呼ばれないことを確認する
+        mock_compression.check_and_compress_async.assert_not_called()
+
 
 # ========================================
 # TestPlanningContextProvider
@@ -196,7 +236,8 @@ class TestToolResultContextProvider:
         # ファイルシステム操作をモックする
         with patch("pathlib.Path.mkdir"), \
              patch("pathlib.Path.write_text"), \
-             patch("pathlib.Path.stat") as mock_stat:
+             patch("pathlib.Path.stat") as mock_stat, \
+             patch("pathlib.Path.exists", return_value=False):
             mock_stat.return_value.st_size = 100
             await provider.after_run(
                 task_uuid="test-uuid",
@@ -208,6 +249,66 @@ class TestToolResultContextProvider:
 
         # DBへのINSERTが呼ばれていることを確認する
         assert mock_conn.execute.call_count >= 1
+
+    def test_update_metadata_jsonが新規ファイルを作成する(self) -> None:
+        """metadata.jsonが存在しない場合に新規作成して集計値が初期化されることを確認する"""
+        import tempfile
+
+        pool = _make_mock_pool()
+        provider = ToolResultContextProvider(db_pool=pool)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            from pathlib import Path
+
+            file_dir = Path(tmpdir)
+            # metadata.jsonが存在しない状態でexecute_commandツールを呼び出す
+            provider._update_metadata_json(file_dir, "execute_command")
+
+            metadata_path = file_dir / "metadata.json"
+            assert metadata_path.exists()
+            meta = json.loads(metadata_path.read_text())
+            assert meta["total_tool_calls"] == 1
+            assert meta["total_command_executions"] == 1
+            assert meta["total_file_reads"] == 0
+
+    def test_update_metadata_jsonがtext_editorのカウンターを更新する(self) -> None:
+        """text_editor系ツールの場合はtotal_file_readsが増加することを確認する"""
+        import tempfile
+
+        pool = _make_mock_pool()
+        provider = ToolResultContextProvider(db_pool=pool)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            from pathlib import Path
+
+            file_dir = Path(tmpdir)
+            provider._update_metadata_json(file_dir, "text_editor")
+
+            meta = json.loads((file_dir / "metadata.json").read_text())
+            assert meta["total_file_reads"] == 1
+            assert meta["total_command_executions"] == 0
+
+    def test_update_metadata_jsonが既存ファイルに加算する(self) -> None:
+        """既存のmetadata.jsonが存在する場合に既存の値に加算されることを確認する"""
+        import tempfile
+
+        pool = _make_mock_pool()
+        provider = ToolResultContextProvider(db_pool=pool)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            from pathlib import Path
+
+            file_dir = Path(tmpdir)
+            existing = {"total_tool_calls": 5, "total_file_reads": 3, "total_command_executions": 2}
+            (file_dir / "metadata.json").write_text(
+                json.dumps(existing), encoding="utf-8"
+            )
+
+            provider._update_metadata_json(file_dir, "execute_command")
+
+            meta = json.loads((file_dir / "metadata.json").read_text())
+            assert meta["total_tool_calls"] == 6
+            assert meta["total_command_executions"] == 3
 
 
 # ========================================
@@ -452,6 +553,55 @@ class TestTaskInheritanceContextProvider:
         # 例外が発生しないことを確認する
         result = await provider.after_run(task_uuid="test-uuid")
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_past_tasks_asyncがimplementation_patterns数が多いタスクを優先する(
+        self,
+    ) -> None:
+        """
+        _get_past_tasks_async()がimplementation_patternsの要素数が多いタスクを優先して
+        返すことを確認する（CLASS_IMPLEMENTATION_SPEC.md § 4.5.4に準拠）。
+        """
+        # 2件のタスクを用意する（1件目はpatterns少、2件目はpatterns多）
+        meta_few = json.dumps({
+            "inheritance_data": {
+                "implementation_patterns": [{"pattern_type": "p1"}],
+            }
+        })
+        meta_many = json.dumps({
+            "inheritance_data": {
+                "implementation_patterns": [
+                    {"pattern_type": "p1"},
+                    {"pattern_type": "p2"},
+                    {"pattern_type": "p3"},
+                ],
+            }
+        })
+
+        # dict()変換が動作するようにMappingプロトコルをサポートするクラスを使用する
+        class _FakeRow(dict):
+            """asyncpg Recordのdict変換をサポートするフェイクRowクラス"""
+            pass
+
+        row_recent = _FakeRow({
+            "task_uuid": "uuid-recent",
+            "metadata": meta_few,
+            "completed_at": "2024-02-01",
+        })
+        row_older_but_richer = _FakeRow({
+            "task_uuid": "uuid-older",
+            "metadata": meta_many,
+            "completed_at": "2024-01-01",
+        })
+
+        pool = _make_mock_pool(fetch_return=[row_recent, row_older_but_richer])
+
+        provider = TaskInheritanceContextProvider(db_pool=pool)
+        result = await provider._get_past_tasks_async("issue-1", "owner/repo")
+
+        # implementation_patternsが多いuuid-olderが選択されることを確認する
+        assert result is not None
+        assert result["task_uuid"] == "uuid-older"
 
 
 # ========================================
