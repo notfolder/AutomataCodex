@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import asyncpg
 import pytest
 
 from database.repositories.workflow_definition_repository import WorkflowDefinitionRepository
@@ -118,6 +119,21 @@ class TestCreateWorkflowDefinition:
         call_args = conn.fetchrow.call_args[0]
         # JSON文字列が引数に含まれることを確認する
         assert any("entry_node" in str(a) for a in call_args)
+
+    async def test_create_definition_raises_on_duplicate_name(self):
+        """同一名称のワークフロー定義を重複作成するとUniqueViolationErrorが伝播することを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(side_effect=asyncpg.UniqueViolationError())
+
+        repo = WorkflowDefinitionRepository(pool)
+        with pytest.raises(asyncpg.UniqueViolationError):
+            await repo.create_workflow_definition(
+                "duplicate_workflow",
+                "重複ワークフロー",
+                _SAMPLE_GRAPH,
+                _SAMPLE_AGENT,
+                _SAMPLE_PROMPT,
+            )
 
 
 class TestGetWorkflowDefinition:

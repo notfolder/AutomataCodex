@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import asyncpg
 import pytest
 
 from database.repositories.user_repository import (
@@ -118,6 +119,15 @@ class TestCreateUser:
 
         call_args = conn.fetchrow.call_args[0]
         assert "upper@example.com" in call_args
+
+    async def test_create_user_raises_on_duplicate_email(self):
+        """重複するメールアドレスでユーザー作成するとUniqueViolationErrorが伝播することを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(side_effect=asyncpg.UniqueViolationError())
+
+        repo = UserRepository(pool)
+        with pytest.raises(asyncpg.UniqueViolationError):
+            await repo.create_user("dup@example.com", "Dup User", "hash")
 
 
 class TestGetUserByEmail:
@@ -275,6 +285,15 @@ class TestCreateUserConfig:
         call_args = conn.fetchrow.call_args[0]
         assert "sk-secret" not in [str(a) for a in call_args]
 
+    async def test_create_config_raises_on_duplicate(self):
+        """同一メールアドレスの設定を重複作成した場合にUniqueViolationErrorが伝播することを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(side_effect=asyncpg.UniqueViolationError())
+
+        repo = UserRepository(pool)
+        with pytest.raises(asyncpg.UniqueViolationError):
+            await repo.create_user_config("dup@example.com")
+
 
 class TestGetDecryptedApiKey:
     """get_decrypted_api_key のテスト"""
@@ -406,6 +425,45 @@ class TestCreateUserWorkflowSetting:
         assert result["workflow_definition_id"] == 1
         conn.fetchrow.assert_awaited_once()
 
+    async def test_create_setting_raises_on_duplicate(self):
+        """同一メールアドレスの設定を重複作成した場合にUniqueViolationErrorが伝播することを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(side_effect=asyncpg.UniqueViolationError())
+
+        repo = UserRepository(pool)
+        with pytest.raises(asyncpg.UniqueViolationError):
+            await repo.create_user_workflow_setting("user@example.com", 1)
+
+
+class TestGetUserWorkflowSetting:
+    """get_user_workflow_setting のテスト"""
+
+    async def test_returns_setting_when_found(self):
+        """ワークフロー設定が存在する場合にレコード辞書を返すことを検証する"""
+        pool, conn = _make_pool()
+        expected = {
+            "user_email": "user@example.com",
+            "workflow_definition_id": 1,
+            "custom_settings": None,
+        }
+        conn.fetchrow = AsyncMock(return_value=expected)
+
+        repo = UserRepository(pool)
+        result = await repo.get_user_workflow_setting("user@example.com")
+
+        assert result is not None
+        assert result["workflow_definition_id"] == 1
+
+    async def test_returns_none_when_not_found(self):
+        """ワークフロー設定が存在しない場合にNoneを返すことを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(return_value=None)
+
+        repo = UserRepository(pool)
+        result = await repo.get_user_workflow_setting("notfound@example.com")
+
+        assert result is None
+
 
 class TestUpdateUserWorkflowSetting:
     """update_user_workflow_setting のテスト"""
@@ -424,6 +482,16 @@ class TestUpdateUserWorkflowSetting:
 
         assert result is not None
         assert result["workflow_definition_id"] == 2
+
+    async def test_returns_none_when_not_found(self):
+        """対象ユーザーが存在しない場合にNoneを返すことを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(return_value=None)
+
+        repo = UserRepository(pool)
+        result = await repo.update_user_workflow_setting("notfound@example.com", 2)
+
+        assert result is None
 
 
 class TestDeleteUserWorkflowSetting:

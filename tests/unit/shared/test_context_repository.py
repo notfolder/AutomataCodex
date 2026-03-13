@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import asyncpg
 import pytest
 
 from database.repositories.context_repository import ContextRepository
@@ -365,6 +366,21 @@ class TestCreateContextMetadata:
         assert result["task_uuid"] == "task-1"
         conn.fetchrow.assert_awaited_once()
 
+    async def test_create_metadata_raises_on_duplicate(self):
+        """同一task_uuidのメタデータを重複作成するとUniqueViolationErrorが伝播することを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(side_effect=asyncpg.UniqueViolationError())
+
+        repo = ContextRepository(pool)
+        with pytest.raises(asyncpg.UniqueViolationError):
+            await repo.create_context_metadata(
+                "dup-task",
+                "issue_to_mr",
+                "12345/issues/1",
+                "owner/repo",
+                "user@example.com",
+            )
+
 
 class TestGetContextMetadata:
     """get_context_metadata のテスト"""
@@ -388,6 +404,33 @@ class TestGetContextMetadata:
 
         repo = ContextRepository(pool)
         result = await repo.get_context_metadata("nonexistent")
+
+        assert result is None
+
+
+class TestUpdateContextMetadata:
+    """update_context_metadata のテスト"""
+
+    async def test_update_workflow_name(self):
+        """ワークフロー名を更新できることを検証する"""
+        pool, conn = _make_pool()
+        expected = {"task_uuid": "task-1", "workflow_name": "new_workflow"}
+        conn.fetchrow = AsyncMock(return_value=expected)
+
+        repo = ContextRepository(pool)
+        result = await repo.update_context_metadata("task-1", workflow_name="new_workflow")
+
+        assert result is not None
+        assert result["workflow_name"] == "new_workflow"
+        conn.fetchrow.assert_awaited_once()
+
+    async def test_returns_none_when_not_found(self):
+        """対象タスクのメタデータが存在しない場合にNoneを返すことを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(return_value=None)
+
+        repo = ContextRepository(pool)
+        result = await repo.update_context_metadata("nonexistent")
 
         assert result is None
 

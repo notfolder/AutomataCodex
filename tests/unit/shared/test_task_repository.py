@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import asyncpg
 import pytest
 
 from database.repositories.task_repository import TaskRepository
@@ -209,6 +210,52 @@ class TestUpdateAssignedBranches:
 
         assert result is not None
         conn.fetchrow.assert_awaited_once()
+
+
+class TestUpdateSelectedBranch:
+    """update_selected_branch のテスト"""
+
+    async def test_update_selected_branch_success(self):
+        """選択ブランチを更新できることを検証する"""
+        pool, conn = _make_pool()
+        expected = {"uuid": "task-1", "selected_branch": "feature/branch-1"}
+        conn.fetchrow = AsyncMock(return_value=expected)
+
+        repo = TaskRepository(pool)
+        result = await repo.update_selected_branch("task-1", "feature/branch-1")
+
+        assert result is not None
+        assert result["selected_branch"] == "feature/branch-1"
+        conn.fetchrow.assert_awaited_once()
+
+    async def test_update_selected_branch_returns_none_when_not_found(self):
+        """対象タスクが存在しない場合にNoneを返すことを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(return_value=None)
+
+        repo = TaskRepository(pool)
+        result = await repo.update_selected_branch("nonexistent", "feature/branch-1")
+
+        assert result is None
+
+
+class TestCreateTaskDuplicate:
+    """create_task の重複キー違反テスト"""
+
+    async def test_create_task_raises_on_duplicate_uuid(self):
+        """同一UUIDでタスクを重複作成するとUniqueViolationErrorが伝播することを検証する"""
+        pool, conn = _make_pool()
+        conn.fetchrow = AsyncMock(side_effect=asyncpg.UniqueViolationError())
+
+        repo = TaskRepository(pool)
+        with pytest.raises(asyncpg.UniqueViolationError):
+            await repo.create_task(
+                "dup-uuid",
+                "issue_to_mr",
+                "12345/issues/1",
+                "owner/repo",
+                "user@example.com",
+            )
 
 
 class TestDeleteTask:
