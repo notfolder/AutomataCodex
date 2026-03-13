@@ -220,3 +220,100 @@ class TestPrePlanningManagerProgressManager:
             plan_environment_id="plan-env-001",
         )
         assert "selected_environment" in result
+
+
+# ========================================
+# TestPrePlanningManagerSubMethods
+# ========================================
+
+
+class TestPrePlanningManagerSubMethods:
+    """PrePlanningManager サブメソッドの個別テスト"""
+
+    @pytest.mark.asyncio
+    async def test_execute_understandingがLLMを呼び出して要約を返す(
+        self,
+        mock_llm_client: MagicMock,
+        mock_mcp_clients: dict[str, MagicMock],
+    ) -> None:
+        """execute_understanding()がLLMを呼び出し、summaryを含む辞書を返すことを確認する"""
+        mock_llm_client.generate = AsyncMock(return_value="タスク要約テキスト")
+
+        manager = PrePlanningManager(
+            config={},
+            llm_client=mock_llm_client,
+            mcp_clients=mock_mcp_clients,
+        )
+
+        result = await manager.execute_understanding("テストタスクの説明")
+
+        assert "summary" in result
+        assert "key_points" in result
+        assert "complexity" in result
+        assert result["summary"] == "タスク要約テキスト"
+
+    @pytest.mark.asyncio
+    async def test_execute_understandingがLLMなしでタスク説明を返す(
+        self,
+        mock_mcp_clients: dict[str, MagicMock],
+    ) -> None:
+        """generate()を持たないllm_clientの場合にタスク説明の先頭200文字が返されることを確認する"""
+        no_generate_client = MagicMock(spec=[])  # generateメソッドを持たないクライアント
+
+        manager = PrePlanningManager(
+            config={},
+            llm_client=no_generate_client,
+            mcp_clients=mock_mcp_clients,
+        )
+
+        long_description = "A" * 300
+        result = await manager.execute_understanding(long_description)
+
+        assert result["summary"] == long_description[:200]
+
+    @pytest.mark.asyncio
+    async def test_select_execution_environmentが有効な環境名とタプルを返す(
+        self,
+        mock_mcp_clients: dict[str, MagicMock],
+    ) -> None:
+        """select_execution_environment()が(str, dict)タプルを返すことを確認する"""
+        import json as _json
+
+        llm_client = MagicMock()
+        llm_client.generate = AsyncMock(
+            return_value=_json.dumps(
+                {"selected_environment": "node", "reasoning": "package.jsonが存在するため"}
+            )
+        )
+
+        manager = PrePlanningManager(
+            config={},
+            llm_client=llm_client,
+            mcp_clients=mock_mcp_clients,
+        )
+        # environment_infoをセットしてからselectを呼ぶ
+        manager.environment_info = {"detected_files": {"package.json": "node"}, "file_contents": {}}
+
+        env_name, details = await manager.select_execution_environment()
+
+        assert env_name == "node"
+        assert isinstance(details, dict)
+        assert "reasoning" in details
+
+    @pytest.mark.asyncio
+    async def test_collect_environment_infoが環境情報辞書を返す(
+        self,
+        mock_llm_client: MagicMock,
+        mock_mcp_clients: dict[str, MagicMock],
+    ) -> None:
+        """collect_environment_info()がdetected_filesとfile_contentsキーを持つ辞書を返すことを確認する"""
+        manager = PrePlanningManager(
+            config={},
+            llm_client=mock_llm_client,
+            mcp_clients=mock_mcp_clients,
+        )
+
+        result = await manager.collect_environment_info("plan-env-001")
+
+        assert "detected_files" in result
+        assert "file_contents" in result

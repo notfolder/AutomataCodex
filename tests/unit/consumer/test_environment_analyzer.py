@@ -120,3 +120,48 @@ class TestAnalyzeEnvironmentFiles:
 
         # 5000文字に切り詰められていることを確認する
         assert len(result["file_contents"]["requirements.txt"]) == 5000
+
+    @pytest.mark.asyncio
+    async def test_mcp_clientが正常にファイル内容を返す(self) -> None:
+        """text_editor MCPクライアントが正常にファイル内容を返す場合の動作を確認する"""
+        mock_text_editor = MagicMock()
+        file_content = "numpy==1.24.0\npandas==2.0.0"
+        mock_text_editor.call_tool.return_value = {"content": file_content}
+
+        analyzer = EnvironmentAnalyzer(mcp_clients={"text_editor": mock_text_editor})
+        detected_files = {"python": ["requirements.txt"]}
+
+        result = await analyzer.analyze_environment_files(detected_files)
+
+        # ファイル内容が正しく取得されていることを確認する
+        assert result["file_contents"]["requirements.txt"] == file_content
+        # detected_filesに正しく記録されていることを確認する
+        assert result["detected_files"]["requirements.txt"] == "python"
+        # call_tool()がread_fileコマンドで呼ばれていることを確認する
+        mock_text_editor.call_tool.assert_called_once_with(
+            "read_file", {"path": "requirements.txt"}
+        )
+
+    @pytest.mark.asyncio
+    async def test_mcp_clientがtext_editorを持たない場合は空文字列を返す(self) -> None:
+        """mcp_clientsにtext_editorがない場合にfile_contentsが空文字列であることを確認する"""
+        analyzer = EnvironmentAnalyzer(mcp_clients={"other_client": MagicMock()})
+        detected_files = {"node": ["package.json"]}
+
+        result = await analyzer.analyze_environment_files(detected_files)
+
+        assert result["file_contents"]["package.json"] == ""
+        assert result["detected_files"]["package.json"] == "node"
+
+    @pytest.mark.asyncio
+    async def test_mcp_clientが例外を発生させた場合は空文字列を返す(self) -> None:
+        """call_tool()が例外をスローした場合にfile_contentsが空文字列であることを確認する"""
+        mock_text_editor = MagicMock()
+        mock_text_editor.call_tool.side_effect = RuntimeError("接続エラー")
+
+        analyzer = EnvironmentAnalyzer(mcp_clients={"text_editor": mock_text_editor})
+        detected_files = {"python": ["requirements.txt"]}
+
+        # 例外が発生しても処理が継続することを確認する
+        result = await analyzer.analyze_environment_files(detected_files)
+        assert result["file_contents"]["requirements.txt"] == ""

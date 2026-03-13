@@ -364,3 +364,48 @@ class TestConfigurableAgentTools:
         )
         assert agent.tools == tools
         assert len(agent.tools) == 2
+
+
+# ========================================
+# TestAgentNodeConfigEnvRef
+# ========================================
+
+
+class TestAgentNodeConfigEnvRef:
+    """AgentNodeConfig.env_ref フィールドのテスト（§1.3 保持データ）"""
+
+    def test_env_refデフォルトはNone(self) -> None:
+        """env_refを省略した場合はNoneになることを確認する（CLASS_IMPLEMENTATION_SPEC.md § 1.3）"""
+        config = AgentNodeConfig(
+            id="test-agent",
+            role="planning",
+            input_keys=["task_description"],
+            output_keys=["result"],
+            prompt_id="prompt-1",
+        )
+        assert config.env_ref is None
+
+    def test_env_refにplanを設定できる(self) -> None:
+        """env_refに'plan'を設定した場合にその値が保持されることを確認する"""
+        config = AgentNodeConfig(
+            id="test-agent",
+            role="planning",
+            input_keys=["task_description"],
+            output_keys=["result"],
+            prompt_id="prompt-1",
+            env_ref="plan",
+        )
+        assert config.env_ref == "plan"
+
+    def test_env_refに分岐番号を設定できる(self) -> None:
+        """env_refに'1'/'2'/'3'を設定した場合にその値が保持されることを確認する"""
+        for ref in ("1", "2", "3"):
+            config = AgentNodeConfig(
+                id="test-agent",
+                role="execution",
+                input_keys=["task_description"],
+                output_keys=["result"],
+                prompt_id="prompt-1",
+                env_ref=ref,
+            )
+            assert config.env_ref == ref

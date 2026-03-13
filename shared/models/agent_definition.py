@@ -84,6 +84,15 @@ class AgentNodeConfig(BaseModel):
             "（text_editor / command_executor / todo_list 等）"
         ),
     )
+    env_ref: str | None = Field(
+        default=None,
+        description=(
+            "使用する実行環境の参照。"
+            "\"plan\": plan共有環境、\"1\"/\"2\"/\"3\": 分岐内の第N実行環境、"
+            "省略(None): 環境不要。ビルド時に environment_id として確定される。"
+            "CLASS_IMPLEMENTATION_SPEC.md § 1.3 に準拠する。"
+        ),
+    )
     prompt_id: str = Field(description="プロンプト定義ファイル内の対応するプロンプトID")
     max_iterations: int = Field(default=20, ge=1, description="LLMとのターン数上限")
     timeout_seconds: int = Field(default=600, ge=1, description="タイムアウト秒数")
