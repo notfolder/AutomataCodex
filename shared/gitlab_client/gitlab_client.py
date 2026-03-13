@@ -29,11 +29,11 @@ from models.gitlab import (
 logger = logging.getLogger(__name__)
 
 # リトライ設定
+# 429（レート制限）・500系・409（競合）エラーはいずれも最大3回試行（初回含む）
 _RETRY_STATUS_CODES = {500, 502, 503, 504}
 _RATE_LIMIT_STATUS_CODE = 429
 _CONFLICT_STATUS_CODE = 409
 _MAX_RETRIES = 3
-_MAX_RATE_LIMIT_RETRIES = 5
 _BASE_DELAY_SECONDS = 1.0
 _RATE_LIMIT_BASE_DELAY = 60.0
 
@@ -46,7 +46,7 @@ def _exponential_backoff(attempt: int, base_delay: float) -> None:
         attempt: 現在のリトライ試行回数（0始まり）
         base_delay: ベース待機秒数
     """
-    delay = base_delay * (2 ** attempt)
+    delay = base_delay * (2**attempt)
     logger.info("バックオフ待機: %.1f秒後にリトライします", delay)
     time.sleep(delay)
 
@@ -84,7 +84,9 @@ def _issue_from_obj(issue_obj: Any) -> GitLabIssue:
         GitLabIssueインスタンス
     """
     assignees_data = getattr(issue_obj, "assignees", []) or []
-    assignees_raw: list[dict[str, Any]] = [a for a in assignees_data if isinstance(a, dict)]
+    assignees_raw: list[dict[str, Any]] = [
+        a for a in assignees_data if isinstance(a, dict)
+    ]
     return GitLabIssue(
         iid=issue_obj.iid,
         title=issue_obj.title,
@@ -112,7 +114,9 @@ def _mr_from_obj(mr_obj: Any) -> GitLabMergeRequest:
         GitLabMergeRequestインスタンス
     """
     assignees_data = getattr(mr_obj, "assignees", []) or []
-    assignees_raw: list[dict[str, Any]] = [a for a in assignees_data if isinstance(a, dict)]
+    assignees_raw: list[dict[str, Any]] = [
+        a for a in assignees_data if isinstance(a, dict)
+    ]
     return GitLabMergeRequest(
         iid=mr_obj.iid,
         title=mr_obj.title,
@@ -125,7 +129,8 @@ def _mr_from_obj(mr_obj: Any) -> GitLabMergeRequest:
         assignees=[_user_from_dict(a) for a in assignees_raw],  # type: ignore[misc]
         author=_user_from_dict(getattr(mr_obj, "author", None)),
         web_url=getattr(mr_obj, "web_url", None),
-        draft=getattr(mr_obj, "draft", False) or getattr(mr_obj, "work_in_progress", False),
+        draft=getattr(mr_obj, "draft", False)
+        or getattr(mr_obj, "work_in_progress", False),
         merge_status=getattr(mr_obj, "merge_status", None),
         sha=getattr(mr_obj, "sha", None),
         created_at=getattr(mr_obj, "created_at", None),
@@ -233,12 +238,12 @@ class GitlabClient:
             except gitlab.exceptions.GitlabHttpError as exc:
                 status = getattr(exc, "response_code", None) or 0
                 if status == _RATE_LIMIT_STATUS_CODE:
-                    # 429: レート制限エラー、指数バックオフでリトライ
-                    if attempt < _MAX_RATE_LIMIT_RETRIES - 1:
+                    # 429: レート制限エラー、指数バックオフでリトライ（最大3回試行）
+                    if attempt < _MAX_RETRIES - 1:
                         logger.warning(
                             "レート制限（429）: バックオフ後リトライします（試行 %d/%d）",
                             attempt + 1,
-                            _MAX_RATE_LIMIT_RETRIES,
+                            _MAX_RETRIES,
                         )
                         _exponential_backoff(attempt, _RATE_LIMIT_BASE_DELAY)
                         last_exception = exc
