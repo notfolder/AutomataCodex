@@ -13,7 +13,12 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from config.config_manager import ConfigManager, _cast_env_value, _get_nested, _set_nested
+from config.config_manager import (
+    ConfigManager,
+    _cast_env_value,
+    _get_nested,
+    _set_nested,
+)
 from config.models import (
     AgentFrameworkConfig,
     AlertsConfig,
@@ -185,7 +190,9 @@ class TestConfigManagerEnvOverride:
 
     def test_環境変数でGitLab設定を上書きできる(self, sample_config: Path) -> None:
         """環境変数 GITLAB_API_URL が設定を上書きすることを確認する"""
-        with patch.dict(os.environ, {"GITLAB_API_URL": "https://env.gitlab.com/api/v4"}):
+        with patch.dict(
+            os.environ, {"GITLAB_API_URL": "https://env.gitlab.com/api/v4"}
+        ):
             manager = ConfigManager(sample_config)
             assert manager.get("gitlab.api_url") == "https://env.gitlab.com/api/v4"
 
@@ -225,10 +232,14 @@ class TestConfigManagerEnvOverride:
             manager = ConfigManager(config_file)
             assert manager.get("gitlab.pat") == "resolved-pat"
 
-    def test_環境変数が未設定の場合はYAMLの値を使用する(self, sample_config: Path) -> None:
+    def test_環境変数が未設定の場合はYAMLの値を使用する(
+        self, sample_config: Path
+    ) -> None:
         """環境変数が未設定の場合はYAMLファイルの値を使用することを確認する"""
         # GITLAB_BOT_NAME 環境変数がない場合
-        env_without_bot_name = {k: v for k, v in os.environ.items() if k != "GITLAB_BOT_NAME"}
+        env_without_bot_name = {
+            k: v for k, v in os.environ.items() if k != "GITLAB_BOT_NAME"
+        }
         with patch.dict(os.environ, env_without_bot_name, clear=True):
             manager = ConfigManager(sample_config)
             assert manager.get("gitlab.bot_name") == "test-bot"
@@ -253,14 +264,18 @@ class TestConfigManagerGetters:
         assert config.model == "gpt-4o"
         assert config.temperature == 0.2
 
-    def test_get_database_configがDatabaseConfigを返す(self, sample_config: Path) -> None:
+    def test_get_database_configがDatabaseConfigを返す(
+        self, sample_config: Path
+    ) -> None:
         """get_database_config()がDatabaseConfigインスタンスを返すことを確認する"""
         manager = ConfigManager(sample_config)
         config = manager.get_database_config()
         assert isinstance(config, DatabaseConfig)
         assert config.pool_size == 10
 
-    def test_get_rabbitmq_configがRabbitMQConfigを返す(self, sample_config: Path) -> None:
+    def test_get_rabbitmq_configがRabbitMQConfigを返す(
+        self, sample_config: Path
+    ) -> None:
         """get_rabbitmq_config()がRabbitMQConfigインスタンスを返すことを確認する"""
         manager = ConfigManager(sample_config)
         config = manager.get_rabbitmq_config()
@@ -268,7 +283,9 @@ class TestConfigManagerGetters:
         assert config.host == "rabbitmq"
         assert config.port == 5672
 
-    def test_get_producer_configがProducerConfigを返す(self, sample_config: Path) -> None:
+    def test_get_producer_configがProducerConfigを返す(
+        self, sample_config: Path
+    ) -> None:
         """get_producer_config()がProducerConfigインスタンスを返すことを確認する"""
         manager = ConfigManager(sample_config)
         config = manager.get_producer_config()
@@ -299,7 +316,9 @@ class TestConfigManagerGetters:
         assert isinstance(config, AlertsConfig)
         assert config.notification_channel == "gitlab"
 
-    def test_get_security_configがSecurityConfigを返す(self, sample_config: Path) -> None:
+    def test_get_security_configがSecurityConfigを返す(
+        self, sample_config: Path
+    ) -> None:
         """get_security_config()がSecurityConfigインスタンスを返すことを確認する"""
         manager = ConfigManager(sample_config)
         config = manager.get_security_config()
@@ -421,7 +440,9 @@ class TestEnvVarSupportForImplementationPlan:
      RABBITMQ_URL, USER_CONFIG_API_URL) が正しく機能することを確認する。
     """
 
-    def test_GITLAB_URLが設定をgitlab_urlフィールドに反映する(self, tmp_path: Path) -> None:
+    def test_GITLAB_URLが設定をgitlab_urlフィールドに反映する(
+        self, tmp_path: Path
+    ) -> None:
         """GITLAB_URL 環境変数が GitLabConfig.url フィールドに反映されることを確認する"""
         config_file = tmp_path / "config.yaml"
         with open(config_file, "w", encoding="utf-8") as f:
@@ -450,7 +471,9 @@ class TestEnvVarSupportForImplementationPlan:
             assert config.url == "https://mygitlab.example.com"
             assert config.api_url == "https://mygitlab.example.com/api/v4"
 
-    def test_RABBITMQ_URLが設定をrabbitmq_urlフィールドに反映する(self, tmp_path: Path) -> None:
+    def test_RABBITMQ_URLが設定をrabbitmq_urlフィールドに反映する(
+        self, tmp_path: Path
+    ) -> None:
         """RABBITMQ_URL 環境変数が RabbitMQConfig.url フィールドに反映されることを確認する"""
         config_file = tmp_path / "config.yaml"
         with open(config_file, "w", encoding="utf-8") as f:
@@ -504,3 +527,278 @@ class TestEnvVarSupportForImplementationPlan:
             manager = ConfigManager(config_file)
             db_config = manager.get_database_config()
             assert "secret123" in db_config.url
+
+
+class TestConfigManagerGettersAdditional:
+    """設定ゲッターの追加テスト（get_retry_policy_config・get_execution_environment_config・
+    get_logging_config・get_mcp_server_configs）"""
+
+    def test_get_retry_policy_configがRetryPolicyConfigを返す(
+        self, sample_config: Path
+    ) -> None:
+        """get_retry_policy_config()がRetryPolicyConfigインスタンスを返すことを確認する"""
+        from config.models import RetryPolicyConfig
+
+        manager = ConfigManager(sample_config)
+        config = manager.get_retry_policy_config()
+        assert isinstance(config, RetryPolicyConfig)
+        # デフォルト値の確認
+        assert config.http_errors.error_5xx.max_attempts == 3
+        assert config.http_errors.error_429.max_attempts == 5
+        assert config.tool_errors.max_attempts == 2
+        assert config.llm_errors.max_attempts == 3
+
+    def test_get_retry_policy_configでYAML値を反映する(self, tmp_path: Path) -> None:
+        """get_retry_policy_config()がYAMLで設定したリトライ設定を返すことを確認する"""
+        from config.models import RetryPolicyConfig
+
+        config = {
+            "retry_policy": {
+                "http_errors": {
+                    "5xx": {"max_attempts": 5, "backoff": "linear", "base_delay": 2.0},
+                    "429": {
+                        "max_attempts": 10,
+                        "backoff": "exponential",
+                        "base_delay": 30.0,
+                    },
+                },
+                "tool_errors": {
+                    "max_attempts": 3,
+                    "backoff": "constant",
+                    "base_delay": 1.0,
+                },
+                "llm_errors": {
+                    "max_attempts": 4,
+                    "backoff": "exponential",
+                    "base_delay": 5.0,
+                },
+            }
+        }
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump(config, f)
+
+        manager = ConfigManager(config_file)
+        retry_config = manager.get_retry_policy_config()
+        assert isinstance(retry_config, RetryPolicyConfig)
+        assert retry_config.http_errors.error_5xx.max_attempts == 5
+        assert retry_config.http_errors.error_429.max_attempts == 10
+        assert retry_config.tool_errors.max_attempts == 3
+
+    def test_get_execution_environment_configがExecutionEnvironmentConfigを返す(
+        self, tmp_path: Path
+    ) -> None:
+        """get_execution_environment_config()がExecutionEnvironmentConfigを返すことを確認する"""
+        from config.models import ExecutionEnvironmentConfig
+
+        config = {
+            "execution_environment": {
+                "docker": {
+                    "image": "python:3.11-slim",
+                    "network": "coding-agent-network",
+                    "cpu_limit": "4.0",
+                    "memory_limit": "8g",
+                },
+                "workspace": {
+                    "base_path": "/workspace",
+                    "mount_path": "/mnt/workspace",
+                },
+            }
+        }
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump(config, f)
+
+        manager = ConfigManager(config_file)
+        env_config = manager.get_execution_environment_config()
+        assert isinstance(env_config, ExecutionEnvironmentConfig)
+        assert env_config.docker.image == "python:3.11-slim"
+        assert env_config.docker.cpu_limit == "4.0"
+        assert env_config.docker.memory_limit == "8g"
+        assert env_config.workspace.base_path == "/workspace"
+
+    def test_get_execution_environment_configのデフォルト値が正しい(
+        self, tmp_path: Path
+    ) -> None:
+        """execution_environment が未設定の場合にデフォルト値が返ることを確認する"""
+        from config.models import ExecutionEnvironmentConfig
+
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump({}, f)
+
+        manager = ConfigManager(config_file)
+        env_config = manager.get_execution_environment_config()
+        assert isinstance(env_config, ExecutionEnvironmentConfig)
+        assert env_config.docker.image == "python:3.11-slim"
+        assert env_config.docker.network == "coding-agent-network"
+        assert env_config.workspace.base_path == "/workspace"
+
+    def test_DOCKER_IMAGE環境変数がDockerConfigに反映される(
+        self, tmp_path: Path
+    ) -> None:
+        """DOCKER_IMAGE 環境変数が ExecutionEnvironmentConfig.docker.image に反映されることを確認する"""
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump({}, f)
+
+        with patch.dict(os.environ, {"DOCKER_IMAGE": "python:3.12-slim"}):
+            manager = ConfigManager(config_file)
+            env_config = manager.get_execution_environment_config()
+            assert env_config.docker.image == "python:3.12-slim"
+
+    def test_get_logging_configがLoggingConfigを返す(self, tmp_path: Path) -> None:
+        """get_logging_config()がLoggingConfigインスタンスを返すことを確認する"""
+        from config.models import LoggingConfig
+
+        config = {
+            "logging": {
+                "level": "DEBUG",
+                "file": "logs/debug.log",
+                "max_bytes": 5242880,
+                "backup_count": 5,
+            }
+        }
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump(config, f)
+
+        manager = ConfigManager(config_file)
+        log_config = manager.get_logging_config()
+        assert isinstance(log_config, LoggingConfig)
+        assert log_config.level == "DEBUG"
+        assert log_config.file == "logs/debug.log"
+        assert log_config.max_bytes == 5242880
+        assert log_config.backup_count == 5
+
+    def test_get_logging_configのデフォルト値が正しい(self, tmp_path: Path) -> None:
+        """logging が未設定の場合にデフォルト値が返ることを確認する"""
+        from config.models import LoggingConfig
+
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump({}, f)
+
+        manager = ConfigManager(config_file)
+        log_config = manager.get_logging_config()
+        assert isinstance(log_config, LoggingConfig)
+        assert log_config.level == "INFO"
+        assert log_config.backup_count == 10
+
+    def test_LoggingConfigの不正なlevelでバリデーションエラー(self) -> None:
+        """無効なログレベルでValidationErrorが発生することを確認する"""
+        from config.models import LoggingConfig
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            LoggingConfig(level="VERBOSE")
+
+    def test_LOG_LEVEL環境変数がLoggingConfigに反映される(self, tmp_path: Path) -> None:
+        """LOG_LEVEL 環境変数が LoggingConfig.level に反映されることを確認する"""
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump({}, f)
+
+        with patch.dict(os.environ, {"LOG_LEVEL": "WARNING"}):
+            manager = ConfigManager(config_file)
+            log_config = manager.get_logging_config()
+            assert log_config.level == "WARNING"
+
+    def test_get_mcp_server_configsが空リストを返す(self, tmp_path: Path) -> None:
+        """mcp_servers が未設定の場合に空リストを返すことを確認する"""
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump({}, f)
+
+        manager = ConfigManager(config_file)
+        mcp_configs = manager.get_mcp_server_configs()
+        assert mcp_configs == []
+
+    def test_get_mcp_server_configsがMCPServerConfigリストを返す(
+        self, tmp_path: Path
+    ) -> None:
+        """get_mcp_server_configs()がMCPServerConfigのリストを返すことを確認する"""
+        from config.models import MCPServerConfig
+
+        config = {
+            "mcp_servers": [
+                {
+                    "name": "text_editor",
+                    "command": ["python", "-m", "mcp_server.text_editor"],
+                    "env": {"LOG_LEVEL": "INFO"},
+                },
+                {
+                    "name": "command_executor",
+                    "command": ["python", "-m", "mcp_server.command_executor"],
+                    "env": {},
+                },
+            ]
+        }
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump(config, f)
+
+        manager = ConfigManager(config_file)
+        mcp_configs = manager.get_mcp_server_configs()
+        assert len(mcp_configs) == 2
+        assert isinstance(mcp_configs[0], MCPServerConfig)
+        assert mcp_configs[0].name == "text_editor"
+        assert mcp_configs[0].command == ["python", "-m", "mcp_server.text_editor"]
+        assert mcp_configs[0].env == {"LOG_LEVEL": "INFO"}
+        assert mcp_configs[1].name == "command_executor"
+
+
+class TestConfigManagerValidationAdditional:
+    """バリデーションの追加テスト（JWT_SECRET 未設定など）"""
+
+    def test_JWT_SECRETが未設定の場合エラーが返る(self, tmp_path: Path) -> None:
+        """JWT_SECRET が未設定の場合バリデーションエラーが返ることを確認する"""
+        config = {
+            "gitlab": {"pat": "test-pat"},
+            "security": {
+                "encryption": {"key": "valid-32byte-encryption-key-here!"},
+                "jwt": {"secret": ""},
+            },
+        }
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump(config, f)
+
+        env_without_jwt = {k: v for k, v in os.environ.items() if k != "JWT_SECRET"}
+        with patch.dict(os.environ, env_without_jwt, clear=True):
+            manager = ConfigManager(config_file)
+            errors = manager.validate()
+            assert any("JWT_SECRET" in e for e in errors)
+
+    def test_全て必須項目が未設定の場合3件のエラーが返る(self, tmp_path: Path) -> None:
+        """ENCRYPTION_KEY・JWT_SECRET・GITLAB_PAT が全て未設定の場合3件のエラーが返ることを確認する"""
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump({}, f)
+
+        env_without_required = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("ENCRYPTION_KEY", "JWT_SECRET", "GITLAB_PAT")
+        }
+        with patch.dict(os.environ, env_without_required, clear=True):
+            manager = ConfigManager(config_file)
+            errors = manager.validate()
+            assert len(errors) == 3
+
+    def test_ENCRYPTION_KEYのみ設定された場合2件のエラーが返る(
+        self, tmp_path: Path
+    ) -> None:
+        """ENCRYPTION_KEY のみ設定された場合は2件のエラーが返ることを確認する"""
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump({}, f)
+
+        env_only_enc = {
+            k: v for k, v in os.environ.items() if k not in ("JWT_SECRET", "GITLAB_PAT")
+        }
+        env_only_enc["ENCRYPTION_KEY"] = "valid-key"
+        with patch.dict(os.environ, env_only_enc, clear=True):
+            manager = ConfigManager(config_file)
+            errors = manager.validate()
+            assert len(errors) == 2

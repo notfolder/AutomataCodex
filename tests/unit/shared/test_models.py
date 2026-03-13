@@ -156,7 +156,12 @@ class TestClassificationResult:
 
     def test_全task_typeが有効である(self) -> None:
         """全ての有効なtask_typeが受け付けられることを確認する"""
-        for task_type in ["code_generation", "bug_fix", "test_creation", "documentation"]:
+        for task_type in [
+            "code_generation",
+            "bug_fix",
+            "test_creation",
+            "documentation",
+        ]:
             result = ClassificationResult(
                 task_type=task_type,
                 confidence=0.8,
@@ -304,7 +309,9 @@ class TestGraphDefinition:
         assert node.type == "executor"
         assert node.executor_class == "UserResolverExecutor"
 
-    def test_get_nodeで存在しないノードはNoneを返す(self, sample_graph_data: dict) -> None:
+    def test_get_nodeで存在しないノードはNoneを返す(
+        self, sample_graph_data: dict
+    ) -> None:
         """get_node()で存在しないIDに対してNoneを返すことを確認する"""
         graph = GraphDefinition.from_dict(sample_graph_data)
         assert graph.get_node("nonexistent") is None
@@ -606,3 +613,291 @@ class TestPromptDefinition:
         params = prompt_def.get_effective_llm_params("test")
         # デフォルトがない場合は全フィールドがNone
         assert params.model is None
+
+
+# ========================================
+# SelectedImplementation・ExecutionReflectionResult の追加テスト
+# ========================================
+
+
+class TestSelectedImplementation:
+    """SelectedImplementationモデルのテスト"""
+
+    def test_正常なSelectedImplementationを作成できる(self) -> None:
+        """正常なSelectedImplementationインスタンスを作成できることを確認する"""
+        selected = SelectedImplementation(
+            environment_id="env-002",
+            branch_name="issue-42-standard",
+            selection_reason="テストカバレッジが最も高い実装を選択",
+            quality_score=0.92,
+            evaluation_details={"test_coverage": 0.95, "lint_errors": 0},
+        )
+        assert selected.environment_id == "env-002"
+        assert selected.branch_name == "issue-42-standard"
+        assert selected.quality_score == pytest.approx(0.92)
+        assert selected.evaluation_details["test_coverage"] == pytest.approx(0.95)
+
+    def test_quality_score範囲外でバリデーションエラー(self) -> None:
+        """quality_scoreが0.0〜1.0の範囲外でValidationErrorが発生することを確認する"""
+        with pytest.raises(ValidationError):
+            SelectedImplementation(
+                environment_id="env-001",
+                branch_name="branch",
+                selection_reason="test",
+                quality_score=1.5,  # 範囲外
+            )
+
+    def test_quality_scoreが0_0の境界値を受け付ける(self) -> None:
+        """quality_scoreが0.0（最小値）でも受け付けられることを確認する"""
+        selected = SelectedImplementation(
+            environment_id="env-001",
+            branch_name="branch",
+            selection_reason="テスト失敗",
+            quality_score=0.0,
+        )
+        assert selected.quality_score == 0.0
+
+    def test_quality_scoreが1_0の境界値を受け付ける(self) -> None:
+        """quality_scoreが1.0（最大値）でも受け付けられることを確認する"""
+        selected = SelectedImplementation(
+            environment_id="env-001",
+            branch_name="branch",
+            selection_reason="完璧な実装",
+            quality_score=1.0,
+        )
+        assert selected.quality_score == 1.0
+
+    def test_evaluation_detailsのデフォルトが空辞書(self) -> None:
+        """evaluation_detailsが省略された場合デフォルトで空辞書になることを確認する"""
+        selected = SelectedImplementation(
+            environment_id="env-001",
+            branch_name="branch",
+            selection_reason="テスト",
+            quality_score=0.8,
+        )
+        assert selected.evaluation_details == {}
+
+
+class TestExecutionReflectionResult:
+    """ExecutionReflectionResultモデルのテスト"""
+
+    def test_正常なExecutionReflectionResultを作成できる(self) -> None:
+        """正常なExecutionReflectionResultインスタンスを作成できることを確認する"""
+        result = ExecutionReflectionResult(
+            action="proceed",
+            status="success",
+            confidence=0.95,
+        )
+        assert result.action == "proceed"
+        assert result.status == "success"
+        assert result.confidence == pytest.approx(0.95)
+        assert result.issues == []
+        assert result.suggestions == []
+
+    def test_全ての有効なactionが受け付けられる(self) -> None:
+        """proceed・revise・abort の全てのactionが受け付けられることを確認する"""
+        for action in ["proceed", "revise", "abort"]:
+            result = ExecutionReflectionResult(
+                action=action,
+                status="success",
+                confidence=0.8,
+            )
+            assert result.action == action
+
+    def test_全ての有効なstatusが受け付けられる(self) -> None:
+        """success・needs_revision・failed の全てのstatusが受け付けられることを確認する"""
+        for status in ["success", "needs_revision", "failed"]:
+            result = ExecutionReflectionResult(
+                action="proceed",
+                status=status,
+                confidence=0.8,
+            )
+            assert result.status == status
+
+    def test_不正なactionでバリデーションエラー(self) -> None:
+        """無効なactionでValidationErrorが発生することを確認する"""
+        with pytest.raises(ValidationError):
+            ExecutionReflectionResult(
+                action="retry",  # 無効なaction（ReflectionResultのactionと混同しないこと）
+                status="success",
+                confidence=0.8,
+            )
+
+    def test_不正なstatusでバリデーションエラー(self) -> None:
+        """無効なstatusでValidationErrorが発生することを確認する"""
+        with pytest.raises(ValidationError):
+            ExecutionReflectionResult(
+                action="proceed",
+                status="unknown_status",
+                confidence=0.8,
+            )
+
+    def test_confidence範囲外でバリデーションエラー(self) -> None:
+        """confidenceが0.0〜1.0の範囲外でValidationErrorが発生することを確認する"""
+        with pytest.raises(ValidationError):
+            ExecutionReflectionResult(
+                action="proceed",
+                status="success",
+                confidence=1.1,  # 範囲外
+            )
+
+    def test_issues_とsuggestionsを含むExecutionReflectionResultを作成できる(
+        self,
+    ) -> None:
+        """issuesとsuggestionsを含むインスタンスを作成できることを確認する"""
+        result = ExecutionReflectionResult(
+            action="revise",
+            status="needs_revision",
+            issues=["テストが失敗しています", "型ヒントが不足しています"],
+            suggestions=["pytest を実行して修正箇所を確認してください"],
+            confidence=0.4,
+        )
+        assert len(result.issues) == 2
+        assert len(result.suggestions) == 1
+        assert result.action == "revise"
+
+
+# ========================================
+# NodeMetadata・GraphNodeDefinition の追加テスト
+# ========================================
+
+
+class TestNodeMetadataAdditional:
+    """NodeMetadataの追加テスト（カスタムフィールド・env_count制約など）"""
+
+    def test_NodeMetadataにカスタムフィールドを追加できる(self) -> None:
+        """extra='allow' により任意の追加フィールドを持てることを確認する"""
+        metadata = NodeMetadata(
+            check_comments_before=True,
+            comment_redirect_to="plan_reflection",
+            custom_field="custom_value",  # type: ignore[call-arg]
+            another_field=42,  # type: ignore[call-arg]
+        )
+        assert metadata.check_comments_before is True
+        assert metadata.comment_redirect_to == "plan_reflection"
+        # extra フィールドがモデルに保持されている
+        assert metadata.model_extra is not None
+        assert metadata.model_extra.get("custom_field") == "custom_value"
+        assert metadata.model_extra.get("another_field") == 42
+
+    def test_NodeMetadataのデフォルト値が正しい(self) -> None:
+        """NodeMetadataのデフォルト値を確認する"""
+        metadata = NodeMetadata()
+        assert metadata.check_comments_before is False
+        assert metadata.comment_redirect_to is None
+        assert metadata.preserve_context == []
+        assert metadata.max_retries == 3
+
+    def test_max_retriesの境界値0が受け付けられる(self) -> None:
+        """max_retriesが0（ge=0の最小値）でも受け付けられることを確認する"""
+        metadata = NodeMetadata(max_retries=0)
+        assert metadata.max_retries == 0
+
+    def test_max_retriesが負の値でバリデーションエラー(self) -> None:
+        """max_retriesが負の値でValidationErrorが発生することを確認する"""
+        with pytest.raises(ValidationError):
+            NodeMetadata(max_retries=-1)
+
+
+class TestGraphNodeDefinitionAdditional:
+    """GraphNodeDefinitionの追加テスト（env_ref・env_count・conditionノードなど）"""
+
+    def test_env_refを設定できる(self) -> None:
+        """env_ref フィールドを正しく設定できることを確認する"""
+        node = GraphNodeDefinition(
+            id="exec_node",
+            type="agent",
+            agent_definition_id="code_generation",
+            env_ref="1",
+        )
+        assert node.env_ref == "1"
+
+    def test_env_refがplanの場合を設定できる(self) -> None:
+        """env_ref='plan' を設定できることを確認する"""
+        node = GraphNodeDefinition(
+            id="plan_node",
+            type="executor",
+            executor_class="PlanEnvSetupExecutor",
+            env_ref="plan",
+        )
+        assert node.env_ref == "plan"
+
+    def test_env_countを設定できる(self) -> None:
+        """env_count フィールドを正しく設定できることを確認する"""
+        node = GraphNodeDefinition(
+            id="exec_env_setup",
+            type="executor",
+            executor_class="ExecEnvSetupExecutor",
+            env_count=3,
+        )
+        assert node.env_count == 3
+
+    def test_env_countが0以下でバリデーションエラー(self) -> None:
+        """env_countが0以下（ge=1に違反）でValidationErrorが発生することを確認する"""
+        with pytest.raises(ValidationError):
+            GraphNodeDefinition(
+                id="node",
+                type="executor",
+                executor_class="ExecEnvSetupExecutor",
+                env_count=0,  # ge=1 に違反
+            )
+
+    def test_conditionノードタイプを設定できる(self) -> None:
+        """type='condition' のノードを作成できることを確認する"""
+        node = GraphNodeDefinition(
+            id="branch_node",
+            type="condition",
+            label="分岐判定",
+        )
+        assert node.type == "condition"
+        assert node.agent_definition_id is None
+        assert node.executor_class is None
+
+    def test_不正なtypeでバリデーションエラー(self) -> None:
+        """無効なtypeでValidationErrorが発生することを確認する"""
+        with pytest.raises(ValidationError):
+            GraphNodeDefinition(
+                id="node",
+                type="invalid_type",
+            )
+
+    def test_conditionエッジを持つグラフを作成できる(self) -> None:
+        """condition付きエッジを含むGraphDefinitionを作成できることを確認する"""
+        data = {
+            "version": "1.0",
+            "name": "条件分岐テスト",
+            "entry_node": "start",
+            "nodes": [
+                {
+                    "id": "start",
+                    "type": "executor",
+                    "executor_class": "UserResolverExecutor",
+                },
+                {"id": "node_a", "type": "agent", "agent_definition_id": "agent_a"},
+                {"id": "node_b", "type": "agent", "agent_definition_id": "agent_b"},
+            ],
+            "edges": [
+                {
+                    "from": "start",
+                    "to": "node_a",
+                    "condition": "classification_result == 'code_generation'",
+                    "label": "コード生成へ",
+                },
+                {
+                    "from": "start",
+                    "to": "node_b",
+                    "condition": "classification_result == 'bug_fix'",
+                    "label": "バグ修正へ",
+                },
+                {"from": "node_a", "to": None},
+                {"from": "node_b", "to": None},
+            ],
+        }
+        graph = GraphDefinition.from_dict(data)
+        edges_from_start = graph.get_outgoing_edges("start")
+        assert len(edges_from_start) == 2
+        assert (
+            edges_from_start[0].condition
+            == "classification_result == 'code_generation'"
+        )
+        assert edges_from_start[1].condition == "classification_result == 'bug_fix'"
