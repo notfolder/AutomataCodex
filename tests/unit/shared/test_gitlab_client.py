@@ -17,6 +17,7 @@ import pytest
 
 from gitlab_client.gitlab_client import (
     GitlabClient,
+    _MAX_RETRIES,
     _exponential_backoff,
     _issue_from_obj,
     _mr_from_obj,
@@ -712,6 +713,41 @@ class TestGitlabClientErrorHandling:
 
         assert len(result) == 1
         assert mock_project.issues.list.call_count == 2
+
+    def test_409競合エラー時にリトライする(
+        self,
+        client: GitlabClient,
+        mock_project: MagicMock,
+    ) -> None:
+        """409競合エラー発生時にリトライして最終的に成功することを確認する（AUTOMATA_CODEX_SPEC § 7.4）"""
+        conflict_error = gitlab.exceptions.GitlabHttpError("Conflict", 409)
+        conflict_error.response_code = 409
+        issue_obj = _make_issue_obj()
+        # 1回目は409、2回目は成功
+        mock_project.issues.list.side_effect = [conflict_error, [issue_obj]]
+
+        with patch("gitlab_client.gitlab_client._exponential_backoff"):
+            result = client.list_issues(project_id=100)
+
+        assert len(result) == 1
+        assert mock_project.issues.list.call_count == 2
+
+    def test_409競合エラーが最大試行回数を超えた場合に例外が発生する(
+        self,
+        client: GitlabClient,
+        mock_project: MagicMock,
+    ) -> None:
+        """409エラーが最大試行回数を超えた場合に例外が伝播することを確認する"""
+        conflict_error = gitlab.exceptions.GitlabHttpError("Conflict", 409)
+        conflict_error.response_code = 409
+        mock_project.issues.list.side_effect = conflict_error
+
+        with patch("gitlab_client.gitlab_client._exponential_backoff"):
+            with pytest.raises(gitlab.exceptions.GitlabHttpError):
+                client.list_issues(project_id=100)
+
+        # 最大3回試行することを確認する
+        assert mock_project.issues.list.call_count == _MAX_RETRIES
 
 
 # ========================================
