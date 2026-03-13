@@ -135,6 +135,64 @@ class TestPostgreSqlChatHistoryProvider:
         # check_and_compress_asyncが呼ばれないことを確認する
         mock_compression.check_and_compress_async.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_save_messagesが全メッセージ既存の場合はINSERTしない(self) -> None:
+        """existing_countがlen(messages)と等しい場合にINSERTが実行されないことを確認する"""
+        # 既存メッセージが2件ある状態をモックする（messagesも2件）
+        pool = _make_mock_pool(fetchval_return=2)
+        mock_conn = pool.acquire.return_value.__aenter__.return_value
+
+        provider = PostgreSqlChatHistoryProvider(db_pool=pool)
+        messages = [
+            {"role": "user", "content": "既存メッセージ1"},
+            {"role": "assistant", "content": "既存メッセージ2"},
+        ]
+        await provider.save_messages("test-uuid", messages)
+
+        # 新規メッセージなしのためINSERTは実行されない
+        mock_conn.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_save_messagesがcompression_serviceの例外を無視する(self) -> None:
+        """check_and_compress_async()が例外を送出しても主処理が継続して例外が伝播しないことを確認する"""
+        pool = _make_mock_pool(fetchval_return=0)
+
+        mock_compression = MagicMock()
+        # 例外をスローするように設定する
+        mock_compression.check_and_compress_async = AsyncMock(
+            side_effect=RuntimeError("圧縮処理失敗")
+        )
+
+        provider = PostgreSqlChatHistoryProvider(
+            db_pool=pool, compression_service=mock_compression
+        )
+        messages = [{"role": "user", "content": "新規メッセージ"}]
+
+        # 例外が外部に伝播しないことを確認する
+        await provider.save_messages(
+            "test-uuid", messages, user_email="user@example.com"
+        )
+        # compression_serviceは呼ばれていることを確認する
+        mock_compression.check_and_compress_async.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_save_messagesにmodel_nameを渡した場合にtiktokenで計算する(
+        self,
+    ) -> None:
+        """model_name='gpt-4o-mini'をkwargsで渡した場合にINSERTが実行されることを確認する"""
+        pool = _make_mock_pool(fetchval_return=0)
+        mock_conn = pool.acquire.return_value.__aenter__.return_value
+
+        provider = PostgreSqlChatHistoryProvider(db_pool=pool)
+        messages = [{"role": "user", "content": "Hello world"}]
+        # model_nameを明示的に指定する
+        await provider.save_messages("test-uuid", messages, model_name="gpt-4o-mini")
+
+        # INSERTが実行されていることを確認する
+        assert mock_conn.execute.call_count >= 1
+        call_args_str = str(mock_conn.execute.call_args_list)
+        assert "INSERT" in call_args_str
+
 
 # ========================================
 # TestPlanningContextProvider
@@ -570,6 +628,46 @@ class TestContextCompressionService:
 
         # 圧縮率0.4がmin_compression_ratio=0.5未満なので圧縮が実行されTrueを返す
         assert result is True
+
+    @pytest.mark.asyncio
+    async def test_token_thresholdがNullの場合にmodel_recommendationsを参照する(
+        self,
+    ) -> None:
+        """user_configs.token_threshold=NULLの場合にconfig.model_recommendationsから
+        閾値を取得してトークン数と比較することを確認する"""
+        # token_threshold=NULLを返すユーザー設定を作成する
+        user_config_row = MagicMock()
+        user_config_row.__getitem__ = lambda self, key: {
+            "context_compression_enabled": True,
+            "token_threshold": None,  # NULLで model_recommendations 参照をトリガーする
+            "keep_recent_messages": 5,
+            "min_to_compress": 3,
+            "min_compression_ratio": 0.5,
+            "model_name": "gpt-4o",
+        }[key]
+
+        pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(return_value=user_config_row)
+        # total_tokens=500（model_recommendationsの80000よりずっと小さい値）
+        mock_conn.fetchval = AsyncMock(return_value=500)
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_config = MagicMock()
+        # model_recommendations["gpt-4o"] = 80000 がthresholdとして使われることを検証する
+        mock_config.model_recommendations = {"gpt-4o": 80000}
+        mock_config.default_token_threshold = 50000
+
+        service = ContextCompressionService(
+            db_pool=pool, llm_client=MagicMock(), config=mock_config
+        )
+        result = await service.check_and_compress_async(
+            task_uuid="test-uuid", user_email="test@example.com"
+        )
+
+        # total_tokens=500 <= threshold=80000 のため圧縮しない
+        assert result is False
 
 
 # ========================================

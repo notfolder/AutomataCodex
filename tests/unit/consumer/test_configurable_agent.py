@@ -221,6 +221,53 @@ class TestConfigurableAgentMethods:
             )
 
     @pytest.mark.asyncio
+    async def test_invoke_mcp_toolが登録済みツールを正常に呼び出す(
+        self,
+        agent_config: AgentNodeConfig,
+        mock_progress_reporter: MagicMock,
+    ) -> None:
+        """tool_callメソッドを持つagentに対して登録済みツールを呼び出せることを確認する"""
+        expected_result = {"output": "ツール実行結果"}
+        # tool_callを持つモックエージェントを作成する（configurable_agentのmock_agentはtool_callなし）
+        mock_agent_with_tool = MagicMock()
+        mock_agent_with_tool.tool_call = AsyncMock(return_value=expected_result)
+
+        agent = ConfigurableAgent(
+            config=agent_config,
+            agent=mock_agent_with_tool,
+            prompt_content="テスト",
+            progress_reporter=mock_progress_reporter,
+        )
+
+        # agent_configのmcp_servers=["text_editor"]に登録されているツールを呼び出す
+        result = await agent.invoke_mcp_tool("text_editor", {"path": "/workspace"})
+
+        assert result == expected_result
+        mock_agent_with_tool.tool_call.assert_called_once_with(
+            "text_editor", {"path": "/workspace"}
+        )
+
+    @pytest.mark.asyncio
+    async def test_invoke_mcp_toolでtool_callなしはNotImplementedErrorが発生する(
+        self,
+        agent_config: AgentNodeConfig,
+        mock_progress_reporter: MagicMock,
+    ) -> None:
+        """agentにtool_callメソッドがない場合にNotImplementedErrorが発生することを確認する"""
+        # tool_callを持たないモックエージェントを作成する（spec(MagicMock)はhasattrでFalseにならないためMagicMock()からspec削除）
+        mock_agent_no_tool = MagicMock(spec=[])  # 空のspecでhasattrがFalseになる
+
+        agent = ConfigurableAgent(
+            config=agent_config,
+            agent=mock_agent_no_tool,
+            prompt_content="テスト",
+            progress_reporter=mock_progress_reporter,
+        )
+
+        with pytest.raises(NotImplementedError):
+            await agent.invoke_mcp_tool("text_editor", {"path": "/workspace"})
+
+    @pytest.mark.asyncio
     async def test_store_resultがcontextにoutput_keysを保存する(
         self,
         configurable_agent: ConfigurableAgent,
