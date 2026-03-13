@@ -517,6 +517,81 @@ class GitlabClient:
         self._call_with_retry(note_obj.save)
         logger.debug("MRNote更新: mr_iid=%d, note_id=%d", mr_iid, note_id)
 
+    def get_merge_request(
+        self,
+        project_id: int,
+        mr_iid: int,
+    ) -> GitLabMergeRequest:
+        """
+        Merge Requestの詳細を取得する。
+
+        Args:
+            project_id: GitLabプロジェクトID
+            mr_iid: MR IID
+
+        Returns:
+            GitLabMergeRequestインスタンス
+
+        Raises:
+            gitlab.exceptions.GitlabHttpError: MRが存在しない場合（404）
+        """
+        project = self._get_project(project_id)
+        mr_obj = self._call_with_retry(project.mergerequests.get, mr_iid)
+        result = _mr_from_obj(mr_obj)
+        logger.debug("MR取得: project_id=%d, mr_iid=%d", project_id, mr_iid)
+        return result
+
+    def update_merge_request(
+        self,
+        project_id: int,
+        mr_iid: int,
+        title: str | None = None,
+        description: str | None = None,
+        labels: list[str] | None = None,
+        assignee_ids: list[int] | None = None,
+        state_event: str | None = None,
+    ) -> GitLabMergeRequest:
+        """
+        Merge Requestを更新する。
+
+        指定されたフィールドのみ更新し、Noneのフィールドは更新しない。
+
+        Args:
+            project_id: GitLabプロジェクトID
+            mr_iid: MR IID
+            title: MRタイトル（Noneの場合は更新しない）
+            description: MR説明文（Noneの場合は更新しない）
+            labels: ラベルリスト（Noneの場合は更新しない）
+            assignee_ids: アサイニーのユーザーIDリスト（Noneの場合は更新しない）
+            state_event: 状態変更イベント（'close' / 'reopen'、Noneの場合は更新しない）
+
+        Returns:
+            更新後のGitLabMergeRequestインスタンス
+
+        Raises:
+            gitlab.exceptions.GitlabHttpError: MRが存在しない場合（404）
+        """
+        project = self._get_project(project_id)
+        mr_obj = self._call_with_retry(project.mergerequests.get, mr_iid)
+        if title is not None:
+            mr_obj.title = title
+        if description is not None:
+            mr_obj.description = description
+        if labels is not None:
+            mr_obj.labels = labels
+        if assignee_ids is not None:
+            mr_obj.assignee_ids = assignee_ids
+        if state_event is not None:
+            mr_obj.state_event = state_event
+        self._call_with_retry(mr_obj.save)
+        result = _mr_from_obj(mr_obj)
+        logger.info(
+            "MR更新: project_id=%d, mr_iid=%d",
+            project_id,
+            mr_iid,
+        )
+        return result
+
     def merge_merge_request(
         self,
         project_id: int,

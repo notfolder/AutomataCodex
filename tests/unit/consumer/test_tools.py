@@ -157,6 +157,8 @@ class TestIssueToMRConverter:
         """convertが正しい順序でGitLabクライアントのメソッドを呼び、GitLabMergeRequestを返すことを確認する"""
         # create_merge_requestが作成したMRを返すようにモックする
         mock_gitlab_client.create_merge_request.return_value = mock_created_mr
+        # update_merge_requestが更新後のMRを返すようにモックする
+        mock_gitlab_client.update_merge_request.return_value = mock_created_mr
         # Issue Notesのモックを作成する（ユーザーコメント1件）
         user_note = MagicMock()
         user_note.system = False
@@ -196,10 +198,16 @@ class TestIssueToMRConverter:
         # ③ Issueのコメントが転記されることを確認する
         mock_gitlab_client.create_merge_request_note.assert_called()
 
-        # ④ IssueにMRリンクのコメントが投稿されることを確認する
+        # ④ update_merge_requestでIssueのラベル・アサイニーがMRにコピーされることを確認する
+        mock_gitlab_client.update_merge_request.assert_called_once()
+        update_mr_kwargs = mock_gitlab_client.update_merge_request.call_args.kwargs
+        assert update_mr_kwargs["project_id"] == 10
+        assert update_mr_kwargs["mr_iid"] == mock_created_mr.iid
+
+        # ⑤ IssueにMRリンクのコメントが投稿されることを確認する
         mock_gitlab_client.create_issue_note.assert_called_once()
 
-        # ⑤ IssueにDoneラベルが設定されることを確認する
+        # ⑥ IssueにDoneラベルが設定されることを確認する
         mock_gitlab_client.update_issue_labels.assert_called_once()
         update_labels_kwargs = mock_gitlab_client.update_issue_labels.call_args.kwargs
         assert "Done" in update_labels_kwargs["labels"]

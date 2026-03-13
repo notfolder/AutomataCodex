@@ -137,7 +137,7 @@ class TestUserResolverExecutor:
         mock_mr = MagicMock()
         mock_mr.iid = 5
         mock_mr.author = mock_author
-        mock_gitlab_client.list_merge_requests.return_value = [mock_mr]
+        mock_gitlab_client.get_merge_request.return_value = mock_mr
 
         # UserConfigClientのモックを作成する
         mock_user_config = {"language": "ja", "model": "gpt-4"}
@@ -154,8 +154,8 @@ class TestUserResolverExecutor:
         # user_emailとuser_configがコンテキストに保存されることを確認する
         assert mock_ctx._state["user_email"] == "user@example.com"
         assert mock_ctx._state["user_config"] == mock_user_config
-        mock_gitlab_client.list_merge_requests.assert_called_once_with(
-            project_id=10, state="opened"
+        mock_gitlab_client.get_merge_request.assert_called_once_with(
+            project_id=10, mr_iid=5
         )
         mock_user_config_client.get_user_config.assert_called_once_with("user@example.com")
 

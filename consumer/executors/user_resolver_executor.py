@@ -74,24 +74,11 @@ class UserResolverExecutor(BaseExecutor):
             "ユーザー情報を解決します: project_id=%s, mr_iid=%s", project_id, mr_iid
         )
 
-        # GitLabからMR情報を取得してauthorのemailを抽出する
-        merge_requests = self.gitlab_client.list_merge_requests(
+        # GitLabからMRの詳細を直接取得してauthorのemailを抽出する
+        target_mr = self.gitlab_client.get_merge_request(
             project_id=project_id,
-            state="opened",
+            mr_iid=mr_iid,
         )
-        # MR IIDが一致するMRを検索する
-        target_mr = next(
-            (mr for mr in merge_requests if mr.iid == mr_iid), None
-        )
-        if target_mr is None:
-            logger.error(
-                "MRが見つかりませんでした: project_id=%s, mr_iid=%s",
-                project_id,
-                mr_iid,
-            )
-            raise ValueError(
-                f"MRが見つかりませんでした: project_id={project_id}, mr_iid={mr_iid}"
-            )
 
         # MR authorのemailを取得する
         author = target_mr.author

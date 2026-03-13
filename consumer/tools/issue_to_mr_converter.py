@@ -123,10 +123,11 @@ class IssueToMRConverter:
         1. LLM でブランチ名を生成する
         2. ブランチを作成する
         3. 空コミットを作成する（create_commit が利用可能な場合のみ）
-        4. MR を作成する（Issue のラベル・アサイニーも設定）
+        4. MR を作成する（タイトル・説明のみ設定）
         5. Issue のコメントを MR に転記する
-        6. Issue にコメントで MR リンクを投稿する
-        7. Issue を Done ラベルでクローズ化する
+        6. Issue のラベル・アサイニーを MR にコピーする（update_merge_request）
+        7. Issue にコメントで MR リンクを投稿する
+        8. Issue を Done ラベルでクローズ化する
 
         Args:
             issue: 変換対象の GitLab Issue
@@ -168,9 +169,8 @@ class IssueToMRConverter:
         else:
             logger.info("create_commit が利用不可のため空コミット作成をスキップします")
 
-        # ④ MR 作成（Issue のラベルとアサイニーを設定する）
+        # ④ MR 作成（タイトルと説明のみ設定。ラベル・アサイニーは次のステップで設定する）
         mr_title = self.config.mr_title_template.format(issue_title=issue.title)
-        assignee_ids: list[int] = [u.id for u in issue.assignees if u.id]
 
         mr = self.gitlab_client.create_merge_request(
             project_id=project_id,
@@ -178,8 +178,6 @@ class IssueToMRConverter:
             target_branch=self.config.target_branch,
             title=mr_title,
             description=issue.description,
-            labels=issue.labels if issue.labels else None,
-            assignee_ids=assignee_ids if assignee_ids else None,
         )
         logger.info("MR作成完了: mr_iid=%d, title=%s", mr.iid, mr_title)
 
@@ -199,7 +197,25 @@ class IssueToMRConverter:
         except Exception as exc:
             logger.warning("Issueコメントの転記に失敗しました: %s", exc)
 
-        # ⑥ Issue に MR リンクのコメントを投稿する
+        # ⑥ Issueのラベル・アサイニーをMRにコピーする
+        try:
+            # u.id が None になりうる場合（GitLabUser.email同様にオプション）に備えてフィルタリングする
+            assignee_ids: list[int] = [u.id for u in issue.assignees if u.id is not None]
+            mr = self.gitlab_client.update_merge_request(
+                project_id=project_id,
+                mr_iid=mr.iid,
+                labels=issue.labels or None,
+                assignee_ids=assignee_ids or None,
+            )
+            logger.info(
+                "MRへのラベル・アサイニーコピー完了: labels=%s, assignee_ids=%s",
+                issue.labels,
+                assignee_ids,
+            )
+        except Exception as exc:
+            logger.warning("MRへのラベル・アサイニーコピーに失敗しました: %s", exc)
+
+        # ⑦ Issue に MR リンクのコメントを投稿する
         try:
             self.gitlab_client.create_issue_note(
                 project_id=project_id,
@@ -210,7 +226,7 @@ class IssueToMRConverter:
         except Exception as exc:
             logger.warning("IssueへのMRリンクコメント投稿に失敗しました: %s", exc)
 
-        # ⑦ Issue に Done ラベルを追加してクローズ化する
+        # ⑧ Issue に Done ラベルを追加してクローズ化する
         try:
             done_labels = list(issue.labels) + [self.config.done_label]
             self.gitlab_client.update_issue_labels(
