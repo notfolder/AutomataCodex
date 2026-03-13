@@ -356,7 +356,7 @@ MCPClientFactoryはMCPサーバーへの[MCPStdioTool](https://github.com/micros
 #### 2.4.2 保持データ
 
 - **mcp_server_configs: Dict[str, MCPServerConfig]** - サーバー設定辞書
-- **mcp_tool_registry: Dict[str, MCPStdioTool]** - 生成済みMCPStdioToolの管理辞書
+- **mcp_tool_registry: Dict[str, MCPStdioTool]** - 生成済みMCPStdioToolの管理辞書。キーは `"{server_name}:{env_id}"` 形式。同一サーバー名でも env_id が異なる場合は別エントリとして管理する
 
 #### 2.4.3 主要メソッド
 
@@ -365,7 +365,7 @@ MCPClientFactoryはMCPサーバーへの[MCPStdioTool](https://github.com/micros
 **処理フロー**:
 
 1. **既存ツール確認**
-   - mcp_tool_registryでserver_nameが登録済みか確認
+   - `"{server_name}:{env_id}"` をキーとしてmcp_tool_registryに登録済みか確認
    - 登録済みの場合: 既存のMCPStdioToolを返す
 
 2. **サーバー設定取得**
@@ -373,12 +373,12 @@ MCPClientFactoryはMCPサーバーへの[MCPStdioTool](https://github.com/micros
    - 存在しない場合: エラーをスロー
 
 3. **MCPStdioToolインスタンス生成**
-   - MCPServerConfigのcommandにenv_idを埋め込み、接続対象のDockerコンテナを特定する
+   - MCPServerConfigのenvにenv_idを `MCP_ENV_ID` キーで追加し、接続対象のDockerコンテナを特定する
    - commandとenvを使用してMCPStdioTool(command=..., args=..., env=...)を生成する
    - Agent FrameworkがAgent.run()呼び出し時にMCPStdioTool経由でMCPサーバーに自動接続する
 
 4. **ツール登録**
-   - mcp_tool_registryにserver_nameとmcp_toolを登録
+   - `"{server_name}:{env_id}"` をキーとしてmcp_tool_registryに登録する
 
 5. **MCPStdioTool返却**
 
