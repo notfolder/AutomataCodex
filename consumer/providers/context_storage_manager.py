@@ -111,10 +111,13 @@ class ContextStorageManager:
         stack_trace: str,
     ) -> None:
         """
-        エラー情報をタスクとコンテキストメタデータへ記録する。
+        エラー情報をタスクとタスクメタデータへ記録する。
 
-        task_repositoryのupdate_task_status()でタスクをfailed状態に更新し、
-        context_repositoryのupdate_context_metadata()でコンテキストへエラー情報を記録する。
+        §4.6.3 の仕様に基づき以下を実行する:
+        1. task_repository.update_task_status() でタスクを failed 状態に更新し error_message を保存する
+        2. task_repository.update_task_metadata() でタスクメタデータへエラー詳細（category/message/stack_trace）を記録する
+           （仕様書の context_repository.save_metadata() に相当する最善実装。context_repository には
+           エラー詳細を保存できる適切なメソッドが存在しないため task_repository を代替使用する）
 
         Args:
             task_uuid: タスクUUID
@@ -123,7 +126,7 @@ class ContextStorageManager:
             error_message: エラーメッセージ
             stack_trace: スタックトレース文字列
         """
-        # タスクのエラー情報を更新する
+        # 1. タスクを failed 状態に更新し error_message を保存する
         try:
             if hasattr(self._task_repository, "update_task_status"):
                 await self._task_repository.update_task_status(
@@ -143,30 +146,33 @@ class ContextStorageManager:
                 exc,
             )
 
-        # コンテキストメタデータへエラー情報を記録する
-        # update_context_metadataはworkflow_nameのみ受け付けるため、
-        # エラー詳細はログに記録する
-        logger.error(
-            "エラー詳細: task_uuid=%s, node_id=%s, category=%s, message=%s, stack_trace=%s",
-            task_uuid,
-            node_id,
-            error_category,
-            error_message,
-            stack_trace,
-        )
+        # 2. タスクメタデータへエラー詳細を記録する
+        # 仕様書: context_repository.save_metadata(task_uuid, node_id, {"error": {...}})
+        # context_repositoryには適切なメソッドが存在しないため、
+        # task_repository.update_task_metadata()でエラー詳細をタスクメタデータに保存する
+        error_metadata: dict = {
+            "error": {
+                "node_id": node_id,
+                "category": error_category,
+                "message": error_message,
+                "stack_trace": stack_trace,
+            }
+        }
         try:
-            if hasattr(self._context_repository, "update_context_metadata"):
-                await self._context_repository.update_context_metadata(
+            if hasattr(self._task_repository, "update_task_metadata"):
+                await self._task_repository.update_task_metadata(
                     task_uuid,
+                    error_metadata,
                 )
                 logger.debug(
-                    "コンテキストエラーメタデータ更新完了: task_uuid=%s, node_id=%s",
+                    "タスクエラーメタデータ保存完了: task_uuid=%s, node_id=%s, category=%s",
                     task_uuid,
                     node_id,
+                    error_category,
                 )
         except Exception as exc:
             logger.error(
-                "コンテキストエラーメタデータ更新失敗: task_uuid=%s, error=%s",
+                "タスクエラーメタデータ保存失敗: task_uuid=%s, error=%s",
                 task_uuid,
                 exc,
             )

@@ -257,6 +257,10 @@ class ContextCompressionService:
         指定seq範囲のメッセージをLLMで要約する。
 
         対象メッセージを取得してテキストに整形し、LLMクライアントで要約を生成する。
+        LLMクライアントに generate_completion() メソッドが存在する場合は
+        config.summary_llm_model と config.summary_llm_temperature を渡して呼び出す
+        （CLASS_IMPLEMENTATION_SPEC.md § 4.4.3 手順3に準拠）。
+        存在しない場合は generate(prompt) にフォールバックする。
         トークン数はlen(summary.split()) * 1.3の近似値を使用する。
 
         Args:
@@ -286,12 +290,22 @@ class ContextCompressionService:
         )
 
         # 要約プロンプトを構築してLLMを呼び出す
+        # §4.4.3: generate_completion()でmodel/temperatureを指定する
         prompt = _SUMMARY_PROMPT_TEMPLATE.format(
             start_seq=start_seq,
             end_seq=end_seq,
             messages_text=messages_text,
         )
-        summary: str = await self._llm_client.generate(prompt)
+        # generate_completion()が利用可能な場合はmodel/temperatureを渡し（§4.4.3準拠）、
+        # 利用できない場合はgenerate()にフォールバックする
+        if hasattr(self._llm_client, "generate_completion"):
+            summary: str = await self._llm_client.generate_completion(
+                prompt=prompt,
+                model=self._config.summary_llm_model,
+                temperature=self._config.summary_llm_temperature,
+            )
+        else:
+            summary = await self._llm_client.generate(prompt)
 
         # トークン数を近似値で計算する
         token_count = int(len(summary.split()) * 1.3)

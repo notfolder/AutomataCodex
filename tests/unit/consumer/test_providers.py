@@ -614,12 +614,13 @@ class TestContextCompressionServiceMethods:
 
     @pytest.mark.asyncio
     async def test_compress_messages_asyncが要約テキストを返す(self) -> None:
-        """compress_messages_async()がLLMを呼び出し(summary, token_count)タプルを返すことを確認する"""
+        """compress_messages_async()がLLMを呼び出し(summary, token_count)タプルを返すことを確認する（generate()フォールバック）"""
         mock_row = MagicMock()
         mock_row.__getitem__ = lambda self, key: {"role": "user", "content": "テストコンテンツ"}[key]
         pool = _make_mock_pool(fetch_return=[mock_row])
 
-        mock_llm = MagicMock()
+        # generate_completionを持たないLLMクライアント（フォールバック確認）
+        mock_llm = MagicMock(spec=["generate"])
         mock_llm.generate = AsyncMock(return_value="要約テキスト")
         mock_config = MagicMock()
 
@@ -637,6 +638,41 @@ class TestContextCompressionServiceMethods:
         assert isinstance(token_count, int)
         assert token_count > 0
         mock_llm.generate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_compress_messages_asyncがgenerate_completionを優先呼び出しする(self) -> None:
+        """
+        generate_completion()が存在する場合はmodel/temperatureを指定して呼び出すことを確認する。
+        CLASS_IMPLEMENTATION_SPEC.md § 4.4.3 手順3に準拠。
+        """
+        from shared.config.models import ContextCompressionConfig
+
+        mock_row = MagicMock()
+        mock_row.__getitem__ = lambda self, key: {"role": "user", "content": "テストコンテンツ"}[key]
+        pool = _make_mock_pool(fetch_return=[mock_row])
+
+        # generate_completionを持つLLMクライアント
+        mock_llm = MagicMock()
+        mock_llm.generate_completion = AsyncMock(return_value="generate_completion要約")
+
+        config = ContextCompressionConfig()  # summary_llm_model="gpt-4o-mini", summary_llm_temperature=0.3
+
+        service = ContextCompressionService(
+            db_pool=pool,
+            llm_client=mock_llm,
+            config=config,
+        )
+
+        summary, token_count = await service.compress_messages_async(
+            task_uuid="test-uuid", start_seq=0, end_seq=5
+        )
+
+        assert summary == "generate_completion要約"
+        # generate_completion()がmodel/temperatureを指定して呼ばれることを確認する
+        mock_llm.generate_completion.assert_called_once()
+        call_kwargs = mock_llm.generate_completion.call_args.kwargs
+        assert call_kwargs.get("model") == "gpt-4o-mini"
+        assert call_kwargs.get("temperature") == 0.3
 
     @pytest.mark.asyncio
     async def test_replace_with_summary_asyncがトランザクションを実行する(self) -> None:
@@ -686,9 +722,10 @@ class TestContextStorageManagerSaveError:
 
     @pytest.mark.asyncio
     async def test_save_errorがtask_repositoryを呼び出す(self) -> None:
-        """save_error()がtask_repository.update_task_status()を呼び出すことを確認する"""
+        """save_error()がtask_repository.update_task_status()とupdate_task_metadata()を呼び出すことを確認する"""
         mock_task_repo = AsyncMock()
         mock_task_repo.update_task_status = AsyncMock()
+        mock_task_repo.update_task_metadata = AsyncMock()
 
         manager = ContextStorageManager(
             chat_history_provider=MagicMock(),
@@ -705,11 +742,21 @@ class TestContextStorageManagerSaveError:
             stack_trace="Traceback ...",
         )
 
+        # update_task_status()がfailed状態でerror_messageを渡して呼ばれることを確認する
         mock_task_repo.update_task_status.assert_called_once_with(
             "test-uuid",
             "failed",
             error_message="テストエラー",
         )
+        # update_task_metadata()がエラー詳細（category/message/stack_trace）を含んで呼ばれることを確認する
+        mock_task_repo.update_task_metadata.assert_called_once()
+        call_args = mock_task_repo.update_task_metadata.call_args
+        metadata_arg = call_args.args[1] if len(call_args.args) > 1 else call_args.kwargs.get("metadata", {})
+        assert "error" in metadata_arg
+        assert metadata_arg["error"]["category"] == "transient"
+        assert metadata_arg["error"]["message"] == "テストエラー"
+        assert metadata_arg["error"]["stack_trace"] == "Traceback ..."
+        assert metadata_arg["error"]["node_id"] == "node1"
 
     @pytest.mark.asyncio
     async def test_save_errorがtask_repositoryなしでも例外を出さない(self) -> None:
