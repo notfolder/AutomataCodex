@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from consumer.analysis.environment_analyzer import EnvironmentAnalyzer
+
+if TYPE_CHECKING:
+    from shared.models.task import Task
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,8 @@ class PrePlanningManager:
         config: 計画前情報収集の設定辞書
         llm_client: LLMクライアント
         mcp_clients: MCPツールクライアントの辞書
+        task: 処理対象のタスク（省略可能）
+        progress_manager: 進捗報告マネージャー（省略可能）
         understanding_result: 依頼内容の理解結果
         environment_info: 収集した環境情報
         selected_environment: LLMが選択した実行環境名
@@ -46,6 +51,8 @@ class PrePlanningManager:
         config: dict[str, Any],
         llm_client: Any,
         mcp_clients: dict[str, Any],
+        task: "Task | None" = None,
+        progress_manager: Any = None,
     ) -> None:
         """
         PrePlanningManagerを初期化する。
@@ -54,10 +61,16 @@ class PrePlanningManager:
             config: 計画前情報収集の設定辞書
             llm_client: LLMクライアント
             mcp_clients: MCPツールクライアントの辞書
+            task: 処理対象のタスク（省略可能）
+            progress_manager: 進捗報告マネージャー（省略可能）
         """
         self.config = config
         self.llm_client = llm_client
         self.mcp_clients = mcp_clients
+        # §8.2 保持データ: 処理対象のタスク
+        self.task: "Task | None" = task
+        # §8.2 保持データ: 進捗報告マネージャー
+        self.progress_manager: Any = progress_manager
 
         # 各フェーズの実行結果を保持するフィールド
         self.understanding_result: dict[str, Any] | None = None
@@ -82,6 +95,9 @@ class PrePlanningManager:
         タスク理解 → 環境情報収集 → 実行環境選択の順に処理を行い、
         全結果をまとめた辞書を返す。
 
+        progress_managerが設定されている場合は開始・完了時に
+        add_history_entry()を呼び出して進捗を通知する（§8.3 手順1・5）。
+
         CLASS_IMPLEMENTATION_SPEC.md § 8.3 に準拠する。
 
         Args:
@@ -100,6 +116,20 @@ class PrePlanningManager:
         logger.info(
             "計画前情報収集フェーズを開始します: task_uuid=%s", task_uuid
         )
+
+        # §8.3 手順1: 開始通知（progress_managerが設定されている場合）
+        if self.progress_manager is not None:
+            try:
+                await self.progress_manager.add_history_entry(
+                    task_uuid=task_uuid,
+                    phase="pre_planning",
+                    status="start",
+                    message="計画前情報収集フェーズを開始します",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "progress_manager.add_history_entry()の呼び出しに失敗しました（開始通知）: %s", exc
+                )
 
         # plan環境IDを保存する
         self.plan_environment_id = plan_environment_id
@@ -122,6 +152,20 @@ class PrePlanningManager:
             "計画前情報収集フェーズが完了しました: selected_environment=%s",
             self.selected_environment,
         )
+
+        # §8.3 手順5: 完了通知（progress_managerが設定されている場合）
+        if self.progress_manager is not None:
+            try:
+                await self.progress_manager.add_history_entry(
+                    task_uuid=task_uuid,
+                    phase="pre_planning",
+                    status="complete",
+                    message=f"計画前情報収集フェーズが完了しました: selected_environment={self.selected_environment}",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "progress_manager.add_history_entry()の呼び出しに失敗しました（完了通知）: %s", exc
+                )
 
         return {
             "understanding_result": self.understanding_result,

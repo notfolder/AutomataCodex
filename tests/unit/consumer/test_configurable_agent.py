@@ -319,3 +319,48 @@ class TestConfigurableAgentContextMethods:
         result = await agent.get_chat_history("test-session-id")
 
         assert result == []
+
+
+# ========================================
+# TestConfigurableAgentTools
+# ========================================
+
+
+class TestConfigurableAgentTools:
+    """ConfigurableAgentのtoolsフィールドのテスト（§1.3 保持データ）"""
+
+    def test_toolsフィールドがデフォルトで空リストを返す(
+        self,
+        agent_config: AgentNodeConfig,
+        mock_agent: MagicMock,
+        mock_progress_reporter: MagicMock,
+    ) -> None:
+        """toolsを指定しない場合はデフォルトで空リストが設定されることを確認する"""
+        agent = ConfigurableAgent(
+            config=agent_config,
+            agent=mock_agent,
+            prompt_content="テスト",
+            progress_reporter=mock_progress_reporter,
+        )
+        assert agent.tools == []
+
+    def test_toolsフィールドに指定ツールが設定される(
+        self,
+        agent_config: AgentNodeConfig,
+        mock_agent: MagicMock,
+        mock_progress_reporter: MagicMock,
+    ) -> None:
+        """tools引数に指定したリストがself.toolsに保持されることを確認する"""
+        mock_tool_1 = MagicMock(name="MCPStdioTool")
+        mock_tool_2 = MagicMock(name="FunctionTool")
+        tools = [mock_tool_1, mock_tool_2]
+
+        agent = ConfigurableAgent(
+            config=agent_config,
+            agent=mock_agent,
+            prompt_content="テスト",
+            progress_reporter=mock_progress_reporter,
+            tools=tools,
+        )
+        assert agent.tools == tools
+        assert len(agent.tools) == 2

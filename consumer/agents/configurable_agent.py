@@ -100,6 +100,7 @@ class ConfigurableAgent(BaseExecutor):
     Attributes:
         config: エージェントノード設定
         agent: LLM エージェントインスタンス（Agent Framework 統合用）
+        tools: エージェントが使用するツールリスト（MCPStdioTool / FunctionTool の結合リスト）
         prompt_content: プロンプト定義のシステムプロンプト文字列
         progress_reporter: 進捗報告インスタンス
         environment_id: ビルド時に確定した Docker 環境 ID（省略可能）
@@ -112,6 +113,7 @@ class ConfigurableAgent(BaseExecutor):
         prompt_content: str,
         progress_reporter: Any,
         environment_id: str | None = None,
+        tools: list[Any] | None = None,
     ) -> None:
         """
         ConfigurableAgent を初期化する。
@@ -122,9 +124,12 @@ class ConfigurableAgent(BaseExecutor):
             prompt_content: プロンプト定義のシステムプロンプト文字列
             progress_reporter: ProgressReporter インスタンス（Any 型）
             environment_id: Docker 環境 ID（省略可能）
+            tools: エージェントが使用するツールリスト（MCPStdioTool / FunctionTool 等、省略時は空リスト）
         """
         self.config: AgentNodeConfig = config
         self.agent: Any = agent
+        # §1.3 保持データ: mcp_serversの各サーバーを解決して生成したMCPStdioTool / FunctionToolの結合リスト
+        self.tools: list[Any] = tools if tools is not None else []
         self.prompt_content: str = prompt_content
         self.progress_reporter: Any = progress_reporter
         self.environment_id: str | None = environment_id
