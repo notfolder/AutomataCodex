@@ -354,6 +354,28 @@ class TestContextCompressionService:
         assert result is False
 
     @pytest.mark.asyncio
+    async def test_ユーザー設定が存在しない場合はFalseを返す(self) -> None:
+        """user_configsテーブルにユーザーが存在しない場合にFalseを返すことを確認する"""
+        pool = MagicMock()
+        mock_conn = AsyncMock()
+        # fetchrowがNoneを返すことでユーザー設定未登録状態を再現する
+        mock_conn.fetchrow = AsyncMock(return_value=None)
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_config = MagicMock()
+        service = ContextCompressionService(
+            db_pool=pool,
+            llm_client=MagicMock(),
+            config=mock_config,
+        )
+        result = await service.check_and_compress_async(
+            task_uuid="test-uuid", user_email="unknown@example.com"
+        )
+
+        assert result is False
+
+    @pytest.mark.asyncio
     async def test_トークン数が閾値以下の場合は圧縮しない(self) -> None:
         """total_tokens <= token_thresholdの場合にFalseを返すことを確認する"""
         # 圧縮有効だがトークン数が少ない状態を作成する
@@ -392,6 +414,153 @@ class TestContextCompressionService:
 
         # トークン数が閾値以下なので圧縮しない
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_圧縮対象が最小件数未満はFalseを返す(self) -> None:
+        """compress_seqsの件数がmin_to_compress未満の場合にFalseを返すことを確認する"""
+        # 圧縮有効・閾値超過だが圧縮対象メッセージが2件でmin_to_compress=3の状態を作成する
+        user_config_row = MagicMock()
+        user_config_row.__getitem__ = lambda self, key: {
+            "context_compression_enabled": True,
+            "token_threshold": 10000,
+            "keep_recent_messages": 5,
+            "min_to_compress": 3,
+            "min_compression_ratio": 0.5,
+            "model_name": "gpt-4o",
+        }[key]
+
+        # 圧縮対象候補のseqRowを2件のみ用意する
+        row1 = MagicMock()
+        row1.__getitem__ = lambda self, key: {"seq": 1, "role": "user"}[key]
+        row2 = MagicMock()
+        row2.__getitem__ = lambda self, key: {"seq": 2, "role": "assistant"}[key]
+
+        pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(return_value=user_config_row)
+        # total_tokens=50000(閾値超過)
+        mock_conn.fetchval = AsyncMock(return_value=50000)
+        # fetch呼び出し順: recent_rows=[], system_rows=[], candidate_rows=[row1, row2]
+        mock_conn.fetch = AsyncMock(side_effect=[[], [], [row1, row2]])
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_config = MagicMock()
+        service = ContextCompressionService(
+            db_pool=pool,
+            llm_client=MagicMock(),
+            config=mock_config,
+        )
+        result = await service.check_and_compress_async(
+            task_uuid="test-uuid", user_email="test@example.com"
+        )
+
+        # 圧縮対象2件 < min_to_compress=3 のため圧縮しない
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_圧縮率不十分の場合はFalseを返す(self) -> None:
+        """LLM要約後の圧縮率がmin_compression_ratio以上の場合は圧縮をスキップしてFalseを返すことを確認する"""
+        user_config_row = MagicMock()
+        user_config_row.__getitem__ = lambda self, key: {
+            "context_compression_enabled": True,
+            "token_threshold": 10000,
+            "keep_recent_messages": 5,
+            "min_to_compress": 2,
+            "min_compression_ratio": 0.5,
+            "model_name": "gpt-4o",
+        }[key]
+
+        # 圧縮対象候補のseqRowを3件用意する
+        row1 = MagicMock()
+        row1.__getitem__ = lambda self, key: {"seq": 1, "role": "user"}[key]
+        row2 = MagicMock()
+        row2.__getitem__ = lambda self, key: {"seq": 2, "role": "assistant"}[key]
+        row3 = MagicMock()
+        row3.__getitem__ = lambda self, key: {"seq": 3, "role": "user"}[key]
+
+        pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(return_value=user_config_row)
+        # fetchval呼び出し順: total_tokens=50000, original_tokens=200
+        mock_conn.fetchval = AsyncMock(side_effect=[50000, 200])
+        # fetch呼び出し順: recent_rows=[], system_rows=[], candidate_rows=[row1, row2, row3]
+        mock_conn.fetch = AsyncMock(side_effect=[[], [], [row1, row2, row3]])
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_config = MagicMock()
+        service = ContextCompressionService(
+            db_pool=pool,
+            llm_client=MagicMock(),
+            config=mock_config,
+        )
+
+        # compress_messages_asyncをモック化し、圧縮後120トークン（ratio=120/200=0.6≥0.5）を返す
+        with patch.object(
+            service, "compress_messages_async", new=AsyncMock(return_value=("要約テキスト", 120))
+        ):
+            result = await service.check_and_compress_async(
+                task_uuid="test-uuid", user_email="test@example.com"
+            )
+
+        # 圧縮率0.6がmin_compression_ratio=0.5以上なので圧縮をスキップする
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_正常に圧縮が実行されTrueを返す(self) -> None:
+        """トークン閾値超過かつ圧縮率が十分な場合にcompressが実行されTrueを返すことを確認する"""
+        user_config_row = MagicMock()
+        user_config_row.__getitem__ = lambda self, key: {
+            "context_compression_enabled": True,
+            "token_threshold": 10000,
+            "keep_recent_messages": 5,
+            "min_to_compress": 2,
+            "min_compression_ratio": 0.5,
+            "model_name": "gpt-4o",
+        }[key]
+
+        # 圧縮対象候補のseqRowを3件用意する
+        row1 = MagicMock()
+        row1.__getitem__ = lambda self, key: {"seq": 1, "role": "user"}[key]
+        row2 = MagicMock()
+        row2.__getitem__ = lambda self, key: {"seq": 2, "role": "assistant"}[key]
+        row3 = MagicMock()
+        row3.__getitem__ = lambda self, key: {"seq": 3, "role": "user"}[key]
+
+        pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(return_value=user_config_row)
+        # fetchval呼び出し順: total_tokens=50000, original_tokens=200
+        mock_conn.fetchval = AsyncMock(side_effect=[50000, 200])
+        # fetch呼び出し順: recent_rows=[], system_rows=[], candidate_rows=[row1, row2, row3]
+        mock_conn.fetch = AsyncMock(side_effect=[[], [], [row1, row2, row3]])
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_config = MagicMock()
+        service = ContextCompressionService(
+            db_pool=pool,
+            llm_client=MagicMock(),
+            config=mock_config,
+        )
+
+        # compress_messages_asyncをモック化し、圧縮後80トークン（ratio=80/200=0.4<0.5）を返す
+        # replace_with_summary_asyncもモック化して副作用不要にする
+        with (
+            patch.object(
+                service, "compress_messages_async", new=AsyncMock(return_value=("要約テキスト", 80))
+            ),
+            patch.object(
+                service, "replace_with_summary_async", new=AsyncMock(return_value=None)
+            ),
+        ):
+            result = await service.check_and_compress_async(
+                task_uuid="test-uuid", user_email="test@example.com"
+            )
+
+        # 圧縮率0.4がmin_compression_ratio=0.5未満なので圧縮が実行されTrueを返す
+        assert result is True
 
 
 # ========================================

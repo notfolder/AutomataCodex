@@ -297,6 +297,34 @@ class TestConfigurableAgentContextMethods:
         mock_history_provider.get_messages.assert_called_once_with("test-session-id")
 
     @pytest.mark.asyncio
+    async def test_get_chat_historyがagent_history_providerにフォールバックする(
+        self,
+        agent_config: AgentNodeConfig,
+    ) -> None:
+        """progress_reporter.chat_history_providerがNoneの場合、agent.history_providerを使用することを確認する"""
+        mock_messages = [{"role": "assistant", "content": "フォールバック応答"}]
+        mock_history_provider = MagicMock()
+        mock_history_provider.get_messages = AsyncMock(return_value=mock_messages)
+
+        # reporter側はproviderなし、agent側がhistory_providerを持つ状態を作成する
+        mock_reporter = MagicMock()
+        mock_reporter.chat_history_provider = None
+        mock_agent_with_provider = MagicMock()
+        mock_agent_with_provider.history_provider = mock_history_provider
+
+        agent = ConfigurableAgent(
+            config=agent_config,
+            agent=mock_agent_with_provider,
+            prompt_content="テスト",
+            progress_reporter=mock_reporter,
+        )
+
+        result = await agent.get_chat_history("test-session-id")
+
+        assert result == mock_messages
+        mock_history_provider.get_messages.assert_called_once_with("test-session-id")
+
+    @pytest.mark.asyncio
     async def test_get_chat_historyがproviderない場合は空リストを返す(
         self,
         agent_config: AgentNodeConfig,
@@ -409,3 +437,84 @@ class TestAgentNodeConfigEnvRef:
                 env_ref=ref,
             )
             assert config.env_ref == ref
+
+
+# ========================================
+# TestReportProgressNodeId
+# ========================================
+
+
+class TestReportProgressNodeId:
+    """report_progress()のnode_idフォールバック動作のテスト（§1.4 report_progress）"""
+
+    @pytest.mark.asyncio
+    async def test_report_progressがnode_idを優先して使用する(
+        self,
+        mock_ctx: _ConcreteWorkflowContext,
+    ) -> None:
+        """config.node_idが設定されている場合はnode_idをprogress_reporterに渡すことを確認する"""
+        # graph構築時にnode_idが設定された状態を再現する
+        config = AgentNodeConfig(
+            id="agent-def-id",
+            node_id="graph-node-id",
+            role="planning",
+            input_keys=["task_description"],
+            output_keys=["result"],
+            prompt_id="prompt-1",
+        )
+        mock_agent = MagicMock()
+        mock_agent.run = AsyncMock(return_value="応答テキスト")
+        mock_progress_reporter = MagicMock()
+        mock_progress_reporter.report_progress = AsyncMock()
+
+        agent = ConfigurableAgent(
+            config=config,
+            agent=mock_agent,
+            prompt_content="タスク: {task_description}",
+            progress_reporter=mock_progress_reporter,
+        )
+
+        await agent.handle(msg={}, ctx=mock_ctx)
+
+        calls = mock_progress_reporter.report_progress.call_args_list
+        assert len(calls) >= 1
+        # 全ての呼び出しでnode_id="graph-node-id"が使用されることを確認する
+        for call in calls:
+            assert call.kwargs["node_id"] == "graph-node-id"
+            assert call.kwargs["agent_definition_id"] == "agent-def-id"
+
+    @pytest.mark.asyncio
+    async def test_report_progressがnode_id未設定時はidをフォールバック(
+        self,
+        mock_ctx: _ConcreteWorkflowContext,
+    ) -> None:
+        """config.node_idがNoneの場合はconfig.idをnode_idとして使用することを確認する"""
+        # node_idが設定されていない（デフォルトNone）状態を再現する
+        config = AgentNodeConfig(
+            id="agent-def-id",
+            node_id=None,
+            role="planning",
+            input_keys=["task_description"],
+            output_keys=["result"],
+            prompt_id="prompt-1",
+        )
+        mock_agent = MagicMock()
+        mock_agent.run = AsyncMock(return_value="応答テキスト")
+        mock_progress_reporter = MagicMock()
+        mock_progress_reporter.report_progress = AsyncMock()
+
+        agent = ConfigurableAgent(
+            config=config,
+            agent=mock_agent,
+            prompt_content="タスク: {task_description}",
+            progress_reporter=mock_progress_reporter,
+        )
+
+        await agent.handle(msg={}, ctx=mock_ctx)
+
+        calls = mock_progress_reporter.report_progress.call_args_list
+        assert len(calls) >= 1
+        # node_id未設定のため、config.idをnode_idとして代替使用することを確認する
+        for call in calls:
+            assert call.kwargs["node_id"] == "agent-def-id"
+            assert call.kwargs["agent_definition_id"] == "agent-def-id"
