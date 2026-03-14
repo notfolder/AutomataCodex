@@ -366,6 +366,457 @@ class TestCreateUser:
 
 
 # =====================================================================
+# ユーザー設定取得エンドポイントのテスト
+# =====================================================================
+
+
+class TestGetUserConfig:
+    """GET /api/v1/config/{email} のテスト"""
+
+    def test_ユーザーは自分の設定を取得できること(self):
+        """一般ユーザーが自分自身の設定を取得できることを検証する"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_by_email.return_value = {
+            "email": "user@example.com",
+            "username": "Test User",
+            "role": "user",
+            "is_active": True,
+        }
+        user_repo.get_user_config.return_value = {
+            "user_email": "user@example.com",
+            "llm_provider": "openai",
+            "api_key_encrypted": None,
+            "model_name": "gpt-4o",
+            "temperature": 0.2,
+            "max_tokens": 4096,
+        }
+        user_repo.get_decrypted_api_key.return_value = None
+        app = _make_test_app(user_repo=user_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.get("/api/v1/config/user@example.com", headers=_user_headers())
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["user_email"] == "user@example.com"
+        assert "api_key" in data
+        assert "api_key_encrypted" not in data
+
+    def test_一般ユーザーは他ユーザーの設定を取得できないこと(self):
+        """一般ユーザーが他ユーザーの設定を取得しようとすると403が返ることを検証する"""
+        app = _make_test_app()
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.get("/api/v1/config/other@example.com", headers=_user_headers())
+
+        assert resp.status_code == 403
+
+    def test_存在しないユーザーで404が返ること(self):
+        """存在しないユーザーの設定を取得しようとすると404が返ることを検証する"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_by_email.return_value = None
+        app = _make_test_app(user_repo=user_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.get("/api/v1/config/admin@example.com", headers=_admin_headers())
+
+        assert resp.status_code == 404
+
+    def test_管理者は任意ユーザーの設定を取得できること(self):
+        """管理者が任意のユーザーの設定を取得できることを検証する"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_by_email.return_value = {
+            "email": "user@example.com",
+            "role": "user",
+            "is_active": True,
+        }
+        user_repo.get_user_config.return_value = {
+            "user_email": "user@example.com",
+            "llm_provider": "openai",
+            "api_key_encrypted": "enc_value",
+            "model_name": "gpt-4o",
+        }
+        user_repo.get_decrypted_api_key.return_value = "sk-decrypted"
+        app = _make_test_app(user_repo=user_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.get("/api/v1/config/user@example.com", headers=_admin_headers())
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["api_key"] == "sk-decrypted"
+
+
+# =====================================================================
+# ユーザー更新エンドポイントのテスト
+# =====================================================================
+
+
+class TestUpdateUser:
+    """PUT /api/v1/users/{email} のテスト"""
+
+    def test_管理者はユーザー情報を更新できること(self):
+        """管理者が他ユーザーのrole/is_activeを変更できることを検証する"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_by_email.return_value = {
+            "email": "user@example.com",
+            "username": "Old Name",
+            "role": "user",
+            "is_active": True,
+        }
+        user_repo.update_user.return_value = {
+            "email": "user@example.com",
+            "username": "New Name",
+            "role": "admin",
+            "is_active": True,
+        }
+        app = _make_test_app(user_repo=user_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.put(
+                "/api/v1/users/user@example.com",
+                headers=_admin_headers(),
+                json={"username": "New Name", "role": "admin"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["role"] == "admin"
+
+    def test_一般ユーザーは他ユーザーの設定を変更できないこと(self):
+        """一般ユーザーが他ユーザーを更新しようとすると403が返ることを検証する"""
+        app = _make_test_app()
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.put(
+                "/api/v1/users/other@example.com",
+                headers=_user_headers(),
+                json={"model_name": "gpt-4"},
+            )
+
+        assert resp.status_code == 403
+
+    def test_一般ユーザーはLLM設定を自分で変更できること(self):
+        """一般ユーザーが自分自身のLLM設定を変更できることを検証する"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_by_email.return_value = {
+            "email": "user@example.com",
+            "username": "Test User",
+            "role": "user",
+            "is_active": True,
+        }
+        app = _make_test_app(user_repo=user_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.put(
+                "/api/v1/users/user@example.com",
+                headers=_user_headers(),
+                json={"model_name": "gpt-4"},
+            )
+
+        assert resp.status_code == 200
+
+    def test_一般ユーザーはroleを変更できないこと(self):
+        """一般ユーザーが自分のroleを変更しようとすると403が返ることを検証する"""
+        app = _make_test_app()
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.put(
+                "/api/v1/users/user@example.com",
+                headers=_user_headers(),
+                json={"role": "admin"},  # 一般ユーザーはrole変更不可
+            )
+
+        assert resp.status_code == 403
+
+    def test_存在しないユーザーで404が返ること(self):
+        """存在しないユーザーを更新しようとすると404が返ることを検証する"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_by_email.return_value = None
+        app = _make_test_app(user_repo=user_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.put(
+                "/api/v1/users/nobody@example.com",
+                headers=_admin_headers(),
+                json={"model_name": "gpt-4"},
+            )
+
+        assert resp.status_code == 404
+
+
+# =====================================================================
+# ワークフロー設定エンドポイントのテスト
+# =====================================================================
+
+
+class TestWorkflowSetting:
+    """GET/PUT /api/v1/users/{user_id}/workflow_setting のテスト"""
+
+    def test_ユーザーは自分のワークフロー設定を取得できること(self):
+        """一般ユーザーが自分のワークフロー設定を取得できることを検証する"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_workflow_setting.return_value = {
+            "user_email": "user@example.com",
+            "workflow_definition_id": 1,
+        }
+        app = _make_test_app(user_repo=user_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.get(
+                "/api/v1/users/user@example.com/workflow_setting",
+                headers=_user_headers(),
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["workflow_definition_id"] == 1
+
+    def test_一般ユーザーは他ユーザーのワークフロー設定を取得できないこと(self):
+        """一般ユーザーが他ユーザーのワークフロー設定を取得しようとすると403が返ることを検証する"""
+        app = _make_test_app()
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.get(
+                "/api/v1/users/other@example.com/workflow_setting",
+                headers=_user_headers(),
+            )
+
+        assert resp.status_code == 403
+
+    def test_ワークフロー設定が存在しない場合404が返ること(self):
+        """ワークフロー設定が未設定の場合404が返ることを検証する"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_workflow_setting.return_value = None
+        app = _make_test_app(user_repo=user_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.get(
+                "/api/v1/users/user@example.com/workflow_setting",
+                headers=_user_headers(),
+            )
+
+        assert resp.status_code == 404
+
+    def test_ユーザーはワークフロー設定を更新できること(self):
+        """一般ユーザーが自分のワークフロー設定を更新できることを検証する（新規作成パス）"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_workflow_setting.return_value = None
+        user_repo.create_user_workflow_setting.return_value = {
+            "user_email": "user@example.com",
+            "workflow_definition_id": 2,
+        }
+        wf_repo = _make_mock_wf_repo()
+        wf_repo.get_workflow_definition.return_value = {
+            "id": 2,
+            "name": "some_workflow",
+            "is_preset": True,
+        }
+        app = _make_test_app(user_repo=user_repo, wf_repo=wf_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.put(
+                "/api/v1/users/user@example.com/workflow_setting",
+                headers=_user_headers(),
+                json={"workflow_definition_id": 2},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["workflow_definition_id"] == 2
+        # 新規作成パスが呼ばれることを確認する
+        user_repo.create_user_workflow_setting.assert_awaited_once()
+
+    def test_既存のワークフロー設定を上書き更新できること(self):
+        """ワークフロー設定が既に存在する場合は update パスが呼ばれることを検証する"""
+        user_repo = _make_mock_user_repo()
+        user_repo.get_user_workflow_setting.return_value = {
+            "user_email": "user@example.com",
+            "workflow_definition_id": 1,
+        }
+        user_repo.update_user_workflow_setting.return_value = {
+            "user_email": "user@example.com",
+            "workflow_definition_id": 3,
+        }
+        wf_repo = _make_mock_wf_repo()
+        wf_repo.get_workflow_definition.return_value = {
+            "id": 3,
+            "name": "another_workflow",
+            "is_preset": False,
+        }
+        app = _make_test_app(user_repo=user_repo, wf_repo=wf_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.put(
+                "/api/v1/users/user@example.com/workflow_setting",
+                headers=_user_headers(),
+                json={"workflow_definition_id": 3},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["workflow_definition_id"] == 3
+        # 更新パスが呼ばれることを確認する
+        user_repo.update_user_workflow_setting.assert_awaited_once()
+
+    def test_存在しないワークフロー定義IDで404が返ること(self):
+        """存在しないワークフロー定義IDを設定しようとすると404が返ることを検証する"""
+        wf_repo = _make_mock_wf_repo()
+        wf_repo.get_workflow_definition.return_value = None
+        app = _make_test_app(wf_repo=wf_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.put(
+                "/api/v1/users/user@example.com/workflow_setting",
+                headers=_user_headers(),
+                json={"workflow_definition_id": 9999},
+            )
+
+        assert resp.status_code == 404
+
+
+# =====================================================================
+# ダッシュボード統計エンドポイントのテスト
+# =====================================================================
+
+
+class TestDashboardStats:
+    """GET /api/v1/dashboard/stats のテスト"""
+
+    def test_管理者はダッシュボード統計を取得できること(self):
+        """管理者権限でダッシュボード統計が取得できることを検証する"""
+        task_repo = _make_mock_task_repo()
+        task_repo.list_tasks.return_value = []
+        app = _make_test_app(task_repo=task_repo)
+
+        mock_pool = MagicMock()
+        mock_conn = AsyncMock()
+        # ダッシュボードが実行する3つのSQLクエリの結果を定義する:
+        # 1. SELECT COUNT(*) FROM users
+        # 2. SELECT COUNT(*) FROM tasks WHERE status='running'
+        # 3. SELECT SUM(*) FROM token_usage WHERE ...（今月分）
+        mock_user_count = {"cnt": 5}
+        mock_running_task_count = {"cnt": 2}
+        mock_token_usage = {"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500}
+        mock_conn.fetchrow = AsyncMock(side_effect=[
+            mock_user_count,
+            mock_running_task_count,
+            mock_token_usage,
+        ])
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}),
+            patch.object(api_module, "get_pool", AsyncMock(return_value=mock_pool)),
+        ):
+            client = TestClient(app)
+            resp = client.get("/api/v1/dashboard/stats", headers=_admin_headers())
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["user_count"] == 5
+        assert data["running_task_count"] == 2
+        assert "monthly_token_usage" in data
+        assert "recent_tasks" in data
+
+    def test_一般ユーザーはダッシュボード統計を取得できないこと(self):
+        """一般ユーザーがGET /api/v1/dashboard/statsにアクセスすると403が返ることを検証する"""
+        app = _make_test_app()
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.get("/api/v1/dashboard/stats", headers=_user_headers())
+
+        assert resp.status_code == 403
+
+
+# =====================================================================
+# トークン使用量統計エンドポイントのテスト
+# =====================================================================
+
+
+class TestTokenStatistics:
+    """GET /api/v1/statistics/tokens のテスト"""
+
+    def test_管理者はトークン統計を取得できること(self):
+        """管理者権限でトークン統計が取得できることを検証する"""
+        app = _make_test_app()
+
+        mock_pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(return_value=[
+            {"user_email": "user@example.com", "call_count": 10,
+             "prompt_tokens": 500, "completion_tokens": 300, "total_tokens": 800},
+        ])
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}),
+            patch.object(api_module, "get_pool", AsyncMock(return_value=mock_pool)),
+        ):
+            client = TestClient(app)
+            resp = client.get("/api/v1/statistics/tokens", headers=_admin_headers())
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "period_days" in data
+        assert "stats" in data
+        assert len(data["stats"]) == 1
+        assert data["stats"][0]["user_email"] == "user@example.com"
+
+    def test_一般ユーザーはトークン統計を取得できないこと(self):
+        """一般ユーザーがGET /api/v1/statistics/tokensにアクセスすると403が返ることを検証する"""
+        app = _make_test_app()
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.get("/api/v1/statistics/tokens", headers=_user_headers())
+
+        assert resp.status_code == 403
+
+    def test_user_emailフィルタが動作すること(self):
+        """user_emailクエリパラメータでフィルタリングできることを検証する"""
+        app = _make_test_app()
+
+        mock_pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}),
+            patch.object(api_module, "get_pool", AsyncMock(return_value=mock_pool)),
+        ):
+            client = TestClient(app)
+            resp = client.get(
+                "/api/v1/statistics/tokens?user_email=user@example.com",
+                headers=_admin_headers(),
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["user_email_filter"] == "user@example.com"
+
+
+# =====================================================================
 # ワークフロー定義エンドポイントのテスト
 # =====================================================================
 
