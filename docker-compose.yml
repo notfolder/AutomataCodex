@@ -96,7 +96,8 @@ services:
     environment:
       DATABASE_URL: postgresql://agent:${POSTGRES_PASSWORD}@postgres:5432/coding_agent
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      JWT_SECRET: ${JWT_SECRET}
+      # auth.py が参照する環境変数名に合わせて JWT_SECRET_KEY として渡す
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
     depends_on:
       postgres:
         condition: service_healthy

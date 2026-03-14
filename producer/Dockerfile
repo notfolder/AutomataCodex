@@ -16,6 +16,5 @@ COPY producer/ ./producer/
 # Producerの依存関係をインストール
 RUN uv pip install --system -e ./shared -e ./producer
 
-WORKDIR /app/producer
-
+# /app をワーキングディレクトリとして python -m producer を実行
 CMD ["python", "-m", "producer"]
