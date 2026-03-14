@@ -131,7 +131,7 @@ services:
         puma['worker_processes'] = 2
         sidekiq['concurrency'] = 4
     ports:
-      - "${GITLAB_TEST_PORT:-8929}:80"
+      - "${GITLAB_TEST_PORT:-8929}:${GITLAB_TEST_PORT:-8929}"
       - "${GITLAB_TEST_SSH_PORT:-2289}:22"
     volumes:
       - gitlab_config:/etc/gitlab
