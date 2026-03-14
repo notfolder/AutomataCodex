@@ -33,7 +33,7 @@ def mock_task_repository() -> MagicMock:
     """テスト用TaskRepositoryモックを返す"""
     repo = MagicMock()
     repo.create_task = AsyncMock(return_value={"uuid": "test-uuid"})
-    repo.update_status = AsyncMock()
+    repo.update_task_status = AsyncMock()
     return repo
 
 
@@ -193,7 +193,7 @@ class TestHandle:
         result = await task_handler.handle(task)
 
         assert result is False
-        mock_task_repository.update_status.assert_awaited_with(task.task_uuid, "failed")
+        mock_task_repository.update_task_status.assert_awaited_with(task.task_uuid, "failed")
 
     async def test_task_repositoryがNoneでも動作する(
         self, mock_task_strategy_factory: MagicMock
@@ -222,7 +222,7 @@ class TestUpdateTaskStatus:
     ) -> None:
         """タスクステータスをcompletedに更新できることを確認する"""
         await task_handler._update_task_status("test-uuid", "completed")
-        mock_task_repository.update_status.assert_awaited_once_with(
+        mock_task_repository.update_task_status.assert_awaited_once_with(
             "test-uuid", "completed"
         )
 

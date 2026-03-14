@@ -187,7 +187,7 @@ class TaskHandler:
             return
 
         try:
-            await self.task_repository.update_status(task_uuid, status)
+            await self.task_repository.update_task_status(task_uuid, status)
             logger.info(
                 "タスクステータスを更新しました: task_uuid=%s, status=%s",
                 task_uuid,

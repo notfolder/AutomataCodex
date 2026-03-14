@@ -231,9 +231,11 @@ sequenceDiagram
 - `consumer.py: consume_tasks()` - タスクデキューロジック
 - `consumer.py: run_consumer_continuous()` - Consumer実行ループ
 - `handlers/task_handler.py: TaskHandler.handle()` - タスク処理分岐
-  - `_should_convert_issue_to_mr()` - Issue判定
-  - `_convert_issue_to_mr()` - 前処理フロー実行
-  - その他メソッド - 本フロー実行（Agent Framework呼び出し）
+  - `_should_convert_issue_to_mr()` - Issue判定（TaskStrategyFactory.should_convert_issue_to_mr()に委譲）
+  - `_update_task_status()` - タスクステータスDB更新
+  - 処理戦略はTaskStrategyFactory.create_strategy()でIssueToMRConversionStrategy・IssueOnlyStrategy・MergeRequestStrategyに委譲
+- `task_processor.py: TaskProcessor.process()` - タスク処理ループ
+- `task_processor.py: TaskProcessor.resume_suspended_tasks()` - 中断タスク再開
 
 ---
 
