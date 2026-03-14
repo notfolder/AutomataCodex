@@ -59,9 +59,17 @@ class BranchMergeExecutor(BaseExecutor):
             ctx: ワークフローコンテキスト
         """
         # 選択された実装番号をコンテキストから取得する
-        selected_implementation: int = await self.get_context_value(
+        selected_implementation: int | None = await self.get_context_value(
             ctx, "selected_implementation"
         )
+
+        # selected_implementationが存在しない場合はノーオペレーション（バグ修正・テスト作成・ドキュメントタスク）
+        if selected_implementation is None:
+            logger.info(
+                "selected_implementationが設定されていないためブランチマージをスキップします。"
+                "（バグ修正・テスト作成・ドキュメント生成タスクの場合）"
+            )
+            return
 
         # branch_envsをコンテキストから取得する
         branch_envs: dict[int, dict[str, Any]] = await self.get_context_value(
