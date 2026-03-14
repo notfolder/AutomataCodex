@@ -135,9 +135,50 @@ class TestMermaidGraphRenderer:
         assert ":::running" in result
         assert ":::done" in result
         # AUTOMATA_CODEX_SPEC.md §6.3 の classDef 色定義を確認する
-        assert "classDef running fill:#ff9800,color:#fff,stroke:#e65100,stroke-width:3px" in result
+        assert (
+            "classDef running fill:#ff9800,color:#fff,stroke:#e65100,stroke-width:3px"
+            in result
+        )
         assert "classDef done fill:#4caf50,color:#fff,stroke:#388e3c" in result
         assert "classDef pending fill:#9e9e9e,color:#fff,stroke:#616161" in result
+
+    def test_mermaid_renderer_parallel_group(
+        self,
+    ) -> None:
+        """同一ノードから2つ以上のノードへのファンアウトがsubgraphで出力されることを確認する（仕様書§10.4）"""
+        # 並列グループを含むグラフ定義を作成する
+        parallel_graph_def = {
+            "nodes": [
+                {"id": "start_node", "label": "開始", "type": "agent"},
+                {"id": "parallel_a", "label": "並列A", "type": "agent"},
+                {"id": "parallel_b", "label": "並列B", "type": "agent"},
+                {"id": "end_node", "label": "終了", "type": "agent"},
+            ],
+            "edges": [
+                {"from": "start_node", "to": "parallel_a"},
+                {"from": "start_node", "to": "parallel_b"},  # ファンアウト
+                {"from": "parallel_a", "to": "end_node"},
+                {"from": "parallel_b", "to": "end_node"},
+            ],
+        }
+        renderer = MermaidGraphRenderer(graph_def=parallel_graph_def)
+        node_states = {
+            "start_node": "done",
+            "parallel_a": "running",
+            "parallel_b": "pending",
+            "end_node": "pending",
+        }
+
+        result = renderer.render(node_states)
+
+        # subgraph が含まれることを確認する（並列グループ検出）
+        assert "subgraph" in result
+        # 並列グループのノードが subgraph 内に含まれることを確認する
+        assert "parallel_a" in result
+        assert "parallel_b" in result
+        # ファンアウトが & 記法またはsubgraph 記法でまとめられることを確認する
+        assert "start_node" in result
+        assert "end_node" in result
 
 
 # ========================================
@@ -214,7 +255,7 @@ class TestProgressCommentManager:
         call_args = mock_gitlab_client.update_merge_request_note.call_args
         # project_id, mr_iid, note_id が正しいことを確認する
         assert call_args.args[0] == 10  # project_id
-        assert call_args.args[1] == 5   # mr_iid
+        assert call_args.args[1] == 5  # mr_iid
         assert call_args.args[2] == 123  # note_id
         # コメント本文に仕様書§6.3のセクションヘッダーが含まれることを確認する
         body: str = call_args.args[3]
@@ -484,7 +525,9 @@ class TestProgressReporter:
         """llm_response eventでノード状態は変化せずlatest_llm_responseが更新されることを確認する"""
         progress_reporter.node_states = {"node_a": "running"}
 
-        long_response = "A" * 300  # 300文字の応答を作成（latest_llm_response は先頭200文字にトリミングされることを検証）
+        long_response = (
+            "A" * 300
+        )  # 300文字の応答を作成（latest_llm_response は先頭200文字にトリミングされることを検証）
         await progress_reporter.report_progress(
             context=mock_ctx,
             event="llm_response",

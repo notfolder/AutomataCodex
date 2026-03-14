@@ -142,7 +142,9 @@ class TestUserResolverExecutor:
         # UserConfigClientのモックを作成する
         mock_user_config = {"language": "ja", "model": "gpt-4"}
         mock_user_config_client = MagicMock()
-        mock_user_config_client.get_user_config = AsyncMock(return_value=mock_user_config)
+        mock_user_config_client.get_user_config = AsyncMock(
+            return_value=mock_user_config
+        )
 
         executor = UserResolverExecutor(
             gitlab_client=mock_gitlab_client,
@@ -157,7 +159,38 @@ class TestUserResolverExecutor:
         mock_gitlab_client.get_merge_request.assert_called_once_with(
             project_id=10, mr_iid=5
         )
-        mock_user_config_client.get_user_config.assert_called_once_with("user@example.com")
+        mock_user_config_client.get_user_config.assert_called_once_with(
+            "user@example.com"
+        )
+
+    async def test_user_resolver_executor_author_email_none(
+        self,
+        mock_ctx: _ConcreteWorkflowContext,
+        mock_gitlab_client: MagicMock,
+    ) -> None:
+        """author.email が None の場合に空文字列が user_email として保存されることを確認する"""
+        mock_ctx._state["task_identifier"] = {"project_id": 10, "mr_iid": 5}
+
+        # author が存在するが email が None の MR モックを作成する
+        mock_author = MagicMock()
+        mock_author.email = None
+        mock_mr = MagicMock()
+        mock_mr.author = mock_author
+        mock_gitlab_client.get_merge_request.return_value = mock_mr
+
+        mock_user_config_client = MagicMock()
+        mock_user_config_client.get_user_config = AsyncMock(return_value={})
+
+        executor = UserResolverExecutor(
+            gitlab_client=mock_gitlab_client,
+            user_config_client=mock_user_config_client,
+        )
+        await executor.handle(msg={}, ctx=mock_ctx)
+
+        # author.email=None の場合は空文字列が設定されることを確認する
+        assert mock_ctx._state["user_email"] == ""
+        # email が空でも get_user_config が呼ばれることを確認する
+        mock_user_config_client.get_user_config.assert_called_once_with("")
 
 
 # ========================================
@@ -196,7 +229,9 @@ class TestContentTransferExecutor:
         note_system.id = 103
 
         mock_gitlab_client.get_issue_notes.return_value = [
-            note_user1, note_user2, note_system
+            note_user1,
+            note_user2,
+            note_system,
         ]
 
         executor = ContentTransferExecutor(gitlab_client=mock_gitlab_client)
@@ -205,6 +240,48 @@ class TestContentTransferExecutor:
         # ユーザーコメント2件が転記されることを確認する
         assert mock_ctx._state["transferred_comments_count"] == 2
         assert mock_gitlab_client.create_merge_request_note.call_count == 2
+
+    async def test_content_transfer_executor_partial_failure(
+        self,
+        mock_ctx: _ConcreteWorkflowContext,
+        mock_gitlab_client: MagicMock,
+    ) -> None:
+        """一部コメントの転記が失敗した場合、failed_transfer_note_idsに失敗した note_id が記録されることを確認する"""
+        mock_ctx._state["issue_iid"] = 3
+        mock_ctx._state["project_id"] = 10
+        mock_ctx._state["mr_iid"] = 7
+
+        # 2件のコメントを設定する（2件目は転記失敗にする）
+        note_ok = MagicMock()
+        note_ok.system = False
+        note_ok.body = "転記成功コメント"
+        note_ok.id = 201
+
+        note_fail = MagicMock()
+        note_fail.system = False
+        note_fail.body = "転記失敗コメント"
+        note_fail.id = 202
+
+        mock_gitlab_client.get_issue_notes.return_value = [note_ok, note_fail]
+
+        # 2件目でエラーを発生させる
+        call_count: list[int] = [0]
+
+        def create_note_side_effect(**kwargs: object) -> None:
+            call_count[0] += 1
+            if call_count[0] == 2:
+                raise RuntimeError("GitLab API error")
+
+        mock_gitlab_client.create_merge_request_note.side_effect = (
+            create_note_side_effect
+        )
+
+        executor = ContentTransferExecutor(gitlab_client=mock_gitlab_client)
+        await executor.handle(msg={}, ctx=mock_ctx)
+
+        # 成功1件、失敗1件が記録されることを確認する
+        assert mock_ctx._state["transferred_comments_count"] == 1
+        assert mock_ctx._state["failed_transfer_note_ids"] == [202]
 
 
 # ========================================
@@ -315,7 +392,10 @@ class TestExecEnvSetupExecutor:
         mock_ctx._state["original_branch"] = "feature/test"
         mock_ctx._state["project_id"] = 10
 
-        mock_env_manager.prepare_environments.return_value = ["exec-env-001", "exec-env-002"]
+        mock_env_manager.prepare_environments.return_value = [
+            "exec-env-001",
+            "exec-env-002",
+        ]
 
         graph_def = self._make_graph_definition(node_id, env_count=2)
         executor = ExecEnvSetupExecutor(
