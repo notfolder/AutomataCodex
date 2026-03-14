@@ -364,6 +364,30 @@ class TestCreateUser:
 
         assert resp.status_code == 403
 
+    def test_重複メールアドレスで409が返ること(self):
+        """既に存在するメールアドレスで登録すると HTTP 409 が返ることを検証する"""
+        import asyncpg
+
+        user_repo = _make_mock_user_repo()
+        # create_user が UniqueViolationError を発生させる
+        user_repo.create_user.side_effect = asyncpg.UniqueViolationError("duplicate")
+        app = _make_test_app(user_repo=user_repo)
+
+        with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
+            client = TestClient(app)
+            resp = client.post(
+                "/api/v1/users",
+                headers=_admin_headers(),
+                json={
+                    "email": "existing@example.com",
+                    "username": "Existing User",
+                    "password": "SecurePass1!",
+                    "role": "user",
+                },
+            )
+
+        assert resp.status_code == 409
+
 
 # =====================================================================
 # ユーザー設定取得エンドポイントのテスト
@@ -395,7 +419,9 @@ class TestGetUserConfig:
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
             client = TestClient(app)
-            resp = client.get("/api/v1/config/user@example.com", headers=_user_headers())
+            resp = client.get(
+                "/api/v1/config/user@example.com", headers=_user_headers()
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -409,7 +435,9 @@ class TestGetUserConfig:
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
             client = TestClient(app)
-            resp = client.get("/api/v1/config/other@example.com", headers=_user_headers())
+            resp = client.get(
+                "/api/v1/config/other@example.com", headers=_user_headers()
+            )
 
         assert resp.status_code == 403
 
@@ -421,7 +449,9 @@ class TestGetUserConfig:
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
             client = TestClient(app)
-            resp = client.get("/api/v1/config/admin@example.com", headers=_admin_headers())
+            resp = client.get(
+                "/api/v1/config/admin@example.com", headers=_admin_headers()
+            )
 
         assert resp.status_code == 404
 
@@ -444,7 +474,9 @@ class TestGetUserConfig:
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
             client = TestClient(app)
-            resp = client.get("/api/v1/config/user@example.com", headers=_admin_headers())
+            resp = client.get(
+                "/api/v1/config/user@example.com", headers=_admin_headers()
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -712,12 +744,18 @@ class TestDashboardStats:
         # 3. SELECT SUM(*) FROM token_usage WHERE ...（今月分）
         mock_user_count = {"cnt": 5}
         mock_running_task_count = {"cnt": 2}
-        mock_token_usage = {"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500}
-        mock_conn.fetchrow = AsyncMock(side_effect=[
-            mock_user_count,
-            mock_running_task_count,
-            mock_token_usage,
-        ])
+        mock_token_usage = {
+            "prompt_tokens": 1000,
+            "completion_tokens": 500,
+            "total_tokens": 1500,
+        }
+        mock_conn.fetchrow = AsyncMock(
+            side_effect=[
+                mock_user_count,
+                mock_running_task_count,
+                mock_token_usage,
+            ]
+        )
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -760,10 +798,17 @@ class TestTokenStatistics:
 
         mock_pool = MagicMock()
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            {"user_email": "user@example.com", "call_count": 10,
-             "prompt_tokens": 500, "completion_tokens": 300, "total_tokens": 800},
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "user_email": "user@example.com",
+                    "call_count": 10,
+                    "prompt_tokens": 500,
+                    "completion_tokens": 300,
+                    "total_tokens": 800,
+                },
+            ]
+        )
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -868,7 +913,9 @@ class TestWorkflowDefinitions:
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
             client = TestClient(app)
-            resp = client.delete("/api/v1/workflow_definitions/1", headers=_user_headers())
+            resp = client.delete(
+                "/api/v1/workflow_definitions/1", headers=_user_headers()
+            )
 
         assert resp.status_code == 403
 
@@ -880,7 +927,9 @@ class TestWorkflowDefinitions:
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
             client = TestClient(app)
-            resp = client.get("/api/v1/workflow_definitions/9999", headers=_user_headers())
+            resp = client.get(
+                "/api/v1/workflow_definitions/9999", headers=_user_headers()
+            )
 
         assert resp.status_code == 404
 
@@ -1021,7 +1070,9 @@ class TestChangePassword:
 
         assert resp.status_code == 422
 
-    def test_管理者は自身の現在パスワードなしで他ユーザーパスワードを変更できること(self):
+    def test_管理者は自身の現在パスワードなしで他ユーザーパスワードを変更できること(
+        self,
+    ):
         """管理者が current_password なしで他ユーザーのパスワードを変更できることを検証する"""
         user_repo = _make_mock_user_repo()
         user_repo.get_user_by_email.return_value = {
@@ -1284,7 +1335,9 @@ class TestTaskHistory:
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
             client = TestClient(app)
-            resp = client.get("/api/v1/tasks?page=2&per_page=10", headers=_admin_headers())
+            resp = client.get(
+                "/api/v1/tasks?page=2&per_page=10", headers=_admin_headers()
+            )
 
         assert resp.status_code == 200
         data = resp.json()
