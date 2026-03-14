@@ -39,14 +39,14 @@ class TaskGetterFromGitLab:
     Attributes:
         gitlab_client: GitLab APIクライアント
         gitlab_config: GitLab設定
-        project_id: 対象GitLabプロジェクトID
+        project_id: 対象GitLabプロジェクトID（Noneの場合は全プロジェクト横断）
     """
 
     def __init__(
         self,
         gitlab_client: GitlabClient,
         gitlab_config: GitLabConfig,
-        project_id: int,
+        project_id: int | None,
     ) -> None:
         """
         TaskGetterFromGitLabを初期化する。
@@ -54,7 +54,8 @@ class TaskGetterFromGitLab:
         Args:
             gitlab_client: GitLab APIクライアントインスタンス
             gitlab_config: GitLab設定（ラベル名等を含む）
-            project_id: 対象GitLabプロジェクトID
+            project_id: 対象GitLabプロジェクトID。Noneを指定すると
+                        PATユーザーにアサインされた全プロジェクトを横断取得する。
         """
         self.gitlab_client = gitlab_client
         self.gitlab_config = gitlab_config
@@ -94,6 +95,7 @@ class TaskGetterFromGitLab:
         """
         処理対象のIssue一覧を取得する。
 
+        project_idがNoneの場合は全プロジェクト横断で取得する。
         bot_labelが付与された未処理のIssueをGitLab APIから取得し、
         除外ラベルが付いていないものをフィルタリングして返す。
 
@@ -101,17 +103,25 @@ class TaskGetterFromGitLab:
             処理対象のGitLabIssueリスト
         """
         logger.info(
-            "未処理Issue一覧を取得します: project_id=%d", self.project_id
+            "未処理Issue一覧を取得します: project_id=%s",
+            self.project_id if self.project_id is not None else "全プロジェクト横断",
         )
         try:
-            issues = self.gitlab_client.list_issues(
-                project_id=self.project_id,
-                labels=[self.gitlab_config.bot_label],
-                state="opened",
-            )
+            if self.project_id is None:
+                # 全プロジェクト横断: PATユーザーにアサインされた全Issueを取得する
+                issues = self.gitlab_client.list_all_assigned_issues(
+                    labels=[self.gitlab_config.bot_label],
+                    state="opened",
+                )
+            else:
+                issues = self.gitlab_client.list_issues(
+                    project_id=self.project_id,
+                    labels=[self.gitlab_config.bot_label],
+                    state="opened",
+                )
         except Exception as exc:
             logger.error(
-                "GitLab APIからのIssue取得に失敗しました: project_id=%d, error=%s",
+                "GitLab APIからのIssue取得に失敗しました: project_id=%s, error=%s",
                 self.project_id,
                 exc,
             )
@@ -131,6 +141,7 @@ class TaskGetterFromGitLab:
         """
         処理対象のMerge Request一覧を取得する。
 
+        project_idがNoneの場合は全プロジェクト横断で取得する。
         bot_labelが付与された未処理のMRをGitLab APIから取得し、
         除外ラベルが付いていないものをフィルタリングして返す。
 
@@ -138,25 +149,31 @@ class TaskGetterFromGitLab:
             処理対象のGitLabMergeRequestリスト
         """
         logger.info(
-            "未処理MR一覧を取得します: project_id=%d", self.project_id
+            "未処理MR一覧を取得します: project_id=%s",
+            self.project_id if self.project_id is not None else "全プロジェクト横断",
         )
         try:
-            mrs = self.gitlab_client.list_merge_requests(
-                project_id=self.project_id,
-                labels=[self.gitlab_config.bot_label],
-                state="opened",
-            )
+            if self.project_id is None:
+                # 全プロジェクト横断: PATユーザーにアサインされた全MRを取得する
+                mrs = self.gitlab_client.list_all_assigned_merge_requests(
+                    labels=[self.gitlab_config.bot_label],
+                    state="opened",
+                )
+            else:
+                mrs = self.gitlab_client.list_merge_requests(
+                    project_id=self.project_id,
+                    labels=[self.gitlab_config.bot_label],
+                    state="opened",
+                )
         except Exception as exc:
             logger.error(
-                "GitLab APIからのMR取得に失敗しました: project_id=%d, error=%s",
+                "GitLab APIからのMR取得に失敗しました: project_id=%s, error=%s",
                 self.project_id,
                 exc,
             )
             return []
 
-        unprocessed = [
-            mr for mr in mrs if self._is_processing_target(mr.labels)
-        ]
+        unprocessed = [mr for mr in mrs if self._is_processing_target(mr.labels)]
         logger.info(
             "未処理MR: total=%d, unprocessed=%d",
             len(mrs),

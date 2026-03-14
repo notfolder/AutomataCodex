@@ -42,6 +42,7 @@ services:
     build:
       context: .
       dockerfile: producer/Dockerfile
+    restart: unless-stopped
     environment:
       GITLAB_PAT: ${GITLAB_PAT}
       GITLAB_URL: ${GITLAB_URL:-https://gitlab.com}
@@ -64,6 +65,7 @@ services:
     build:
       context: .
       dockerfile: consumer/Dockerfile
+    restart: unless-stopped
     environment:
       GITLAB_PAT: ${GITLAB_PAT}
       GITLAB_URL: ${GITLAB_URL:-https://gitlab.com}

@@ -330,6 +330,37 @@ class GitlabClient:
         logger.debug("Issue一覧取得: project_id=%d, count=%d", project_id, len(result))
         return result
 
+    def list_all_assigned_issues(
+        self,
+        labels: list[str] | None = None,
+        state: str = "opened",
+    ) -> list[GitLabIssue]:
+        """
+        全プロジェクト横断で認証ユーザー（PAT）にアサインされたIssueを取得する。
+
+        GitLab APIの scope=assigned_to_me パラメータを使用して、
+        PATユーザーにアサインされた全プロジェクトのIssueを横断的に取得する。
+        取得したIssueオブジェクトにはproject_idが含まれる。
+
+        Args:
+            labels: フィルタリングするラベルリスト（Noneの場合はフィルタなし）
+            state: Issueの状態（opened/closed/all）
+
+        Returns:
+            GitLabIssueのリスト
+        """
+        kwargs: dict[str, Any] = {
+            "scope": "assigned_to_me",
+            "state": state,
+            "all": True,
+        }
+        if labels:
+            kwargs["labels"] = labels
+        raw_issues = self._call_with_retry(self._gl.issues.list, **kwargs)
+        result = [_issue_from_obj(i) for i in raw_issues]
+        logger.debug("全プロジェクトアサイン済みIssue取得: count=%d", len(result))
+        return result
+
     def get_issue(self, project_id: int, issue_iid: int) -> GitLabIssue:
         """
         Issueの詳細を取得する。
@@ -419,6 +450,37 @@ class GitlabClient:
         raw_mrs = self._call_with_retry(project.mergerequests.list, **kwargs)
         result = [_mr_from_obj(mr) for mr in raw_mrs]
         logger.debug("MR一覧取得: project_id=%d, count=%d", project_id, len(result))
+        return result
+
+    def list_all_assigned_merge_requests(
+        self,
+        labels: list[str] | None = None,
+        state: str = "opened",
+    ) -> list[GitLabMergeRequest]:
+        """
+        全プロジェクト横断で認証ユーザー（PAT）にアサインされたMRを取得する。
+
+        GitLab APIの scope=assigned_to_me パラメータを使用して、
+        PATユーザーにアサインされた全プロジェクトのMRを横断的に取得する。
+        取得したMRオブジェクトにはproject_idが含まれる。
+
+        Args:
+            labels: フィルタリングするラベルリスト（Noneの場合はフィルタなし）
+            state: MRの状態（opened/closed/merged/all）
+
+        Returns:
+            GitLabMergeRequestのリスト
+        """
+        kwargs: dict[str, Any] = {
+            "scope": "assigned_to_me",
+            "state": state,
+            "all": True,
+        }
+        if labels:
+            kwargs["labels"] = labels
+        raw_mrs = self._call_with_retry(self._gl.mergerequests.list, **kwargs)
+        result = [_mr_from_obj(mr) for mr in raw_mrs]
+        logger.debug("全プロジェクトアサイン済みMR取得: count=%d", len(result))
         return result
 
     def create_merge_request(
