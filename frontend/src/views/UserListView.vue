@@ -91,14 +91,14 @@
             size="small"
             variant="text"
             icon="mdi-eye"
-            :to="{ name: 'UserDetail', params: { id: item.id } }"
+            :to="{ name: 'UserDetail', params: { id: item.email } }"
             title="詳細"
           />
           <v-btn
             size="small"
             variant="text"
             icon="mdi-pencil"
-            :to="{ name: 'UserEdit', params: { id: item.id } }"
+            :to="{ name: 'UserEdit', params: { id: item.email } }"
             title="編集"
           />
         </template>

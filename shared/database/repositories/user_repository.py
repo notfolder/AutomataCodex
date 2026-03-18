@@ -10,7 +10,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import asyncpg
@@ -202,9 +202,8 @@ class UserRepository:
         if not fields:
             return await self.get_user_by_email(email)
 
-        fields.append(f"updated_at = ${idx}")
-        values.append(datetime.now(timezone.utc))
-        idx += 1
+        # updated_at はDBのNOW()で設定する（Pythonのdatetimeとの型不一致を回避）
+        fields.append("updated_at = NOW()")
         values.append(email.lower())
 
         async with self._pool.acquire() as conn:
@@ -513,9 +512,8 @@ class UserRepository:
         if not fields:
             return await self.get_user_config(user_email)
 
-        fields.append(f"updated_at = ${idx}")
-        values.append(datetime.now(timezone.utc))
-        idx += 1
+        # updated_at はDBのNOW()で設定する（Pythonのdatetimeとの型不一致を回避）
+        fields.append("updated_at = NOW()")
         values.append(user_email.lower())
 
         async with self._pool.acquire() as conn:
@@ -620,13 +618,12 @@ class UserRepository:
                 UPDATE user_workflow_settings
                 SET workflow_definition_id = $1,
                     custom_settings = $2,
-                    updated_at = $3
-                WHERE user_email = $4
+                    updated_at = NOW()
+                WHERE user_email = $3
                 RETURNING *
                 """,
                 workflow_definition_id,
                 custom_settings,
-                datetime.now(timezone.utc),
                 user_email.lower(),
             )
         return dict(row) if row else None

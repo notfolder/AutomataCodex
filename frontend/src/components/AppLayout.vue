@@ -32,6 +32,7 @@
           title="ユーザー管理"
           :to="{ name: 'UserList' }"
           value="users"
+          v-if="authStore.isAdmin"
         />
         <v-list-item
           prepend-icon="mdi-sitemap"

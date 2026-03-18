@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -87,9 +86,6 @@ def validate_password_strength(password: str) -> None:
 
     要件:
     - 8文字以上
-    - 英字（大文字または小文字）を含む
-    - 数字を含む
-    - 記号を含む
 
     Args:
         password: バリデーション対象のパスワード
@@ -99,12 +95,6 @@ def validate_password_strength(password: str) -> None:
     """
     if len(password) < 8:
         raise ValueError("パスワードは8文字以上である必要があります")
-    if not re.search(r"[A-Za-z]", password):
-        raise ValueError("パスワードには英字を含める必要があります")
-    if not re.search(r"\d", password):
-        raise ValueError("パスワードには数字を含める必要があります")
-    if not re.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`\\'\"]", password):
-        raise ValueError("パスワードには記号を含める必要があります")
 
 
 def create_access_token(

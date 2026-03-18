@@ -269,11 +269,13 @@
 
       <!-- 操作ボタン -->
       <div class="d-flex justify-space-between">
+        <!-- 管理者のみ他ユーザーのパスワード代理変更ボタンを表示 -->
         <v-btn
+          v-if="authStore.isAdmin"
           variant="outlined"
           color="warning"
           prepend-icon="mdi-lock-reset"
-          :to="{ name: 'PasswordChange' }"
+          :to="{ name: 'PasswordChange', query: { email: originalEmail } }"
         >
           パスワード変更（管理者代理）
         </v-btn>

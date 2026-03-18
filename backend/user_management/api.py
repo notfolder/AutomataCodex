@@ -116,7 +116,9 @@ class UserCreateRequest(BaseModel):
     def validate_token_threshold(cls, v: int | None) -> int | None:
         """token_threshold バリデーション（1,000〜150,000）"""
         if v is not None and not 1000 <= v <= 150000:
-            raise ValueError("token_threshold は 1,000 以上 150,000 以下である必要があります")
+            raise ValueError(
+                "token_threshold は 1,000 以上 150,000 以下である必要があります"
+            )
         return v
 
     @field_validator("keep_recent_messages")
@@ -124,7 +126,9 @@ class UserCreateRequest(BaseModel):
     def validate_keep_recent_messages(cls, v: int) -> int:
         """keep_recent_messages バリデーション（1〜50）"""
         if not 1 <= v <= 50:
-            raise ValueError("keep_recent_messages は 1 以上 50 以下である必要があります")
+            raise ValueError(
+                "keep_recent_messages は 1 以上 50 以下である必要があります"
+            )
         return v
 
     @field_validator("min_to_compress")
@@ -140,7 +144,9 @@ class UserCreateRequest(BaseModel):
     def validate_min_compression_ratio(cls, v: float) -> float:
         """圧縮率バリデーション（0.5〜0.95）"""
         if not 0.5 <= v <= 0.95:
-            raise ValueError("min_compression_ratio は 0.5 以上 0.95 以下である必要があります")
+            raise ValueError(
+                "min_compression_ratio は 0.5 以上 0.95 以下である必要があります"
+            )
         return v
 
     @field_validator("temperature")
@@ -196,7 +202,9 @@ class UserUpdateRequest(BaseModel):
     def validate_token_threshold(cls, v: int | None) -> int | None:
         """token_threshold バリデーション（1,000〜150,000）"""
         if v is not None and not 1000 <= v <= 150000:
-            raise ValueError("token_threshold は 1,000 以上 150,000 以下である必要があります")
+            raise ValueError(
+                "token_threshold は 1,000 以上 150,000 以下である必要があります"
+            )
         return v
 
     @field_validator("keep_recent_messages")
@@ -204,7 +212,9 @@ class UserUpdateRequest(BaseModel):
     def validate_keep_recent_messages(cls, v: int | None) -> int | None:
         """keep_recent_messages バリデーション（1〜50）"""
         if v is not None and not 1 <= v <= 50:
-            raise ValueError("keep_recent_messages は 1 以上 50 以下である必要があります")
+            raise ValueError(
+                "keep_recent_messages は 1 以上 50 以下である必要があります"
+            )
         return v
 
     @field_validator("min_to_compress")
@@ -220,7 +230,9 @@ class UserUpdateRequest(BaseModel):
     def validate_min_compression_ratio(cls, v: float | None) -> float | None:
         """圧縮率バリデーション（0.5〜0.95）"""
         if v is not None and not 0.5 <= v <= 0.95:
-            raise ValueError("min_compression_ratio は 0.5 以上 0.95 以下である必要があります")
+            raise ValueError(
+                "min_compression_ratio は 0.5 以上 0.95 以下である必要があります"
+            )
         return v
 
     @field_validator("temperature")
@@ -436,10 +448,8 @@ async def get_user_config(
 
     config = await user_repo.get_user_config(email)
     if not config:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="ユーザー設定が見つかりません",
-        )
+        # 設定レコードが未作成の場合はデフォルト値で自動作成する
+        config = await user_repo.create_user_config(user_email=email)
 
     # APIキーを復号して返す
     decrypted_key = await user_repo.get_decrypted_api_key(email)
@@ -447,6 +457,14 @@ async def get_user_config(
     # 暗号化済みフィールドを除外して復号済みを設定する
     result.pop("api_key_encrypted", None)
     result["api_key"] = decrypted_key
+
+    # users テーブルの基本情報をマージする（フロントエンドが参照するフィールド）
+    result["email"] = user["email"]
+    result["username"] = user.get("username")
+    result["role"] = user.get("role")
+    result["is_active"] = user.get("is_active")
+    result["created_at"] = user.get("created_at")
+    result["updated_at"] = user.get("updated_at")
 
     return result
 
@@ -554,7 +572,9 @@ async def update_user(
         )
 
     # users テーブルの更新（管理者のみ）
-    if is_admin and any(v is not None for v in [body.username, body.role, body.is_active]):
+    if is_admin and any(
+        v is not None for v in [body.username, body.role, body.is_active]
+    ):
         updated_user = await user_repo.update_user(
             email,
             username=body.username,
@@ -566,13 +586,27 @@ async def update_user(
 
     # user_configs テーブルの更新（LLM設定・学習設定）
     llm_fields = [
-        body.llm_provider, body.api_key, body.model_name, body.temperature,
-        body.max_tokens, body.top_p, body.frequency_penalty, body.presence_penalty,
-        body.base_url, body.timeout, body.context_compression_enabled,
-        body.token_threshold, body.keep_recent_messages, body.min_to_compress,
-        body.min_compression_ratio, body.learning_enabled, body.learning_llm_model,
-        body.learning_llm_temperature, body.learning_llm_max_tokens,
-        body.learning_exclude_bot_comments, body.learning_only_after_task_start,
+        body.llm_provider,
+        body.api_key,
+        body.model_name,
+        body.temperature,
+        body.max_tokens,
+        body.top_p,
+        body.frequency_penalty,
+        body.presence_penalty,
+        body.base_url,
+        body.timeout,
+        body.context_compression_enabled,
+        body.token_threshold,
+        body.keep_recent_messages,
+        body.min_to_compress,
+        body.min_compression_ratio,
+        body.learning_enabled,
+        body.learning_llm_model,
+        body.learning_llm_temperature,
+        body.learning_llm_max_tokens,
+        body.learning_exclude_bot_comments,
+        body.learning_only_after_task_start,
     ]
     if any(v is not None for v in llm_fields):
         await user_repo.update_user_config(
@@ -673,7 +707,9 @@ async def change_password(
 @router.get("/workflow_definitions", tags=["ワークフロー定義"])
 async def list_workflow_definitions(
     current_user: dict[str, Any] = Depends(get_current_user),
-    wf_repo: WorkflowDefinitionRepository = Depends(_get_workflow_definition_repository),
+    wf_repo: WorkflowDefinitionRepository = Depends(
+        _get_workflow_definition_repository
+    ),
 ) -> list[dict[str, Any]]:
     """
     ワークフロー定義一覧を取得する。
@@ -686,7 +722,9 @@ async def list_workflow_definitions(
 async def get_workflow_definition(
     definition_id: int,
     current_user: dict[str, Any] = Depends(get_current_user),
-    wf_repo: WorkflowDefinitionRepository = Depends(_get_workflow_definition_repository),
+    wf_repo: WorkflowDefinitionRepository = Depends(
+        _get_workflow_definition_repository
+    ),
 ) -> dict[str, Any]:
     """
     ワークフロー定義を ID で取得する。
@@ -708,7 +746,9 @@ async def get_workflow_definition(
 async def create_workflow_definition(
     body: WorkflowDefinitionCreateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
-    wf_repo: WorkflowDefinitionRepository = Depends(_get_workflow_definition_repository),
+    wf_repo: WorkflowDefinitionRepository = Depends(
+        _get_workflow_definition_repository
+    ),
 ) -> dict[str, Any]:
     """
     ワークフロー定義を新規作成する。
@@ -739,7 +779,9 @@ async def update_workflow_definition(
     definition_id: int,
     body: WorkflowDefinitionUpdateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
-    wf_repo: WorkflowDefinitionRepository = Depends(_get_workflow_definition_repository),
+    wf_repo: WorkflowDefinitionRepository = Depends(
+        _get_workflow_definition_repository
+    ),
 ) -> dict[str, Any]:
     """
     ワークフロー定義を更新する。
@@ -785,7 +827,9 @@ async def update_workflow_definition(
 async def delete_workflow_definition(
     definition_id: int,
     current_user: dict[str, Any] = Depends(get_current_user),
-    wf_repo: WorkflowDefinitionRepository = Depends(_get_workflow_definition_repository),
+    wf_repo: WorkflowDefinitionRepository = Depends(
+        _get_workflow_definition_repository
+    ),
 ) -> None:
     """
     ワークフロー定義を削除する。
@@ -852,7 +896,9 @@ async def update_user_workflow_setting(
     body: WorkflowSettingUpdateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
     user_repo: UserRepository = Depends(_get_user_repository),
-    wf_repo: WorkflowDefinitionRepository = Depends(_get_workflow_definition_repository),
+    wf_repo: WorkflowDefinitionRepository = Depends(
+        _get_workflow_definition_repository
+    ),
 ) -> dict[str, Any]:
     """
     ユーザーのワークフロー設定を更新する。
@@ -978,7 +1024,9 @@ async def get_dashboard_stats(
 
 @router.get("/statistics/tokens", tags=["統計"])
 async def get_token_statistics(
-    user_email: str | None = Query(default=None, description="フィルタリングするユーザーメールアドレス"),
+    user_email: str | None = Query(
+        default=None, description="フィルタリングするユーザーメールアドレス"
+    ),
     period: int = Query(default=30, ge=1, description="集計期間（日数）"),
     admin: dict[str, Any] = Depends(get_admin_user),
 ) -> dict[str, Any]:
@@ -1054,8 +1102,13 @@ async def get_token_statistics(
 
 @router.get("/tasks", tags=["タスク"])
 async def list_tasks(
-    user_email: str | None = Query(default=None, description="ユーザーメールアドレスでフィルタ"),
-    status: str | None = Query(default=None, description="ステータスでフィルタ（running/completed/failed/paused）"),
+    user_email: str | None = Query(
+        default=None, description="ユーザーメールアドレスでフィルタ"
+    ),
+    status: str | None = Query(
+        default=None,
+        description="ステータスでフィルタ（running/completed/failed/paused）",
+    ),
     task_type: str | None = Query(default=None, description="タスク種別でフィルタ"),
     page: int = Query(default=1, ge=1, description="ページ番号"),
     per_page: int = Query(default=20, ge=1, le=100, description="1ページあたりの件数"),
