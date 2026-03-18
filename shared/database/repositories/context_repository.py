@@ -13,6 +13,17 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+
+def _utcnow() -> datetime:
+    """タイムゾーン情報なしのUTC現在時刻を返す。
+
+    PostgreSQL の TIMESTAMP WITHOUT TIME ZONE カラムに渡す値として使用する。
+    timezone-aware な datetime を渡すと asyncpg がエラーとなるため、
+    timezone.utc で取得後に tzinfo 情報を除去して返す。
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 import asyncpg
 
 logger = logging.getLogger(__name__)
@@ -486,7 +497,7 @@ class ContextRepository:
                 RETURNING *
                 """,
                 workflow_name,
-                datetime.now(timezone.utc),
+                _utcnow(),
                 task_uuid,
             )
         return dict(row) if row else None
@@ -702,7 +713,7 @@ class ContextRepository:
         Returns:
             更新後のTodoレコード辞書。対象が存在しない場合はNone。
         """
-        now = datetime.now(timezone.utc)
+        now = _utcnow()
         completed_at = now if status == "completed" else None
 
         async with self._pool.acquire() as conn:

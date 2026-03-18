@@ -13,6 +13,17 @@ from typing import Any
 
 import asyncpg
 
+
+def _utcnow() -> datetime:
+    """タイムゾーン情報なしのUTC現在時刻を返す。
+
+    PostgreSQL の TIMESTAMP WITHOUT TIME ZONE カラムに渡す値として使用する。
+    timezone-aware な datetime を渡すと asyncpg がエラーとなるため、
+    timezone.utc で取得後に tzinfo 情報を除去して返す。
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -195,7 +206,7 @@ class WorkflowDefinitionRepository:
             return await self.get_workflow_definition(workflow_id)
 
         fields.append(f"updated_at = ${idx}")
-        values.append(datetime.now(timezone.utc))
+        values.append(_utcnow())
         idx += 1
         values.append(workflow_id)
 
