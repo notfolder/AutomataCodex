@@ -277,7 +277,8 @@ erDiagram
 
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
-| username | TEXT | PRIMARY KEY | GitLabユーザー名（外部キー） | | TEXT | NOT NULL DEFAULT 'openai' | LLMプロバイダ（openai/ollama/lmstudio） |
+| username | TEXT | PRIMARY KEY | GitLabユーザー名（外部キー） |
+| llm_provider | TEXT | NOT NULL DEFAULT 'openai' | LLMプロバイダ（openai/ollama/lmstudio） |
 | api_key_encrypted | TEXT | | APIキー（AES-256-GCM暗号化済み） |
 | model_name | TEXT | NOT NULL DEFAULT 'gpt-4o' | 使用モデル名 |
 | temperature | REAL | NOT NULL DEFAULT 0.2 | LLM温度パラメータ |
@@ -337,7 +338,8 @@ erDiagram
 
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
-| username | TEXT | PRIMARY KEY | GitLabユーザー名（外部キー） | |
+| username | TEXT | PRIMARY KEY | GitLabユーザー名（外部キー） |
+| workflow_definition_id | INTEGER | NOT NULL | 選択中のワークフロー定義ID（外部キー） |
 | custom_settings | TEXT | | ユーザー固有の追加設定（JSON文字列） |
 | created_at | TIMESTAMP | NOT NULL DEFAULT CURRENT_TIMESTAMP | 設定作成日時 |
 | updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 最終更新日時 |
@@ -887,7 +889,8 @@ LLM会話履歴を時系列順に保存する。PostgreSqlChatHistoryProviderが
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
 | id | SERIAL | PRIMARY KEY | レコードID |
-| username | TEXT | NOT NULL | GitLabユーザー名（外部キー） | |
+| username | TEXT | NOT NULL | GitLabユーザー名（外部キー） |
+| task_uuid | TEXT | NOT NULL | タスクUUID（外部キー） |
 | node_id | TEXT | NOT NULL | ワークフローノードID |
 | model | TEXT | NOT NULL | 使用モデル名（例: gpt-4o） |
 | prompt_tokens | INTEGER | NOT NULL | 入力プロンプトのトークン数 |
