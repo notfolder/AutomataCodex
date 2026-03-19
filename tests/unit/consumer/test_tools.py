@@ -358,7 +358,7 @@ class TestIssueToMRConverter:
             config=config,
         )
 
-        result = await converter.convert(issue=mock_issue)
+        result = await converter.convert(mock_issue)
 
         # ① ブランチが作成されることを確認する
         mock_gitlab_client.create_branch.assert_called_once()

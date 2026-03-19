@@ -568,8 +568,14 @@ class TestWorkflowFactory:
     @pytest.fixture
     def mock_executor_factory(self) -> MagicMock:
         """テスト用ExecutorFactoryモックを返す"""
+        from consumer.executors.base_executor import PassthroughExecutor
+
         factory = MagicMock()
-        factory.create_executor_by_class_name = MagicMock(return_value=MagicMock())
+        # AF WorkflowBuilder は Executor インスタンスを要求するため、
+        # MagicMock ではなく PassthroughExecutor を返す
+        factory.create_executor_by_class_name = MagicMock(
+            side_effect=lambda class_name, **kwargs: PassthroughExecutor(id=class_name)
+        )
         return factory
 
     @pytest.fixture

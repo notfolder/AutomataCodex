@@ -143,19 +143,27 @@ def mock_config_manager() -> MagicMock:
 
 def _make_executor_factory() -> MagicMock:
     """ExecutorFactoryのモックを生成する"""
+    from consumer.executors.base_executor import PassthroughExecutor
+
     factory = MagicMock()
-    executor_mock = MagicMock()
-    executor_mock.handle = AsyncMock()
-    factory.create_executor_by_class_name = MagicMock(return_value=executor_mock)
+    # AF WorkflowBuilder は Executor インスタンスを要求するため、
+    # MagicMock ではなく PassthroughExecutor を返す
+    factory.create_executor_by_class_name = MagicMock(
+        side_effect=lambda class_name, **kwargs: PassthroughExecutor(id=class_name)
+    )
     return factory
 
 
 def _make_agent_factory() -> MagicMock:
     """AgentFactoryのモックを生成する"""
+    from consumer.executors.base_executor import PassthroughExecutor
+
     factory = MagicMock()
-    agent_mock = MagicMock()
-    agent_mock.handle = AsyncMock()
-    factory.create_agent = AsyncMock(return_value=agent_mock)
+    # AF WorkflowBuilder は Executor インスタンスを要求するため、
+    # MagicMock ではなく PassthroughExecutor を返す
+    factory.create_agent = AsyncMock(
+        side_effect=lambda agent_config, **kwargs: PassthroughExecutor(id=agent_config.id)
+    )
     return factory
 
 

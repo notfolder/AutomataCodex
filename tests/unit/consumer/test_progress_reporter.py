@@ -28,11 +28,11 @@ class _ConcreteWorkflowContext(WorkflowContext):
     def __init__(self) -> None:
         self._state: dict = {}
 
-    async def get_state(self, key: str):
+    def get_state(self, key: str, default=None):
         """指定キーの状態値を返す"""
-        return self._state.get(key)
+        return self._state.get(key, default)
 
-    async def set_state(self, key: str, value) -> None:
+    def set_state(self, key: str, value) -> None:
         """指定キーに値を保存する"""
         self._state[key] = value
 

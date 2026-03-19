@@ -183,6 +183,8 @@ class ProgressCommentManager:
         # Note ID を WorkflowContext に保存する
         context.set_state("progress_comment_id", note_id)
 
+        return note_id
+
     async def update_progress_comment(
         self,
         context: "WorkflowContext",
