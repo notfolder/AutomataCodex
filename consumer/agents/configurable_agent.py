@@ -11,8 +11,9 @@ CLASS_IMPLEMENTATION_SPEC.md § 1（ConfigurableAgent）に準拠する。
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
 from typing import Any
+
+from agent_framework import Executor, WorkflowContext, handler
 
 from shared.models.agent_definition import AgentNodeConfig
 
@@ -20,74 +21,11 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Agent Framework スタブ定義
-# 実際の Agent Framework が利用可能になった際に差し替える。
-# ---------------------------------------------------------------------------
-
-
-class WorkflowContext(ABC):
-    """
-    ワークフローコンテキスト（スタブ）
-
-    Agent Framework の WorkflowContext に相当する抽象基底クラス。
-    ノード間で共有される状態（キー・バリュー）を読み書きするインターフェースを定義する。
-    実装クラスは get_state / set_state を必ず実装しなければならない。
-    """
-
-    @abstractmethod
-    async def get_state(self, key: str) -> Any:
-        """
-        指定キーの状態値を取得する。
-
-        Args:
-            key: 取得するキー名
-
-        Returns:
-            キーに対応する値。存在しない場合は None。
-        """
-        ...
-
-    @abstractmethod
-    async def set_state(self, key: str, value: Any) -> None:
-        """
-        指定キーに値を保存する。
-
-        Args:
-            key: 保存するキー名
-            value: 保存する値
-        """
-        ...
-
-
-class BaseExecutor(ABC):
-    """
-    Agent Framework の Executor 基底クラス（スタブ）
-
-    Agent Framework の Executor インターフェースに相当する抽象基底クラス。
-    すべてのエージェントノードはこのクラスを継承して handle() を実装する。
-    """
-
-    @abstractmethod
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> Any:
-        """
-        メッセージを処理して結果を返す。
-
-        Args:
-            msg: 受け取るメッセージ（型は Agent Framework に依存）
-            ctx: ワークフローコンテキスト
-
-        Returns:
-            処理結果
-        """
-        ...
-
-
-# ---------------------------------------------------------------------------
 # ConfigurableAgent 本体
 # ---------------------------------------------------------------------------
 
 
-class ConfigurableAgent(BaseExecutor):
+class ConfigurableAgent(Executor):
     """
     汎用エージェントクラス
 
@@ -133,7 +71,9 @@ class ConfigurableAgent(BaseExecutor):
         self.prompt_content: str = prompt_content
         self.progress_reporter: Any = progress_reporter
         self.environment_id: str | None = environment_id
+        super().__init__(id=config.id)
 
+    @handler(input=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext) -> dict[str, Any]:
         """
         エージェントノードのメインハンドラ。
@@ -168,13 +108,13 @@ class ConfigurableAgent(BaseExecutor):
 
         try:
             # ステップ 1: タスク MR/Issue IID 取得
-            task_iid: Any = await ctx.get_state("task_mr_iid") or await ctx.get_state(
+            task_iid: Any = ctx.get_state("task_mr_iid") or ctx.get_state(
                 "task_issue_iid"
             )
 
             # ステップ 2: 入力データ取得
             input_data: dict[str, Any] = {
-                key: await ctx.get_state(key) for key in self.config.input_keys
+                key: ctx.get_state(key) for key in self.config.input_keys
             }
 
             # ステップ 3: 進捗報告（開始）
@@ -229,7 +169,7 @@ class ConfigurableAgent(BaseExecutor):
             # response_text から出力を抽出し、output_keys に対して ctx.set_state() を呼び出す
             for key in self.config.output_keys:
                 output_data[key] = response_text
-                await ctx.set_state(key, response_text)
+                ctx.set_state(key, response_text)
 
         except Exception as exc:
             # エラー発生時は progress_reporter に通知してから再送出する
@@ -334,7 +274,7 @@ class ConfigurableAgent(BaseExecutor):
         Returns:
             キーと値のペアからなる辞書
         """
-        return {key: await ctx.get_state(key) for key in keys}
+        return {key: ctx.get_state(key) for key in keys}
 
     async def store_result(
         self,
@@ -357,7 +297,7 @@ class ConfigurableAgent(BaseExecutor):
         """
         for key in output_keys:
             value: Any = result.get(key)
-            await ctx.set_state(key, value)
+            ctx.set_state(key, value)
 
     async def invoke_mcp_tool(
         self, tool_name: str, params: dict[str, Any]

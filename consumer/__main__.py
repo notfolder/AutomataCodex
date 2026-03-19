@@ -159,12 +159,32 @@ async def main() -> None:
         config_manager=config_manager,
     )
 
+    # IssueToMRConverter の初期化（OpenAIChatClientを使ったブランチ名LLM生成）
+    from agent_framework.openai import OpenAIChatClient
+    from consumer.tools.issue_to_mr_converter import IssueToMRConverter, IssueToMRConfig
+
+    openai_config = config_manager.get_openai_config()
+    issue_to_mr_chat_client = OpenAIChatClient(
+        api_key=openai_config.api_key or None,
+        base_url=openai_config.base_url or None,
+    )
+    issue_to_mr_config = config_manager.get_issue_to_mr_config()
+    issue_to_mr_converter = IssueToMRConverter(
+        gitlab_client=gitlab_client,
+        chat_client=issue_to_mr_chat_client,
+        config=IssueToMRConfig(
+            branch_prefix=issue_to_mr_config.branch_prefix,
+            target_branch=issue_to_mr_config.target_branch,
+        ),
+    )
+
     # TaskHandler の初期化
     task_handler = TaskHandler(
         task_strategy_factory=task_strategy_factory,
         workflow_factory=workflow_factory,
         definition_loader=definition_loader,
         task_repository=task_repository,
+        issue_to_mr_converter=issue_to_mr_converter,
     )
 
     # TaskProcessor の初期化

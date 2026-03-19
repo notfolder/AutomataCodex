@@ -12,10 +12,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from agent_framework import WorkflowContext, handler
+
 from consumer.executors.base_executor import BaseExecutor
 
 if TYPE_CHECKING:
-    from consumer.agents.configurable_agent import WorkflowContext
     from shared.gitlab_client.gitlab_client import GitlabClient
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,9 @@ class BranchMergeExecutor(BaseExecutor):
             gitlab_client: GitLabAPI クライアント
         """
         self.gitlab_client = gitlab_client
+        super().__init__(id=self.__class__.__name__)
 
+    @handler(input=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
         """
         選択された実装ブランチをオリジナルブランチにマージする。
@@ -59,7 +62,7 @@ class BranchMergeExecutor(BaseExecutor):
             ctx: ワークフローコンテキスト
         """
         # 選択された実装番号をコンテキストから取得する
-        selected_implementation: int | None = await self.get_context_value(
+        selected_implementation: int | None = self.get_context_value(
             ctx, "selected_implementation"
         )
 
@@ -72,7 +75,7 @@ class BranchMergeExecutor(BaseExecutor):
             return
 
         # branch_envsをコンテキストから取得する
-        branch_envs: dict[int, dict[str, Any]] = await self.get_context_value(
+        branch_envs: dict[int, dict[str, Any]] = self.get_context_value(
             ctx, "branch_envs"
         )
 
@@ -91,8 +94,8 @@ class BranchMergeExecutor(BaseExecutor):
         selected_branch: str = selected_entry["branch"]
 
         # original_branchとproject_idをコンテキストから取得する
-        original_branch: str = await self.get_context_value(ctx, "original_branch")
-        project_id: int = await self.get_context_value(ctx, "project_id")
+        original_branch: str = self.get_context_value(ctx, "original_branch")
+        project_id: int = self.get_context_value(ctx, "project_id")
 
         logger.info(
             "選択ブランチをオリジナルブランチにマージします: "
@@ -154,6 +157,6 @@ class BranchMergeExecutor(BaseExecutor):
                 )
 
         # merged_branchをコンテキストに保存する
-        await self.set_context_value(ctx, "merged_branch", selected_branch)
+        self.set_context_value(ctx, "merged_branch", selected_branch)
 
         logger.info("ブランチマージが完了しました: merged_branch=%s", selected_branch)

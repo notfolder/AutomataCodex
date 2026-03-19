@@ -7,17 +7,37 @@ ConfigurableAgentのhandle()・store_result()・invoke_mcp_tool()を検証する
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from agent_framework import InProcRunnerContext, WorkflowContext
+from agent_framework._workflows._state import State
 
-from agents.configurable_agent import ConfigurableAgent, WorkflowContext
+from agents.configurable_agent import ConfigurableAgent
 from shared.models.agent_definition import AgentNodeConfig
 
 
 # ========================================
-# テスト用フィクスチャ
+# テスト用ヘルパー関数・フィクスチャ
 # ========================================
+
+
+def _make_workflow_context(
+    executor_instance: Any, state_data: dict | None = None
+) -> WorkflowContext:
+    """テスト用WorkflowContextを作成するヘルパー"""
+    state = State()
+    if state_data:
+        for k, v in state_data.items():
+            state.set(k, v)
+        state.commit()
+    return WorkflowContext(
+        executor=executor_instance,
+        source_executor_ids=["test-source"],
+        state=state,
+        runner_context=InProcRunnerContext(),
+    )
 
 
 def _make_agent_node_config(
@@ -37,34 +57,12 @@ def _make_agent_node_config(
     )
 
 
-class _ConcreteWorkflowContext(WorkflowContext):
-    """テスト用WorkflowContextの具象クラス"""
-
-    def __init__(self) -> None:
-        self._state: dict = {}
-
-    async def get_state(self, key: str):
-        return self._state.get(key)
-
-    async def set_state(self, key: str, value) -> None:
-        self._state[key] = value
 
 
 @pytest.fixture
 def agent_config() -> AgentNodeConfig:
     """テスト用AgentNodeConfigを返す"""
     return _make_agent_node_config()
-
-
-@pytest.fixture
-def mock_ctx() -> _ConcreteWorkflowContext:
-    """テスト用WorkflowContextを返す"""
-    ctx = _ConcreteWorkflowContext()
-    ctx._state = {
-        "task_mr_iid": 42,
-        "task_description": "テストタスクの説明",
-    }
-    return ctx
 
 
 @pytest.fixture
@@ -98,6 +96,18 @@ def configurable_agent(
     )
 
 
+@pytest.fixture
+def mock_ctx(configurable_agent: ConfigurableAgent) -> WorkflowContext:
+    """テスト用WorkflowContextを返す（初期状態を設定済み）"""
+    return _make_workflow_context(
+        configurable_agent,
+        state_data={
+            "task_mr_iid": 42,
+            "task_description": "テストタスクの説明",
+        },
+    )
+
+
 # ========================================
 # TestConfigurableAgentHandle
 # ========================================
@@ -110,11 +120,11 @@ class TestConfigurableAgentHandle:
     async def test_handleが入力データを取得してプロンプトを生成する(
         self,
         configurable_agent: ConfigurableAgent,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
         mock_agent: MagicMock,
     ) -> None:
         """handle()を実行し、入力データが正しく取得されてagent.run()が呼ばれることを確認する"""
-        result = await configurable_agent.handle(msg={}, ctx=mock_ctx)
+        result = await configurable_agent.handle({}, mock_ctx)
 
         # agent.run()が呼ばれていることを確認する
         mock_agent.run.assert_called_once()
@@ -129,7 +139,7 @@ class TestConfigurableAgentHandle:
         role: str,
         mock_agent: MagicMock,
         mock_progress_reporter: MagicMock,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """roleが各値の場合にエラーなくhandle()が実行されることを確認する"""
         config = _make_agent_node_config(role=role)
@@ -141,18 +151,18 @@ class TestConfigurableAgentHandle:
         )
 
         # 例外が発生しないことを確認する
-        result = await agent.handle(msg={}, ctx=mock_ctx)
+        result = await agent.handle({}, mock_ctx)
         assert isinstance(result, dict)
 
     @pytest.mark.asyncio
     async def test_進捗報告がstart_llm_response_completeの順に呼び出される(
         self,
         configurable_agent: ConfigurableAgent,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
         mock_progress_reporter: MagicMock,
     ) -> None:
         """progress_reporter.report_progressが3回呼び出されることを確認する"""
-        await configurable_agent.handle(msg={}, ctx=mock_ctx)
+        await configurable_agent.handle({}, mock_ctx)
 
         # start・llm_response・completeの3回呼ばれることを確認する
         assert mock_progress_reporter.report_progress.call_count == 3
@@ -174,7 +184,7 @@ class TestConfigurableAgentHandle:
         self,
         agent_config: AgentNodeConfig,
         mock_progress_reporter: MagicMock,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """handle()内でエラーが発生した場合にevent='error'で報告されることを確認する"""
         # agent.run()が例外をスローするモックを作成する
@@ -189,7 +199,7 @@ class TestConfigurableAgentHandle:
         )
 
         with pytest.raises(RuntimeError, match="テストエラー"):
-            await agent.handle(msg={}, ctx=mock_ctx)
+            await agent.handle({}, mock_ctx)
 
         # エラー進捗報告が呼ばれていることを確認する
         error_calls = [
@@ -271,7 +281,7 @@ class TestConfigurableAgentMethods:
     async def test_store_resultがcontextにoutput_keysを保存する(
         self,
         configurable_agent: ConfigurableAgent,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """store_result()がctx.set_state()を正しく呼び出すことを確認する"""
         output_keys = ["planning_result"]
@@ -284,7 +294,7 @@ class TestConfigurableAgentMethods:
         )
 
         # contextに保存されていることを確認する
-        saved_value = await mock_ctx.get_state("planning_result")
+        saved_value = mock_ctx.get_state("planning_result")
         assert saved_value == "生成されたプラン"
 
 
@@ -300,11 +310,11 @@ class TestConfigurableAgentContextMethods:
     async def test_get_contextが複数キーの値を返す(
         self,
         configurable_agent: ConfigurableAgent,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """get_context()が指定したキー一覧のコンテキスト値をまとめて返すことを確認する"""
-        mock_ctx._state["key1"] = "value1"
-        mock_ctx._state["key2"] = "value2"
+        mock_ctx.set_state("key1", "value1")
+        mock_ctx.set_state("key2", "value2")
 
         result = await configurable_agent.get_context(["key1", "key2"], mock_ctx)
 
@@ -314,7 +324,7 @@ class TestConfigurableAgentContextMethods:
     async def test_get_contextが存在しないキーはNoneを返す(
         self,
         configurable_agent: ConfigurableAgent,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """get_context()で存在しないキーはNoneを返すことを確認する"""
         result = await configurable_agent.get_context(["nonexistent_key"], mock_ctx)
@@ -501,7 +511,7 @@ class TestReportProgressNodeId:
     @pytest.mark.asyncio
     async def test_report_progressがnode_idを優先して使用する(
         self,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """config.node_idが設定されている場合はnode_idをprogress_reporterに渡すことを確認する"""
         # graph構築時にnode_idが設定された状態を再現する
@@ -525,7 +535,7 @@ class TestReportProgressNodeId:
             progress_reporter=mock_progress_reporter,
         )
 
-        await agent.handle(msg={}, ctx=mock_ctx)
+        await agent.handle({}, mock_ctx)
 
         calls = mock_progress_reporter.report_progress.call_args_list
         assert len(calls) >= 1
@@ -537,7 +547,7 @@ class TestReportProgressNodeId:
     @pytest.mark.asyncio
     async def test_report_progressがnode_id未設定時はidをフォールバック(
         self,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """config.node_idがNoneの場合はconfig.idをnode_idとして使用することを確認する"""
         # node_idが設定されていない（デフォルトNone）状態を再現する
@@ -561,7 +571,7 @@ class TestReportProgressNodeId:
             progress_reporter=mock_progress_reporter,
         )
 
-        await agent.handle(msg={}, ctx=mock_ctx)
+        await agent.handle({}, mock_ctx)
 
         calls = mock_progress_reporter.report_progress.call_args_list
         assert len(calls) >= 1

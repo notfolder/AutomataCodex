@@ -14,17 +14,15 @@ import logging
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
-# 循環インポートを避けるため型チェック時のみインポートする
-if TYPE_CHECKING:
-    from consumer.agents.configurable_agent import WorkflowContext
+from agent_framework import Executor, WorkflowContext
 
-# configurable_agent.py で定義済みの BaseExecutor を継承して拡張する
-from consumer.agents.configurable_agent import BaseExecutor as _AgentBaseExecutor
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
 
-class BaseExecutor(_AgentBaseExecutor):
+class BaseExecutor(Executor):
     """
     Executor 基底クラス
 
@@ -35,7 +33,7 @@ class BaseExecutor(_AgentBaseExecutor):
         なし（サブクラスで定義する）
     """
 
-    async def get_context_value(self, ctx: WorkflowContext, key: str) -> Any:
+    def get_context_value(self, ctx: WorkflowContext, key: str) -> Any:
         """
         ワークフローコンテキストから値を取得する。
 
@@ -46,9 +44,9 @@ class BaseExecutor(_AgentBaseExecutor):
         Returns:
             キーに対応する値。存在しない場合は None。
         """
-        return await ctx.get_state(key)
+        return ctx.get_state(key)
 
-    async def set_context_value(
+    def set_context_value(
         self, ctx: WorkflowContext, key: str, value: Any
     ) -> None:
         """
@@ -59,7 +57,7 @@ class BaseExecutor(_AgentBaseExecutor):
             key: 保存するキー名
             value: 保存する値
         """
-        await ctx.set_state(key, value)
+        ctx.set_state(key, value)
 
     @abstractmethod
     async def handle(self, msg: Any, ctx: WorkflowContext) -> Any:

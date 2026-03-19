@@ -9,32 +9,36 @@ IMPLEMENTATION_PLAN.md フェーズ6-5 に準拠する。
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from agent_framework import InProcRunnerContext, WorkflowContext
+from agent_framework._workflows._state import State
 
-from agents.guideline_learning_agent import GuidelineLearningAgent, AgentResponse
-from agents.configurable_agent import WorkflowContext
+from agents.guideline_learning_agent import AgentResponse, GuidelineLearningAgent
 
 
 # ========================================
-# テスト用ヘルパークラス
+# テスト用ヘルパー関数
 # ========================================
 
 
-class _ConcreteWorkflowContext(WorkflowContext):
-    """テスト用WorkflowContextの具象クラス"""
-
-    def __init__(self) -> None:
-        self._state: dict = {}
-
-    async def get_state(self, key: str):
-        """指定キーの状態値を返す"""
-        return self._state.get(key)
-
-    async def set_state(self, key: str, value) -> None:
-        """指定キーに値を保存する"""
-        self._state[key] = value
+def _make_workflow_context(
+    executor_instance: Any, state_data: dict | None = None
+) -> WorkflowContext:
+    """テスト用WorkflowContextを作成するヘルパー"""
+    state = State()
+    if state_data:
+        for k, v in state_data.items():
+            state.set(k, v)
+        state.commit()
+    return WorkflowContext(
+        executor=executor_instance,
+        source_executor_ids=["test-source"],
+        state=state,
+        runner_context=InProcRunnerContext(),
+    )
 
 
 # ========================================
@@ -70,9 +74,13 @@ def mock_gitlab_client() -> MagicMock:
 
 
 @pytest.fixture
-def mock_ctx() -> _ConcreteWorkflowContext:
+def mock_ctx(mock_user_config_enabled: MagicMock, mock_gitlab_client: MagicMock) -> WorkflowContext:
     """テスト用WorkflowContextを返す"""
-    return _ConcreteWorkflowContext()
+    agent = GuidelineLearningAgent(
+        user_config=mock_user_config_enabled,
+        gitlab_client=mock_gitlab_client,
+    )
+    return _make_workflow_context(agent)
 
 
 # ========================================
@@ -87,7 +95,7 @@ class TestGuidelineLearningAgentHandle:
         self,
         mock_user_config_enabled: MagicMock,
         mock_gitlab_client: MagicMock,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """処理中にエラーが発生してもhandle()がAgentResponse(success=True)を返すことを確認する"""
         # _processで例外が発生するようにモック
@@ -106,7 +114,7 @@ class TestGuidelineLearningAgentHandle:
         self,
         mock_user_config_disabled: MagicMock,
         mock_gitlab_client: MagicMock,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """learning_enabled=falseの場合にhandle()がAgentResponse(success=True)を返してスキップすることを確認する"""
         agent = GuidelineLearningAgent(
@@ -125,7 +133,7 @@ class TestGuidelineLearningAgentHandle:
         self,
         mock_user_config_enabled: MagicMock,
         mock_gitlab_client: MagicMock,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """task_mr_iidがコンテキストに設定されていない場合にスキップされることを確認する"""
         agent = GuidelineLearningAgent(
@@ -143,7 +151,7 @@ class TestGuidelineLearningAgentHandle:
         self,
         mock_user_config_enabled: MagicMock,
         mock_gitlab_client: MagicMock,
-        mock_ctx: _ConcreteWorkflowContext,
+        mock_ctx: WorkflowContext,
     ) -> None:
         """対象コメントが存在する場合にLLM呼び出しが実行されることを確認する"""
         agent = GuidelineLearningAgent(
@@ -152,8 +160,8 @@ class TestGuidelineLearningAgentHandle:
         )
 
         # コンテキストを設定
-        await mock_ctx.set_state("task_mr_iid", 10)
-        await mock_ctx.set_state("task_project_id", 1)
+        mock_ctx.set_state("task_mr_iid", 10)
+        mock_ctx.set_state("task_project_id", 1)
 
         # MRコメントを返すモック
         mock_gitlab_client.get_mr_comments.return_value = [

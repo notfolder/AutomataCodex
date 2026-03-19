@@ -12,10 +12,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from agent_framework import WorkflowContext, handler
+
 from consumer.executors.base_executor import BaseExecutor
 
 if TYPE_CHECKING:
-    from consumer.agents.configurable_agent import WorkflowContext
     from consumer.execution.execution_environment_manager import (
         ExecutionEnvironmentManager,
     )
@@ -63,6 +64,7 @@ class ExecEnvSetupExecutor(BaseExecutor):
         self.env_manager = env_manager
         self.gitlab_client = gitlab_client
         self.graph_definition = graph_definition
+        super().__init__(id=node_id)
 
     def _get_node_config(self) -> dict[str, Any]:
         """
@@ -96,6 +98,7 @@ class ExecEnvSetupExecutor(BaseExecutor):
             suffix = suffix[len(_NODE_ID_PREFIX):]
         return suffix.replace("_", "-")
 
+    @handler(input=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
         """
         実行フェーズの Docker 環境を準備し、必要に応じてサブブランチを作成する。
@@ -115,14 +118,14 @@ class ExecEnvSetupExecutor(BaseExecutor):
             ctx: ワークフローコンテキスト
         """
         # MR IIDをコンテキストから取得する
-        mr_iid: int = await self.get_context_value(ctx, "task_mr_iid")
+        mr_iid: int = self.get_context_value(ctx, "task_mr_iid")
 
         # graph_definitionから自ノードのenv_countを取得する
         node_config = self._get_node_config()
         env_count: int = node_config.get("env_count", 1)
 
         # 使用する環境名をコンテキストから取得する
-        selected_environment: str = await self.get_context_value(
+        selected_environment: str = self.get_context_value(
             ctx, "selected_environment"
         )
 
@@ -150,8 +153,8 @@ class ExecEnvSetupExecutor(BaseExecutor):
         )
 
         # original_branchとproject_idをコンテキストから取得する
-        original_branch: str = await self.get_context_value(ctx, "original_branch")
-        project_id: int = await self.get_context_value(ctx, "project_id")
+        original_branch: str = self.get_context_value(ctx, "original_branch")
+        project_id: int = self.get_context_value(ctx, "project_id")
 
         # branch_envs辞書を構築する（キーは環境番号N: 1〜env_count）
         branch_envs: dict[int, dict[str, Any]] = {}
@@ -218,7 +221,7 @@ class ExecEnvSetupExecutor(BaseExecutor):
                 raise
 
         # branch_envsをコンテキストに保存する
-        await self.set_context_value(ctx, "branch_envs", branch_envs)
+        self.set_context_value(ctx, "branch_envs", branch_envs)
 
         logger.info(
             "実行環境のセットアップが完了しました: node_id=%s, branch_envs=%s",

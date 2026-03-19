@@ -15,7 +15,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from consumer.agents.configurable_agent import BaseExecutor, WorkflowContext
+from agent_framework import Executor, WorkflowContext, handler
 
 if TYPE_CHECKING:
     from consumer.user_config_client import UserConfig
@@ -61,7 +61,7 @@ class AgentResponse:
         self.message = message
 
 
-class GuidelineLearningAgent(BaseExecutor):
+class GuidelineLearningAgent(Executor):
     """
     ガイドライン学習エージェント
 
@@ -100,7 +100,9 @@ class GuidelineLearningAgent(BaseExecutor):
         self.user_config = user_config
         self.gitlab_client = gitlab_client
         self.progress_reporter = progress_reporter
+        super().__init__(id=self.__class__.__name__)
 
+    @handler(input=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext) -> AgentResponse:
         """
         ガイドライン学習処理を実行する。
@@ -154,9 +156,9 @@ class GuidelineLearningAgent(BaseExecutor):
             return AgentResponse(success=True)
 
         # 2. タスク情報取得
-        task_mr_iid = await ctx.get_state("task_mr_iid")
-        task_project_id = await ctx.get_state("task_project_id")
-        task_start_time = await ctx.get_state("task_start_time")
+        task_mr_iid = ctx.get_state("task_mr_iid")
+        task_project_id = ctx.get_state("task_project_id")
+        task_start_time = ctx.get_state("task_start_time")
 
         if task_mr_iid is None or task_project_id is None:
             logger.warning(
@@ -184,7 +186,7 @@ class GuidelineLearningAgent(BaseExecutor):
             return AgentResponse(success=True)
 
         # 4. ガイドライン読み込み
-        branch = await ctx.get_state("assigned_branch") or "main"
+        branch = ctx.get_state("assigned_branch") or "main"
         current_guidelines = self._get_guidelines(
             project_id=task_project_id,
             branch=branch,

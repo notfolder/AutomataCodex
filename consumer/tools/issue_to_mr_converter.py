@@ -10,17 +10,19 @@ CLASS_IMPLEMENTATION_SPEC.md § 10.2（IssueToMRConverter）に準拠する。
 
 from __future__ import annotations
 
-import asyncio
-import inspect
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from agent_framework.openai import OpenAIChatClient
     from shared.gitlab_client.gitlab_client import GitlabClient
     from shared.models.gitlab import GitLabIssue, GitLabMergeRequest
 
 logger = logging.getLogger(__name__)
+
+# ブランチ名生成の最大リトライ回数（重複があった場合に再生成する回数）
+_BRANCH_NAME_MAX_RETRIES = 3
 
 
 @dataclass
@@ -45,21 +47,26 @@ class IssueToMRConverter:
     """
     Issue から Merge Request への変換クラス。
 
-    LLM クライアントを使ってブランチ名を生成し、GitLab API を通じて
-    ブランチ作成・MR 作成・コメント転記・Issue Done 化を一連の流れで実行する。
+    Agent Framework の OpenAIChatClient を使ってブランチ名を生成し、
+    GitLab API を通じてブランチ作成・MR 作成・コメント転記・Issue Done 化を
+    一連の流れで実行する。
+
+    ブランチ名生成時はブランチ重複チェック付きリトライを行い、重複がなくなるまで
+    最大 _BRANCH_NAME_MAX_RETRIES 回再生成する。それでも重複が解消しない場合は
+    デフォルト形式（{prefix}{iid}-{title[:30]}）を使用する。
 
     CLASS_IMPLEMENTATION_SPEC.md § 10.2 に準拠する。
 
     Attributes:
         gitlab_client: GitLab API クライアント
-        llm_client: LLM クライアント（ブランチ名生成用）
+        chat_client: AF ChatClient（ブランチ名生成用）
         config: IssueToMRConfig 設定オブジェクト
     """
 
     def __init__(
         self,
         gitlab_client: "GitlabClient",
-        llm_client: Any,
+        chat_client: "OpenAIChatClient | None" = None,
         config: IssueToMRConfig | None = None,
     ) -> None:
         """
@@ -67,19 +74,36 @@ class IssueToMRConverter:
 
         Args:
             gitlab_client: GitLab API クライアント
-            llm_client: LLM クライアント（generate メソッドを持つことが期待される）
+            chat_client: AF の ChatClient（ブランチ名生成用。None の場合はデフォルト形式を使用）
             config: Issue → MR 変換設定（省略時はデフォルト設定を使用）
         """
         self.gitlab_client = gitlab_client
-        self.llm_client = llm_client
+        self.chat_client = chat_client
         self.config = config if config is not None else IssueToMRConfig()
+
+    def _make_default_branch_name(self, issue: "GitLabIssue") -> str:
+        """
+        デフォルト形式のブランチ名を生成する。
+
+        AUTOMATA_CODEX_SPEC.md § 5.0.5 に準拠する形式:
+        {prefix}{iid}-{title の先頭30文字をハイフン区切り}
+
+        Args:
+            issue: 変換対象の GitLab Issue
+
+        Returns:
+            デフォルトブランチ名文字列
+        """
+        safe_title = issue.title[:30].replace(" ", "-")
+        return f"{self.config.branch_prefix}{issue.iid}-{safe_title}"
 
     async def _generate_branch_name(self, issue: "GitLabIssue") -> str:
         """
-        LLM を使ってブランチ名を生成する。
+        AF Agent を使ってブランチ名を生成する。
 
-        llm_client に generate メソッドがある場合は LLM でブランチ名を生成し、
-        ない場合はデフォルト形式（{prefix}{iid}-{title[:30]}）を使用する。
+        chat_client が設定されている場合は Agent.run() でブランチ名を生成し、
+        生成したブランチ名が GitLab 上で既に存在する場合は再生成する（最大 _BRANCH_NAME_MAX_RETRIES 回）。
+        全リトライが失敗した場合、または chat_client が None の場合はデフォルト形式を使用する。
 
         Args:
             issue: 変換対象の GitLab Issue
@@ -87,32 +111,98 @@ class IssueToMRConverter:
         Returns:
             生成されたブランチ名文字列
         """
-        if hasattr(self.llm_client, "generate"):
-            prompt = (
-                f"Generate a git branch name for the following issue: "
-                f"{issue.title}. Use format: {self.config.branch_prefix}{{issue_iid}}"
-            )
+        if self.chat_client is None:
+            branch_name = self._make_default_branch_name(issue)
+            logger.info("chat_clientが未設定のためデフォルトブランチ名を使用します: %s", branch_name)
+            return branch_name
+
+        from agent_framework import Agent
+
+        prompt = (
+            f"次のIssueに対するGitブランチ名を生成してください。\n"
+            f"プレフィックス: {self.config.branch_prefix}\n"
+            f"Issue IID: {issue.iid}\n"
+            f"Issue タイトル: {issue.title}\n\n"
+            f"要件:\n"
+            f"- 先頭に '{self.config.branch_prefix}' を付ける\n"
+            f"- 英小文字・数字・ハイフンのみを使用する\n"
+            f"- スペースは '-' に変換する\n"
+            f"- Issue IID を含める\n"
+            f"- ブランチ名のみを出力する（説明文は不要）"
+        )
+
+        agent = Agent(client=self.chat_client)
+
+        for attempt in range(_BRANCH_NAME_MAX_RETRIES):
             try:
-                generate_fn = self.llm_client.generate
-                # generate メソッドが非同期の場合は await する
-                if inspect.iscoroutinefunction(generate_fn):
-                    branch_name: str = await generate_fn(prompt)
+                response = await agent.run([{"role": "user", "content": prompt}])
+                # AgentResponseから応答テキストを取得する
+                branch_name = ""
+                if hasattr(response, "content") and isinstance(response.content, list):
+                    # content がリストの場合は最初のテキストアイテムを取得する
+                    for item in response.content:
+                        if hasattr(item, "text"):
+                            branch_name = item.text.strip()
+                            break
+                elif hasattr(response, "content") and isinstance(response.content, str):
+                    branch_name = response.content.strip()
                 else:
-                    branch_name = generate_fn(prompt)
-                branch_name = branch_name.strip()
-                if branch_name:
-                    logger.info("LLMによるブランチ名生成: %s", branch_name)
+                    branch_name = str(response).strip()
+
+                # 不正文字を除去して正規化する（英小文字・数字・ハイフン・スラッシュのみ許可）
+                import re
+                branch_name = re.sub(r"[^a-zA-Z0-9\-/]", "-", branch_name)
+                branch_name = re.sub(r"-{2,}", "-", branch_name).strip("-")
+
+                if not branch_name:
+                    logger.warning(
+                        "LLMのブランチ名生成結果が空でした（試行%d/%d）。再試行します。",
+                        attempt + 1,
+                        _BRANCH_NAME_MAX_RETRIES,
+                    )
+                    continue
+
+                # ブランチ重複チェック
+                branch_exists = self.gitlab_client.branch_exists(
+                    project_id=issue.project_id,
+                    branch_name=branch_name,
+                )
+                if not branch_exists:
+                    logger.info(
+                        "LLMによるブランチ名生成成功（試行%d/%d）: %s",
+                        attempt + 1,
+                        _BRANCH_NAME_MAX_RETRIES,
+                        branch_name,
+                    )
                     return branch_name
+
+                logger.warning(
+                    "生成したブランチ名が既に存在します（試行%d/%d）: %s 再生成します。",
+                    attempt + 1,
+                    _BRANCH_NAME_MAX_RETRIES,
+                    branch_name,
+                )
+                # リトライ時はIssue番号のサフィックスをプロンプトに追加する
+                prompt = (
+                    f"{prompt}\n\n"
+                    f"注意: '{branch_name}' は既に存在します。"
+                    f" 末尾に '-v{attempt + 2}' を付けるなど、異なる名前を生成してください。"
+                )
+
             except Exception as exc:
                 logger.warning(
-                    "LLMブランチ名生成に失敗しました。デフォルト形式を使用します: %s",
+                    "LLMブランチ名生成に失敗しました（試行%d/%d）: %s",
+                    attempt + 1,
+                    _BRANCH_NAME_MAX_RETRIES,
                     exc,
                 )
 
-        # デフォルト: {prefix}{iid}-{title の先頭30文字をハイフン区切り}
-        safe_title = issue.title[:30].replace(" ", "-")
-        branch_name = f"{self.config.branch_prefix}{issue.iid}-{safe_title}"
-        logger.info("デフォルト形式でブランチ名を生成: %s", branch_name)
+        # 全リトライ失敗: デフォルト形式にフォールバックする
+        branch_name = self._make_default_branch_name(issue)
+        logger.warning(
+            "LLMブランチ名生成が全て失敗しました。デフォルト形式を使用します: %s",
+            branch_name,
+        )
         return branch_name
 
     async def convert(self, issue: "GitLabIssue") -> "GitLabMergeRequest":

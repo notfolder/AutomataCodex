@@ -354,7 +354,7 @@ class TestIssueToMRConverter:
 
         converter = IssueToMRConverter(
             gitlab_client=mock_gitlab_client,
-            llm_client=mock_llm_client,
+            chat_client=mock_llm_client,
             config=config,
         )
 

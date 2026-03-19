@@ -728,19 +728,23 @@ class TestBranchMergeExecutorIntegration:
 
     def _make_context(self, state: dict[str, Any]) -> Any:
         """テスト用WorkflowContextを生成する"""
-        from agents.configurable_agent import WorkflowContext
+        from agent_framework import InProcRunnerContext, WorkflowContext
+        from agent_framework._workflows._state import State
+        from executors.branch_merge_executor import BranchMergeExecutor
 
-        class _ConcreteWorkflowContext(WorkflowContext):
-            def __init__(self, initial_state: dict) -> None:
-                self._state = dict(initial_state)
-
-            async def get_state(self, key: str) -> Any:
-                return self._state.get(key)
-
-            async def set_state(self, key: str, value: Any) -> None:
-                self._state[key] = value
-
-        return _ConcreteWorkflowContext(state)
+        # ダミーのgitlab_clientでexecutorインスタンスを作成してcontextに渡す
+        from unittest.mock import MagicMock
+        dummy_executor = BranchMergeExecutor(gitlab_client=MagicMock())
+        s = State()
+        for k, v in state.items():
+            s.set(k, v)
+        s.commit()
+        return WorkflowContext(
+            executor=dummy_executor,
+            source_executor_ids=["test-source"],
+            state=s,
+            runner_context=InProcRunnerContext(),
+        )
 
     async def test_選択ブランチが元ブランチにマージされる(
         self,
@@ -765,7 +769,7 @@ class TestBranchMergeExecutorIntegration:
         })
 
         executor = BranchMergeExecutor(gitlab_client=mock_gitlab_client)
-        await executor.handle(msg={}, ctx=ctx)
+        await executor.handle({}, ctx)
 
         # 選択された実装（env-002: feature/test-code-gen-2）がマージされることを確認する
         mock_gitlab_client.merge_branch.assert_called_once_with(
@@ -796,7 +800,7 @@ class TestBranchMergeExecutorIntegration:
         })
 
         executor = BranchMergeExecutor(gitlab_client=mock_gitlab_client)
-        await executor.handle(msg={}, ctx=ctx)
+        await executor.handle({}, ctx)
 
         # 非選択ブランチ（1, 3）が削除されることを確認する
         deleted_branches = {
@@ -828,7 +832,7 @@ class TestBranchMergeExecutorIntegration:
         })
 
         executor = BranchMergeExecutor(gitlab_client=mock_gitlab_client)
-        await executor.handle(msg={}, ctx=ctx)
+        await executor.handle({}, ctx)
 
         # マージが呼ばれないことを確認する
         mock_gitlab_client.merge_branch.assert_not_called()
@@ -855,10 +859,10 @@ class TestBranchMergeExecutorIntegration:
         })
 
         executor = BranchMergeExecutor(gitlab_client=mock_gitlab_client)
-        await executor.handle(msg={}, ctx=ctx)
+        await executor.handle({}, ctx)
 
         # merged_branchが保存されていることを確認する
-        merged_branch = await ctx.get_state("merged_branch")
+        merged_branch = ctx.get_state("merged_branch")
         assert merged_branch == "feature/test-code-gen-1"
 
 

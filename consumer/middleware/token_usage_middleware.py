@@ -15,7 +15,7 @@ from consumer.middleware.i_middleware import IMiddleware, MiddlewareSignal, Work
 from consumer.middleware.metrics_collector import MetricsCollector
 
 if TYPE_CHECKING:
-    from consumer.agents.configurable_agent import WorkflowContext
+    from agent_framework import WorkflowContext
     from consumer.providers.context_storage_manager import ContextStorageManager
 
 logger = logging.getLogger(__name__)

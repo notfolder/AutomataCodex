@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from consumer.agents.configurable_agent import WorkflowContext
+    from agent_framework import WorkflowContext
     from consumer.tools.mermaid_graph_renderer import MermaidGraphRenderer
     from consumer.tools.progress_comment_manager import ProgressCommentManager
 

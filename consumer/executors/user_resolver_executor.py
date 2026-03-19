@@ -12,10 +12,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from agent_framework import WorkflowContext, handler
+
 from consumer.executors.base_executor import BaseExecutor
 
 if TYPE_CHECKING:
-    from consumer.agents.configurable_agent import WorkflowContext
     from shared.gitlab_client.gitlab_client import GitlabClient
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,9 @@ class UserResolverExecutor(BaseExecutor):
         """
         self.gitlab_client = gitlab_client
         self.user_config_client = user_config_client
+        super().__init__(id=self.__class__.__name__)
 
+    @handler(input=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
         """
         ユーザー情報を解決してコンテキストに保存する。
@@ -64,7 +67,7 @@ class UserResolverExecutor(BaseExecutor):
             ctx: ワークフローコンテキスト
         """
         # タスク識別子からプロジェクトIDとMR IIDを取得する
-        task_identifier: dict[str, Any] = await self.get_context_value(
+        task_identifier: dict[str, Any] = self.get_context_value(
             ctx, "task_identifier"
         )
         project_id: int = task_identifier["project_id"]
@@ -96,7 +99,7 @@ class UserResolverExecutor(BaseExecutor):
         user_config: Any = await self.user_config_client.get_user_config(user_email)
 
         # コンテキストにユーザー情報を保存する
-        await self.set_context_value(ctx, "user_email", user_email)
-        await self.set_context_value(ctx, "user_config", user_config)
+        self.set_context_value(ctx, "user_email", user_email)
+        self.set_context_value(ctx, "user_config", user_config)
 
         logger.info("ユーザー情報をコンテキストに保存しました: email=%s", user_email)

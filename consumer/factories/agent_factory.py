@@ -188,24 +188,47 @@ class AgentFactory:
 
     def _create_chat_client(self, user_config: Any) -> Any:
         """
-        ユーザー設定に基づいてChatClientを生成する（スタブ）。
+        ユーザー設定に基づいてChatClientを生成する。
 
-        Agent Framework統合後に OpenAIChatClient/AzureOpenAIChatClient を
-        適切に生成する実装に置き換える。
+        user_config.llm_provider が "azure" の場合は AzureOpenAIChatClient を、
+        それ以外（openai/ollama/lmstudio）の場合は OpenAIChatClient を生成する。
+        ユーザーの api_key が空の場合、環境変数 OPENAI_API_KEY が使用される。
 
         Args:
             user_config: UserConfigインスタンス
 
         Returns:
-            ChatClientインスタンス（スタブ）
+            BaseChatClientインスタンス
         """
+        provider: str = getattr(user_config, "llm_provider", "openai")
+        model_name: str = getattr(user_config, "model_name", "gpt-4o")
+        api_key: str = getattr(user_config, "api_key", "")
+        base_url: str | None = getattr(user_config, "base_url", None)
+
         logger.debug(
             "ChatClientを生成します: provider=%s, model=%s",
-            getattr(user_config, "llm_provider", "openai"),
-            getattr(user_config, "model_name", "gpt-4o"),
+            provider,
+            model_name,
         )
-        # スタブ実装: 将来的にAgent Framework統合で実際のChatClientを返す
-        return None
+
+        if provider == "azure":
+            from agent_framework.azure import AzureOpenAIChatClient
+
+            # Azure OpenAI: api_keyとbase_urlはUserConfigから取得する
+            return AzureOpenAIChatClient(
+                api_key=api_key or None,
+                endpoint=base_url or None,
+                deployment_name=model_name,
+            )
+        else:
+            from agent_framework.openai import OpenAIChatClient
+
+            # OpenAI互換（openai/ollama/lmstudio）: base_urlにOpenAI互換エンドポイントを指定
+            return OpenAIChatClient(
+                api_key=api_key or None,
+                model_id=model_name,
+                base_url=base_url or None,
+            )
 
     def _build_system_prompt(self, prompt_content: str) -> str:
         """
@@ -277,17 +300,30 @@ class AgentFactory:
         tool_list: list[Any],
     ) -> Any:
         """
-        Agent Frameworkのエージェントインスタンスを生成する（スタブ）。
+        Agent Frameworkのエージェントインスタンスを生成する。
 
-        Agent Framework統合後に実際のAgentインスタンスを生成する実装に置き換える。
+        chat_client に基づいて Agent を生成する。
+        chat_client が None の場合はスキップして None を返す。
 
         Args:
-            chat_client: ChatClientインスタンス
+            chat_client: BaseChatClientインスタンス
             system_prompt: システムプロンプト文字列
-            tool_list: ツールリスト
+            tool_list: ツールリスト（MCPStdioTool / FunctionTool 等）
 
         Returns:
-            Agentインスタンス（スタブ）
+            Agent インスタンス。chat_client が None の場合は None。
         """
-        # スタブ実装: 将来的にAgent Framework統合で実際のAgentを返す
-        return None
+        if chat_client is None:
+            logger.warning(
+                "chat_clientが未設定のためAgentインスタンスをスキップします。"
+                " LLM API キーが設定されているか確認してください。"
+            )
+            return None
+
+        from agent_framework import Agent
+
+        return Agent(
+            client=chat_client,
+            instructions=system_prompt or None,
+            tools=tool_list or None,
+        )
