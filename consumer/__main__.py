@@ -168,7 +168,7 @@ async def main() -> None:
     gitlab_config = config_manager.get_gitlab_config()
     issue_to_mr_converter = IssueToMRConverter(
         gitlab_client=gitlab_client,
-        llm_client=None,  # ブランチ名生成はデフォルト形式にフォールバックする
+        chat_client=None,  # ブランチ名生成はデフォルト形式にフォールバックする
         config=IssueToMRConverterConfig(
             branch_prefix=issue_to_mr_app_config.branch_prefix,
             target_branch=issue_to_mr_app_config.target_branch,
