@@ -214,9 +214,12 @@ class IssueToMRConverter:
         )
         return branch_name
 
-    async def convert(self, issue: "GitLabIssue") -> "GitLabMergeRequest":
+    async def convert(self, issue_or_task: "GitLabIssue | Any") -> "GitLabMergeRequest":
         """
         Issue から Merge Request への変換を実行する。
+
+        引数に Task が渡された場合は gitlab_client で GitLabIssue を取得してから処理する。
+        引数に GitLabIssue が直接渡された場合はそのまま使用する。
 
         処理フロー:
         1. LLM でブランチ名を生成する
@@ -229,11 +232,23 @@ class IssueToMRConverter:
         8. Issue を Done ラベルでクローズ化する
 
         Args:
-            issue: 変換対象の GitLab Issue
+            issue_or_task: 変換対象の GitLab Issue または Task オブジェクト
 
         Returns:
             作成された GitLabMergeRequest オブジェクト
         """
+        from shared.models.task import Task as _Task
+
+        if isinstance(issue_or_task, _Task):
+            # Task が渡された場合は GitLab API から GitLabIssue を取得する
+            task = issue_or_task
+            issue = self.gitlab_client.get_issue(
+                project_id=task.project_id,
+                issue_iid=task.issue_iid,
+            )
+        else:
+            issue = issue_or_task
+
         project_id = issue.project_id
         logger.info(
             "Issue→MR変換開始: project_id=%d, issue_iid=%d, title=%s",
@@ -291,7 +306,8 @@ class IssueToMRConverter:
                     project_id, mr.iid, note.body
                 )
             logger.info(
-                "Issueコメント転記完了: %d 件", sum(1 for n in issue_notes if not n.system)
+                "Issueコメント転記完了: %d 件",
+                sum(1 for n in issue_notes if not n.system),
             )
         except Exception as exc:
             logger.warning("Issueコメントの転記に失敗しました: %s", exc)
@@ -299,7 +315,9 @@ class IssueToMRConverter:
         # ⑥ Issueのラベル・アサイニーをMRにコピーする
         try:
             # u.id が None になりうる場合（GitLabUser.email同様にオプション）に備えてフィルタリングする
-            assignee_ids: list[int] = [u.id for u in issue.assignees if u.id is not None]
+            assignee_ids: list[int] = [
+                u.id for u in issue.assignees if u.id is not None
+            ]
             mr = self.gitlab_client.update_merge_request(
                 project_id=project_id,
                 mr_iid=mr.iid,

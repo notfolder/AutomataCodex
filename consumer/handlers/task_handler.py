@@ -136,7 +136,9 @@ class TaskHandler:
                         user_email=task.user_email,
                         status="running",
                     )
-                logger.info("タスクをDBに記録しました: task_uuid=%s", task.task_uuid)
+                    logger.info(
+                        "タスクをDBに記録しました: task_uuid=%s", task.task_uuid
+                    )
             except Exception as exc:
                 logger.warning(
                     "タスクのDB記録に失敗しました（処理は続行）: task_uuid=%s, error=%s",

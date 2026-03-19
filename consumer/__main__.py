@@ -34,6 +34,10 @@ from shared.database.repositories.workflow_execution_state_repository import (
 from shared.gitlab_client.gitlab_client import GitlabClient
 from shared.messaging.rabbitmq_client import RabbitMQClient
 
+from consumer.tools.issue_to_mr_converter import (
+    IssueToMRConverter,
+    IssueToMRConfig as IssueToMRConverterConfig,
+)
 from consumer.consumer import Consumer
 from consumer.definitions.definition_loader import DefinitionLoader
 from consumer.factories.agent_factory import AgentFactory
@@ -159,22 +163,17 @@ async def main() -> None:
         config_manager=config_manager,
     )
 
-    # IssueToMRConverter の初期化（OpenAIChatClientを使ったブランチ名LLM生成）
-    from agent_framework.openai import OpenAIChatClient
-    from consumer.tools.issue_to_mr_converter import IssueToMRConverter, IssueToMRConfig
-
-    openai_config = config_manager.get_openai_config()
-    issue_to_mr_chat_client = OpenAIChatClient(
-        api_key=openai_config.api_key or None,
-        base_url=openai_config.base_url or None,
-    )
-    issue_to_mr_config = config_manager.get_issue_to_mr_config()
+    # IssueToMRConverter の設定を組み立てる
+    issue_to_mr_app_config = config_manager.get_issue_to_mr_config()
+    gitlab_config = config_manager.get_gitlab_config()
     issue_to_mr_converter = IssueToMRConverter(
         gitlab_client=gitlab_client,
-        chat_client=issue_to_mr_chat_client,
-        config=IssueToMRConfig(
-            branch_prefix=issue_to_mr_config.branch_prefix,
-            target_branch=issue_to_mr_config.target_branch,
+        llm_client=None,  # ブランチ名生成はデフォルト形式にフォールバックする
+        config=IssueToMRConverterConfig(
+            branch_prefix=issue_to_mr_app_config.branch_prefix,
+            target_branch=issue_to_mr_app_config.target_branch,
+            mr_title_template=issue_to_mr_app_config.mr_title_template,
+            done_label=gitlab_config.done_label,
         ),
     )
 
