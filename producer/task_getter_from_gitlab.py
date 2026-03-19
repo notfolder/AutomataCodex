@@ -91,6 +91,25 @@ class TaskGetterFromGitLab:
 
         return True
 
+    def _is_bot_assignee(self, assignees: list) -> bool:
+        """
+        botがアサインされているか確認する（coding_agent準拠）。
+
+        bot_nameが未設定（空文字）の場合はチェックをスキップしてTrueを返す。
+        assigneesリストの中にbot_nameと一致するusernameが存在する場合にTrueを返す。
+
+        Args:
+            assignees: GitLabUser オブジェクトのリスト
+
+        Returns:
+            botがアサインされている場合True、それ以外はFalse
+        """
+        bot_name = self.gitlab_config.bot_name
+        # bot_name未設定の場合はチェックをスキップ（後方互換性を維持）
+        if not bot_name:
+            return True
+        return any(user.username == bot_name for user in assignees)
+
     def get_unprocessed_issues(self) -> list[GitLabIssue]:
         """
         処理対象のIssue一覧を取得する。
@@ -128,7 +147,10 @@ class TaskGetterFromGitLab:
             return []
 
         unprocessed = [
-            issue for issue in issues if self._is_processing_target(issue.labels)
+            issue
+            for issue in issues
+            if self._is_processing_target(issue.labels)
+            and self._is_bot_assignee(issue.assignees)
         ]
         logger.info(
             "未処理Issue: total=%d, unprocessed=%d",
@@ -173,7 +195,12 @@ class TaskGetterFromGitLab:
             )
             return []
 
-        unprocessed = [mr for mr in mrs if self._is_processing_target(mr.labels)]
+        unprocessed = [
+            mr
+            for mr in mrs
+            if self._is_processing_target(mr.labels)
+            and self._is_bot_assignee(mr.assignees)
+        ]
         logger.info(
             "未処理MR: total=%d, unprocessed=%d",
             len(mrs),
