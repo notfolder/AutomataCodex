@@ -114,7 +114,10 @@ class IssueToMRConverter:
         """
         if self.chat_client is None:
             branch_name = self._make_default_branch_name(issue)
-            logger.info("chat_clientが未設定のためデフォルトブランチ名を使用します: %s", branch_name)
+            logger.info(
+                "chat_clientが未設定のためデフォルトブランチ名を使用します: %s",
+                branch_name,
+            )
             return branch_name
 
         from agent_framework import Agent
@@ -276,6 +279,7 @@ class IssueToMRConverter:
                     branch=branch_name,
                     commit_message=f"Initial commit for issue #{issue.iid}",
                     actions=[],
+                    allow_empty=True,
                 )
                 logger.info("空コミット作成完了: branch=%s", branch_name)
             except Exception as exc:

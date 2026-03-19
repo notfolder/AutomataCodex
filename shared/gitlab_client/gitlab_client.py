@@ -878,6 +878,7 @@ class GitlabClient:
         branch: str,
         commit_message: str,
         actions: list[dict[str, Any]],
+        allow_empty: bool = False,
     ) -> GitLabCommit:
         """
         コミットを作成する（複数ファイル操作を1コミットで実行）。
@@ -889,16 +890,19 @@ class GitlabClient:
             actions: ファイル操作アクションのリスト
                 各アクション: {"action": "create"|"update"|"delete"|"move"|"chmod",
                                "file_path": str, "content": str, ...}
+            allow_empty: Trueの場合、actionsが空でもコミットを作成する（デフォルト: False）
 
         Returns:
             作成されたGitLabCommitインスタンス
         """
         project = self._get_project(project_id)
-        payload = {
+        payload: dict[str, Any] = {
             "branch": branch,
             "commit_message": commit_message,
             "actions": actions,
         }
+        if allow_empty:
+            payload["allow_empty"] = True
         commit_obj = self._call_with_retry(project.commits.create, payload)
         result = GitLabCommit(
             id=commit_obj.id,
