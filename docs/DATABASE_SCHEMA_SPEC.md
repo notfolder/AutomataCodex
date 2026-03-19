@@ -782,7 +782,8 @@ LLM会話履歴を時系列順に保存する。PostgreSqlChatHistoryProviderが
 | task_type | TEXT | NOT NULL | タスク種別 |
 | task_identifier | TEXT | NOT NULL | GitLab Issue/MR識別子 |
 | repository | TEXT | NOT NULL | リポジトリ名 |
-| username | TEXT | NOT NULL | GitLabユーザー名（外部キー） | | TEXT | | 使用ワークフロー名 |
+| username | TEXT | NOT NULL | GitLabユーザー名（外部キー） |
+| workflow_name | TEXT | | 使用ワークフロー名 |
 | created_at | TIMESTAMP | NOT NULL DEFAULT CURRENT_TIMESTAMP | 作成日時 |
 | updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 最終更新日時 |
 

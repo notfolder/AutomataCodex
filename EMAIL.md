@@ -143,3 +143,183 @@ GitLabではemailの取得が困難なため、ユーザー識別キーをメー
 | 行番号 | 修正前 | 修正後 |
 |--------|--------|--------|
 | 351 | `TaskContextのフィールドに user_email` | `TaskContextのフィールドに username` |
+
+---
+
+## コード修正方針
+
+仕様変更をコードに反映する際の変更方針を変更点別に記載する。
+
+### 1. データモデル（`shared/models/task.py`）
+
+| 変更前 | 変更後 | 対象フィールド |
+|--------|--------|---------------|
+| `user_email: str \| None` (Taskモデル) | `username: str \| None` | `Task.user_email` → `Task.username` |
+| `user_email: str \| None` (TaskContextモデル) | `username: str \| None` | `TaskContext.user_email` → `TaskContext.username` |
+
+変更方針: Pydanticフィールド名を `user_email` から `username` に変更し、説明文を「GitLabユーザー名」に更新する。
+
+---
+
+### 2. データベース定義（`shared/database/`）
+
+DBはまだ運用していないため、マイグレーションは不要。テーブル作成DDLを直接変更する。
+
+#### 変更対象テーブルとカラム
+
+| テーブル | 変更前カラム名 | 変更後カラム名 |
+|--------|--------------|--------------|
+| `users` | `email TEXT PRIMARY KEY`, `username TEXT NOT NULL` | `username TEXT PRIMARY KEY`（`email`列削除、`username`列がPKを兼ねる） |
+| `user_configs` | `user_email TEXT PRIMARY KEY` | `username TEXT PRIMARY KEY` |
+| `user_llm_settings` | `user_email TEXT PRIMARY KEY` | `username TEXT PRIMARY KEY` |
+| `tasks` | `user_email TEXT NOT NULL` | `username TEXT NOT NULL` |
+| `context_metadata` | `user_email TEXT NOT NULL` | `username TEXT NOT NULL` |
+| `token_usage` | `user_email TEXT NOT NULL` | `username TEXT NOT NULL` |
+
+変更方針: テーブル定義ファイル（`shared/database/schema.sql` または DDLを定義している箇所）のカラム名・FK定義・インデックス名を一括変更する。`.lower()` による正規化は不要（usernameは大文字小文字が区別される）。
+
+---
+
+### 3. リポジトリ層（`shared/database/repositories/`）
+
+#### `user_repository.py`
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| 全メソッドシグネチャの `user_email: str` | `username: str` に変更 |
+| SQLの `WHERE user_email = $N`, `user_email` カラム参照 | `WHERE username = $N`, `username` に変更 |
+| `get_user_by_email()` メソッド | `get_user_by_username()` に改名 |
+| `user_email.lower()` 正規化 | 削除（usernameは正規化不要） |
+
+#### `task_repository.py`
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `create_task(..., user_email: str, ...)` | `create_task(..., username: str, ...)` |
+| `get_tasks(..., user_email: str | None, ...)` | `get_tasks(..., username: str | None, ...)` |
+| SQL内の `user_email` カラム参照・インデックス | `username` に変更 |
+| `user_email.lower()` 正規化 | 削除 |
+
+#### `token_usage_repository.py`
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `record_token_usage(user_email: str, ...)` | `record_token_usage(username: str, ...)` |
+| `get_user_usage(user_email: str, ...)` | `get_user_usage(username: str, ...)` |
+| SQL内の `user_email` カラム参照 | `username` に変更 |
+| `user_email.lower()` 正規化 | 削除 |
+
+#### `context_repository.py`
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `save_context_metadata(..., user_email: str, ...)` | `save_context_metadata(..., username: str, ...)` |
+| SQL内の `user_email` カラム参照 | `username` に変更 |
+| `user_email.lower()` 正規化 | 削除 |
+
+---
+
+### 4. ユーザー設定クライアント（`consumer/user_config_client.py`）
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `self.email: str = data.get("email", "")` | `self.username: str = data.get("username", "")` |
+| `"email": self.email` (シリアライズ) | `"username": self.username` |
+
+---
+
+### 5. Executorクラス（`consumer/executors/user_resolver_executor.py`）
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `author.email` 取得 | `author.username` 取得に変更（GitLab APIはusernameを返す） |
+| `user_email = author.email` | `username = author.username` |
+| `await self.user_config_client.get_user_config(user_email)` | `await self.user_config_client.get_user_config(username)` |
+| `ctx.set_state("user_email", user_email)` | `ctx.set_state("username", username)` |
+| ログメッセージ内の `email=` | `username=` |
+
+---
+
+### 6. ファクトリクラス（`consumer/factories/agent_factory.py`）
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `create_agent(..., user_email: str, ...)` シグネチャ | `create_agent(..., username: str, ...)` |
+| `self.user_config_client.get_user_config(user_email)` | `self.user_config_client.get_user_config(username)` |
+| ログメッセージ内の `user_email=` | `username=` |
+
+---
+
+### 7. ミドルウェア（`consumer/middleware/token_usage_middleware.py`）
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `context.get_state("user_email")` | `context.get_state("username")` |
+| `user_email=user_email or ""` (引数渡し) | `username=username or ""` |
+| `"user_email": user_email or ""` (辞書キー) | `"username": username or ""` |
+
+---
+
+### 8. コンテキスト圧縮サービス（`consumer/providers/context_compression_service.py`）
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `check_and_compress_async(self, task_uuid: str, user_email: str)` | `check_and_compress_async(self, task_uuid: str, username: str)` |
+| `WHERE user_email = $1` SQL | `WHERE username = $1` |
+| ログメッセージ内の `user_email=` | `username=` |
+
+---
+
+### 9. Producerコード（`producer/task_getter_from_gitlab.py`、`producer/gitlab_event_handler.py`）
+
+| ファイル | 変更箇所 | 変更内容 |
+|---------|---------|---------|
+| `task_getter_from_gitlab.py` | `issue_to_task(..., user_email: str)` | `issue_to_task(..., username: str)` |
+| `task_getter_from_gitlab.py` | `mr_to_task(..., user_email: str)` | `mr_to_task(..., username: str)` |
+| `task_getter_from_gitlab.py` | `get_all_unprocessed_tasks(..., user_email: str)` | `get_all_unprocessed_tasks(..., username: str)` |
+| `task_getter_from_gitlab.py` | `issue.author.email` / `mr.author.email` 参照 | `issue.author.username` / `mr.author.username` に変更 |
+| `gitlab_event_handler.py` | `author.email` 参照箇所 | `author.username` に変更 |
+
+---
+
+### 10. バックエンドAPI（`backend/user_management/api.py`）
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `user_repo.get_user_by_email(body.email)` | `user_repo.get_user_by_username(body.username)` |
+| `create_user_config(user_email=email)` | `create_user_config(username=username)` |
+| `"user_email": t["user_email"]` (レスポンス) | `"username": t["username"]` |
+| `user_email: str \| None = Query(...)` | `username: str \| None = Query(...)` |
+| `WHERE user_email = $1` SQL | `WHERE username = $1` |
+| APIパス `/{email}` のパスパラメータ | `/{username}` に変更 |
+
+---
+
+### 11. 管理者CLIツール（`backend/user_management/cli/create_admin.py`）
+
+| 変更箇所 | 変更内容 |
+|---------|---------|
+| `args.email` によるユーザー識別 | `args.username` による識別に統一 |
+| `--email` 引数（parser定義） | `--username` のみ残す（emailは削除） |
+| `user_email` 変数名・引数名 | `username` に変更 |
+
+---
+
+### 12. テストコード（`tests/`）
+
+上記の本体コード変更に合わせて、`user_email` が登場するすべてのテストファイル内の変数名・モックデータ・アサーション内のキー名を `username` に変更する。対象ファイル:
+
+- `tests/unit/consumer/test_executors.py`
+- `tests/unit/consumer/test_middleware.py`
+- `tests/unit/consumer/test_factories.py`
+- `tests/unit/consumer/test_task_handler.py`
+- `tests/unit/consumer/test_strategies.py`
+- `tests/unit/consumer/test_providers.py`
+- `tests/unit/producer/test_task_getter_from_gitlab.py`
+- `tests/unit/backend/test_api.py`
+- `tests/unit/shared/test_models.py`
+- `tests/unit/shared/test_token_usage_repository.py`
+- `tests/unit/shared/test_user_repository.py`
+- `tests/unit/shared/test_task_repository.py`
+- `tests/integration/test_standard_mr_processing.py`
+- `tests/integration/test_multi_codegen_mr_processing.py`
