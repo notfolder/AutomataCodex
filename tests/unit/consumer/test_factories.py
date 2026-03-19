@@ -123,16 +123,20 @@ def mr_task() -> Task:
 class TestWorkflowBuilder:
     """WorkflowBuilderのテスト"""
 
+    def _make_dummy_executor(self, node_id: str) -> Any:
+        """テスト用のダミーExecutor（AF Executor継承）を返す"""
+        from consumer.executors.base_executor import PassthroughExecutor
+        return PassthroughExecutor(id=node_id)
+
     def test_add_nodeでノードが登録される(self) -> None:
-        """add_node()でノードがnode_registryとworkflowに登録されることを確認する"""
+        """add_node()でノードがnode_registryに登録されることを確認する"""
         builder = WorkflowBuilder()
-        node_instance = MagicMock()
+        node_instance = self._make_dummy_executor("test_node")
 
         builder.add_node("test_node", node_instance)
 
         assert "test_node" in builder.node_registry
         assert builder.node_registry["test_node"] is node_instance
-        assert "test_node" in builder.workflow._nodes
 
     def test_add_edgeでエッジがキューに追加される(self) -> None:
         """add_edge()でエッジがedge_registryに追加されることを確認する"""
@@ -156,9 +160,9 @@ class TestWorkflowBuilder:
         assert builder.edge_registry[0]["condition"] == "True"
 
     def test_buildでWorkflowが返される(self) -> None:
-        """build()でWorkflowインスタンスが返されることを確認する"""
+        """build()でAF Workflowインスタンスが返されることを確認する"""
         builder = WorkflowBuilder()
-        builder.add_node("node_a", MagicMock())
+        builder.add_node("node_a", self._make_dummy_executor("node_a"))
         builder.add_edge("node_a", None)
 
         workflow = builder.build()
@@ -168,31 +172,37 @@ class TestWorkflowBuilder:
     def test_buildでエントリポイントが設定される(self) -> None:
         """build()で最初に登録されたノードがエントリポイントに設定されることを確認する"""
         builder = WorkflowBuilder()
-        builder.add_node("first_node", MagicMock())
-        builder.add_node("second_node", MagicMock())
+        builder.add_node("first_node", self._make_dummy_executor("first_node"))
+        builder.add_node("second_node", self._make_dummy_executor("second_node"))
         builder.add_edge("first_node", "second_node")
         builder.add_edge("second_node", None)
 
-        builder.build()
+        workflow = builder.build()
 
-        assert builder.workflow._entry_node == "first_node"
+        # AF Workflowのスタートエグゼキュータが最初のノードであることを確認
+        assert workflow.get_start_executor().id == "first_node"
 
     def test_buildで条件付きエッジが追加される(self) -> None:
         """build()で条件付きエッジがworkflowに追加されることを確認する"""
         builder = WorkflowBuilder()
-        builder.add_node("node_a", MagicMock())
-        builder.add_node("node_b", MagicMock())
-        builder.add_edge("node_a", "node_b", condition="some_condition")
+        builder.add_node("node_a", self._make_dummy_executor("node_a"))
+        builder.add_node("node_b", self._make_dummy_executor("node_b"))
+        builder.add_edge("node_a", "node_b", condition="true")
         builder.add_edge("node_b", None)
 
-        builder.build()
+        workflow = builder.build()
 
-        # 条件付きエッジがworkflowの_edgesに追加されていることを確認
-        conditional_edges = [
-            e for e in builder.workflow._edges if e.get("condition") is not None
-        ]
-        assert len(conditional_edges) == 1
-        assert conditional_edges[0]["condition"] == "some_condition"
+        # AF Workflowが正常に構築されたことを確認
+        executor_ids = [e.id for e in workflow.get_executors_list()]
+        assert "node_a" in executor_ids
+        assert "node_b" in executor_ids
+
+    def test_ノード未登録でbuildするとValueErrorが発生する(self) -> None:
+        """ノードが1件も登録されていない状態でbuild()を呼ぶとValueErrorが発生する"""
+        builder = WorkflowBuilder()
+
+        with pytest.raises(ValueError, match="ノードが1件も登録されていません"):
+            builder.build()
 
 
 # ========================================

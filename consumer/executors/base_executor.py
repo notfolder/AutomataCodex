@@ -14,7 +14,7 @@ import logging
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from agent_framework import Executor, WorkflowContext
+from agent_framework import Executor, WorkflowContext, handler
 
 if TYPE_CHECKING:
     pass
@@ -74,3 +74,26 @@ class BaseExecutor(Executor):
             処理結果
         """
         ...
+
+
+class PassthroughExecutor(Executor):
+    """
+    パススルー Executor
+
+    条件ノード等、独自処理を持たないプレースホルダーノードとして使用する。
+    受け取ったメッセージをそのまま返す。
+    """
+
+    @handler(input=Any)
+    async def handle(self, msg: Any, ctx: WorkflowContext) -> Any:
+        """
+        メッセージをそのまま返す。
+
+        Args:
+            msg: 受け取るメッセージ
+            ctx: ワークフローコンテキスト
+
+        Returns:
+            受け取ったメッセージをそのまま返す
+        """
+        return msg

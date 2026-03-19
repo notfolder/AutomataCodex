@@ -154,7 +154,7 @@ class ProgressCommentManager:
         Returns:
             作成された GitLab Note ID
         """
-        project_id: int = await context.get_state("project_id")
+        project_id: int = context.get_state("project_id")
 
         # Mermaid チャートを生成する
         mermaid_chart = self.mermaid_renderer.render(node_states)
@@ -181,9 +181,7 @@ class ProgressCommentManager:
         )
 
         # Note ID を WorkflowContext に保存する
-        await context.set_state("progress_comment_id", note_id)
-
-        return note_id
+        context.set_state("progress_comment_id", note_id)
 
     async def update_progress_comment(
         self,
@@ -218,7 +216,7 @@ class ProgressCommentManager:
             await asyncio.sleep(wait_sec)
 
         # ② Note ID の取得
-        note_id: int | None = await context.get_state("progress_comment_id")
+        note_id: int | None = context.get_state("progress_comment_id")
         if note_id is None:
             logger.error(
                 "progress_comment_id が未設定のためコメント更新をスキップします: mr_iid=%d",
@@ -226,7 +224,7 @@ class ProgressCommentManager:
             )
             return
 
-        project_id: int = await context.get_state("project_id")
+        project_id: int = context.get_state("project_id")
 
         # ③ Mermaid チャートを再生成してコメント本文を再構築する
         mermaid_chart = self.mermaid_renderer.render(node_states)

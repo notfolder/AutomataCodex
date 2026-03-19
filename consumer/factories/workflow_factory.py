@@ -343,9 +343,14 @@ class WorkflowFactory:
                 )
 
             elif node_type == "condition":
-                # 条件ノードはエッジで制御するため、ノード自体は空のプレースホルダーを登録
-                builder.add_node(node_id, None)
-                logger.debug("条件ノードを登録しました: node_id=%s", node_id)
+                # 条件ノードはエッジの条件式で制御する。
+                # AF WorkflowBuilder ではノードインスタンスが必須のため、
+                # 受け取ったメッセージをそのまま転送するパススルーExecutorを登録する。
+                from consumer.executors.base_executor import PassthroughExecutor
+
+                passthrough = PassthroughExecutor(id=node_id)
+                builder.add_node(node_id, passthrough)
+                logger.debug("条件ノード（パススルー）を登録しました: node_id=%s", node_id)
 
             # 学習ノードの場合（_inject_learning_nodeで挿入されたノード）
             elif node_id == "learning":

@@ -167,19 +167,31 @@ class AgentFactory:
         """
         TodoManagementToolのFunctionTool群を生成して返す。
 
+        Agent FrameworkのFunctionToolとしてラップして返す。
+
         Returns:
             FunctionToolのリスト
         """
         try:
+            from agent_framework import FunctionTool
+
             from consumer.tools.todo_management_tool import TodoManagementTool
 
             todo_tool = TodoManagementTool()
-            # FunctionToolとして登録可能な関数群を返す
-            return [
+            # Agent FrameworkのFunctionToolとして登録可能な関数群を返す
+            tools: list[Any] = []
+            for method in [
                 todo_tool.create_todo_list,
                 todo_tool.get_todo_list,
                 todo_tool.update_todo_status,
-            ]
+            ]:
+                ft = FunctionTool(
+                    name=method.__name__,
+                    description=getattr(method, "__doc__", "") or method.__name__,
+                    func=method,
+                )
+                tools.append(ft)
+            return tools
         except Exception as exc:
             logger.warning(
                 "TodoManagementToolの生成に失敗しました: %s", exc

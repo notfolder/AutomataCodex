@@ -95,8 +95,8 @@ class TokenUsageMiddleware(IMiddleware):
         model: str = token_info.get("model", "unknown")
 
         # コンテキストからタスク・ユーザー情報を取得する
-        task_uuid: str | None = await context.get_state("task_uuid")
-        user_email: str | None = await context.get_state("user_email")
+        task_uuid: str | None = context.get_state("task_uuid")
+        user_email: str | None = context.get_state("user_email")
 
         # トークン使用量をデータベースに保存する
         try:

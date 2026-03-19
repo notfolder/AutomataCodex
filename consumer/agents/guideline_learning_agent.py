@@ -399,19 +399,56 @@ class GuidelineLearningAgent(Executor):
             '"updated_guidelines": "更新後のPROJECT_GUIDELINES.md全文（should_update=trueのみ）"}'
         )
 
-        # LLM呼び出し（スタブ: 実際のAgent Framework統合時に実装）
         logger.debug(
             "LLMでガイドライン更新判定を実行します: mr_iid=%s, model=%s",
             task_mr_iid,
             self.user_config.learning_llm_model,
         )
 
-        # スタブ実装: 更新不要を返す
-        return {
-            "should_update": False,
-            "rationale": "LLM統合は将来実装されます",
-            "category": "general",
-        }
+        # Agent FrameworkのAgentを使用してLLM呼び出しを実行する
+        try:
+            from agent_framework import Agent
+            from agent_framework.openai import OpenAIChatClient
+
+            model_name: str = getattr(
+                self.user_config, "learning_llm_model", "gpt-4o"
+            )
+            chat_client = OpenAIChatClient(model_id=model_name)
+            agent = Agent(
+                client=chat_client,
+                instructions=system_prompt,
+            )
+
+            response = await agent.run(
+                [{"role": "user", "content": user_prompt}]
+            )
+
+            # AgentResponseからテキストを抽出する
+            response_text: str = ""
+            if hasattr(response, "content") and isinstance(response.content, list):
+                for item in response.content:
+                    if hasattr(item, "text"):
+                        response_text = item.text
+                        break
+            elif hasattr(response, "content") and isinstance(response.content, str):
+                response_text = response.content
+            else:
+                response_text = str(response)
+
+            # JSON応答をパースする
+            return json.loads(response_text)
+
+        except Exception as exc:
+            logger.warning(
+                "LLMによるガイドライン更新判定に失敗しました: mr_iid=%s, error=%s",
+                task_mr_iid,
+                exc,
+            )
+            return {
+                "should_update": False,
+                "rationale": f"LLM呼び出しエラー: {exc}",
+                "category": "general",
+            }
 
     async def _update_guidelines(
         self,

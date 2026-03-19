@@ -187,7 +187,7 @@ class ProgressReporter:
             logger.warning("未知のイベント種別: event=%s, node_id=%s", event, node_id)
 
         # ② MR コメントを上書き更新する
-        mr_iid: int = await context.get_state("task_mr_iid")
+        mr_iid: int = context.get_state("task_mr_iid")
         await self.comment_manager.update_progress_comment(
             context=context,
             mr_iid=mr_iid,
