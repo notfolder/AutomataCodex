@@ -146,7 +146,7 @@ class WorkflowFactory:
 
     async def create_workflow_from_definition(
         self,
-        user_id: int,
+        user_id: str,
         task_context: TaskContext,
     ) -> Workflow:
         """
@@ -180,8 +180,8 @@ class WorkflowFactory:
         if definition_id is None:
             # User Config APIからワークフロー設定を取得
             try:
-                workflow_setting = await self.user_config_client.get_user_workflow_setting(
-                    user_id
+                workflow_setting = (
+                    await self.user_config_client.get_user_workflow_setting(user_id)
                 )
                 definition_id = workflow_setting.get("workflow_definition_id")
             except Exception as exc:
@@ -191,8 +191,12 @@ class WorkflowFactory:
                 )
 
         if definition_id is None:
-            raise ValueError(
-                f"ワークフロー定義IDが取得できませんでした: user_id={user_id}"
+            # システムデフォルト（standard_mr_processing, ID=1）にフォールバック
+            definition_id = 1
+            logger.info(
+                "ワークフロー定義IDが未設定のためシステムデフォルトを使用します: definition_id=%s, user_id=%s",
+                definition_id,
+                user_id,
             )
 
         # 2. 定義をロード
@@ -344,7 +348,9 @@ class WorkflowFactory:
                 # _build_nodes() 内で一度だけ生成して使い回す設計にする。
                 # （この代入は loop 内だが、全ノードで同一インスタンスを参照する）
                 if progress_reporter is None:
-                    from consumer.tools.mermaid_graph_renderer import MermaidGraphRenderer
+                    from consumer.tools.mermaid_graph_renderer import (
+                        MermaidGraphRenderer,
+                    )
                     from consumer.tools.progress_comment_manager import (
                         ProgressCommentManager,
                     )
@@ -384,7 +390,9 @@ class WorkflowFactory:
 
                 passthrough = PassthroughExecutor(id=node_id)
                 builder.add_node(node_id, passthrough)
-                logger.debug("条件ノード（パススルー）を登録しました: node_id=%s", node_id)
+                logger.debug(
+                    "条件ノード（パススルー）を登録しました: node_id=%s", node_id
+                )
 
             # 学習ノードの場合（_inject_learning_nodeで挿入されたノード）
             elif node_id == "learning":
@@ -434,9 +442,9 @@ class WorkflowFactory:
             return getattr(task_context, "plan_environment_id", None)
 
         # 整数文字列（"1"/"2"/"3"）の場合は branch_envs から取得する
-        branch_envs: dict[int, dict[str, Any]] = getattr(
-            task_context, "branch_envs", None
-        ) or {}
+        branch_envs: dict[int, dict[str, Any]] = (
+            getattr(task_context, "branch_envs", None) or {}
+        )
         try:
             n = int(env_ref)
             entry = branch_envs.get(n)
@@ -464,17 +472,16 @@ class WorkflowFactory:
         Args:
             graph_def: 変更対象のGraphDefinition（インプレース変更）
         """
-        from shared.models.graph_definition import GraphEdgeDefinition, GraphNodeDefinition
+        from shared.models.graph_definition import (
+            GraphEdgeDefinition,
+            GraphNodeDefinition,
+        )
 
         # 終了エッジ（to: null）を持つノードを特定する
-        terminal_edges = [
-            edge for edge in graph_def.edges if edge.to_node is None
-        ]
+        terminal_edges = [edge for edge in graph_def.edges if edge.to_node is None]
 
         if not terminal_edges:
-            logger.warning(
-                "終了エッジが見つからないため学習ノードを挿入できません"
-            )
+            logger.warning("終了エッジが見つからないため学習ノードを挿入できません")
             return
 
         # 学習ノードをノードリストに追加する
@@ -551,9 +558,7 @@ class WorkflowFactory:
             return
 
         task_uuid = (
-            self._current_task_context.task_uuid
-            if self._current_task_context
-            else None
+            self._current_task_context.task_uuid if self._current_task_context else None
         )
         definition_id = (
             self._current_task_context.workflow_definition_id
@@ -706,9 +711,7 @@ class WorkflowFactory:
             user_id=0,
             task_context=task_context,
         )
-        logger.info(
-            "ワークフローを再構築しました: execution_id=%s", execution_id
-        )
+        logger.info("ワークフローを再構築しました: execution_id=%s", execution_id)
 
         # 5. 完了ノードのスキップ情報をコンテキストに記録する。
         # Agent Framework の WorkflowContext は completed_nodes を直接セットできないため、
@@ -769,4 +772,3 @@ class WorkflowFactory:
             return True
 
         return False
-

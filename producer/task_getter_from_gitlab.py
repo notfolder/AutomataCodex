@@ -287,11 +287,24 @@ class TaskGetterFromGitLab:
             tasks.append(self.issue_to_task(issue, username=issue_username))
 
         # MR取得（author.username を優先して username として使用する）
+        # MR authorがbotの場合はreviewersの1人目のusernameを使用する
         mrs = self.get_unprocessed_merge_requests()
+        bot_name = self.gitlab_config.bot_name
         for mr in mrs:
             mr_username = (
                 mr.author.username if mr.author and mr.author.username else username
             )
+            # MR authorがbotの場合、reviewerのusernameに切り替える
+            if bot_name and mr_username and mr_username.lower() == bot_name.lower():
+                if mr.reviewers:
+                    first_reviewer = mr.reviewers[0]
+                    if first_reviewer.username:
+                        logger.info(
+                            "MR authorがbot(%s)のためレビュアーのusernameを使用します: %s",
+                            bot_name,
+                            first_reviewer.username,
+                        )
+                        mr_username = first_reviewer.username
             tasks.append(self.mr_to_task(mr, username=mr_username))
 
         logger.info(

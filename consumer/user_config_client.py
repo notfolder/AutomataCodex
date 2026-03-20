@@ -228,7 +228,7 @@ class UserConfigClient:
         logger.info("ユーザー設定を取得しました: username=%s", username)
         return UserConfig(data)
 
-    async def get_user_workflow_setting(self, user_id: int) -> dict[str, Any]:
+    async def get_user_workflow_setting(self, user_id: str) -> dict[str, Any]:
         """
         ユーザーの現在選択中のワークフロー定義設定を取得する。
 
@@ -237,7 +237,7 @@ class UserConfigClient:
         USER_MANAGEMENT_SPEC.md § 6.4 に準拠する。
 
         Args:
-            user_id: ユーザーID
+            user_id: ユーザー名（Backend APIのパスパラメータとして使用）
 
         Returns:
             ワークフロー設定辞書（workflow_definition_id等を含む）

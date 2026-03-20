@@ -29,16 +29,19 @@ class UserResolverExecutor(BaseExecutor):
     タスク識別子から project_id と mr_iid を取得し、
     GitLab MR の author username を元にユーザー設定を取得して
     ワークフローコンテキストに保存する。
+    MRのauthorがbotの場合は、reviewersの1人目のusernameを使用する。
 
     Attributes:
         gitlab_client: GitLabAPI クライアント
         user_config_client: ユーザー設定取得クライアント（未実装のため Any 型）
+        bot_name: botアカウント名（authorがbotか判定するために使用）
     """
 
     def __init__(
         self,
         gitlab_client: GitlabClient,
         user_config_client: Any,
+        bot_name: str = "",
     ) -> None:
         """
         UserResolverExecutor を初期化する。
@@ -46,9 +49,11 @@ class UserResolverExecutor(BaseExecutor):
         Args:
             gitlab_client: GitLabAPI クライアント
             user_config_client: ユーザー設定取得クライアント
+            bot_name: botアカウント名
         """
         self.gitlab_client = gitlab_client
         self.user_config_client = user_config_client
+        self.bot_name = bot_name
         super().__init__(id=self.__class__.__name__)
 
     @handler(input=Any)
@@ -67,9 +72,7 @@ class UserResolverExecutor(BaseExecutor):
             ctx: ワークフローコンテキスト
         """
         # タスク識別子からプロジェクトIDとMR IIDを取得する
-        task_identifier: dict[str, Any] = self.get_context_value(
-            ctx, "task_identifier"
-        )
+        task_identifier: dict[str, Any] = self.get_context_value(ctx, "task_identifier")
         project_id: int = task_identifier["project_id"]
         mr_iid: int = task_identifier["mr_iid"]
 
@@ -93,7 +96,29 @@ class UserResolverExecutor(BaseExecutor):
         else:
             username = author.username
 
-        logger.info("MR authorのusernameを取得しました: username=%s", username)
+        # MRのauthorがbotの場合、reviewersの1人目のusernameを使用する
+        if self.bot_name and username.lower() == self.bot_name.lower():
+            if target_mr.reviewers:
+                first_reviewer = target_mr.reviewers[0]
+                if first_reviewer.username:
+                    logger.info(
+                        "MR authorがbot(%s)のためレビュアーのusernameを使用します: %s",
+                        self.bot_name,
+                        first_reviewer.username,
+                    )
+                    username = first_reviewer.username
+                else:
+                    logger.warning(
+                        "MR authorがbotですがレビュアーのusernameが取得できませんでした: mr_iid=%s",
+                        mr_iid,
+                    )
+            else:
+                logger.warning(
+                    "MR authorがbotですがレビュアーが未設定です: mr_iid=%s",
+                    mr_iid,
+                )
+
+        logger.info("MRのタスク対象usernameを取得しました: username=%s", username)
 
         # ユーザー設定を取得する
         user_config: Any = await self.user_config_client.get_user_config(username)

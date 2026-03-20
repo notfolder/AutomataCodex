@@ -77,9 +77,19 @@ class ExecutorFactory:
         """
         from consumer.executors.user_resolver_executor import UserResolverExecutor
 
+        # bot_nameをConfigManagerから取得する
+        bot_name = ""
+        if self.config_manager is not None:
+            try:
+                gitlab_config = self.config_manager.get_gitlab_config()
+                bot_name = gitlab_config.bot_name
+            except Exception:
+                pass
+
         return UserResolverExecutor(
             gitlab_client=self.gitlab_client,
             user_config_client=self.user_config_client,
+            bot_name=bot_name,
         )
 
     def create_content_transfer(self) -> ContentTransferExecutor:
@@ -121,9 +131,10 @@ class ExecutorFactory:
         if self.config_manager is not None:
             try:
                 exec_env_config = self.config_manager.get_execution_environment_config()
-                config["plan_environment_name"] = getattr(
-                    getattr(exec_env_config, "docker", None), "image", "python"
-                ) or "python"
+                config["plan_environment_name"] = (
+                    getattr(getattr(exec_env_config, "docker", None), "image", "python")
+                    or "python"
+                )
             except Exception:
                 config["plan_environment_name"] = "python"
 

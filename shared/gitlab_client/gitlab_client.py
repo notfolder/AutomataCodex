@@ -117,6 +117,10 @@ def _mr_from_obj(mr_obj: Any) -> GitLabMergeRequest:
     assignees_raw: list[dict[str, Any]] = [
         a for a in assignees_data if isinstance(a, dict)
     ]
+    reviewers_data = getattr(mr_obj, "reviewers", []) or []
+    reviewers_raw: list[dict[str, Any]] = [
+        r for r in reviewers_data if isinstance(r, dict)
+    ]
     return GitLabMergeRequest(
         iid=mr_obj.iid,
         title=mr_obj.title,
@@ -127,6 +131,7 @@ def _mr_from_obj(mr_obj: Any) -> GitLabMergeRequest:
         state=getattr(mr_obj, "state", "opened"),
         labels=list(getattr(mr_obj, "labels", []) or []),
         assignees=[_user_from_dict(a) for a in assignees_raw],  # type: ignore[misc]
+        reviewers=[_user_from_dict(r) for r in reviewers_raw],  # type: ignore[misc]
         author=_user_from_dict(getattr(mr_obj, "author", None)),
         web_url=getattr(mr_obj, "web_url", None),
         draft=getattr(mr_obj, "draft", False)
@@ -611,6 +616,7 @@ class GitlabClient:
         description: str | None = None,
         labels: list[str] | None = None,
         assignee_ids: list[int] | None = None,
+        reviewer_ids: list[int] | None = None,
         state_event: str | None = None,
     ) -> GitLabMergeRequest:
         """
@@ -625,6 +631,7 @@ class GitlabClient:
             description: MR説明文（Noneの場合は更新しない）
             labels: ラベルリスト（Noneの場合は更新しない）
             assignee_ids: アサイニーのユーザーIDリスト（Noneの場合は更新しない）
+            reviewer_ids: レビュアーのユーザーIDリスト（Noneの場合は更新しない）
             state_event: 状態変更イベント（'close' / 'reopen'、Noneの場合は更新しない）
 
         Returns:
@@ -643,6 +650,8 @@ class GitlabClient:
             mr_obj.labels = labels
         if assignee_ids is not None:
             mr_obj.assignee_ids = assignee_ids
+        if reviewer_ids is not None:
+            mr_obj.reviewer_ids = reviewer_ids
         if state_event is not None:
             mr_obj.state_event = state_event
         self._call_with_retry(mr_obj.save)

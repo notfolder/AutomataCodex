@@ -335,7 +335,7 @@ class IssueToMRConverter:
         except Exception as exc:
             logger.warning("Issueコメントの転記に失敗しました: %s", exc)
 
-        # ⑥ Issueのラベル・アサイニーをMRにコピーする
+        # ⑥ Issueのラベル・アサイニー・レビュアーをMRに設定する
         try:
             # u.id が None になりうる場合（GitLabUser.email同様にオプション）に備えてフィルタリングする
             assignee_ids: list[int] = [
@@ -346,16 +346,22 @@ class IssueToMRConverter:
                 (set(issue.labels or []) - {self.config.processing_label})
                 | {self.config.bot_label}
             )
+            # Issue の author をレビュアーとして設定する
+            reviewer_ids: list[int] = []
+            if issue.author and issue.author.id is not None:
+                reviewer_ids = [issue.author.id]
             mr = self.gitlab_client.update_merge_request(
                 project_id=project_id,
                 mr_iid=mr.iid,
                 labels=mr_labels or None,
                 assignee_ids=assignee_ids or None,
+                reviewer_ids=reviewer_ids or None,
             )
             logger.info(
-                "MRへのラベル・アサイニーコピー完了: labels=%s, assignee_ids=%s",
+                "MRへのラベル・アサイニー・レビュアー設定完了: labels=%s, assignee_ids=%s, reviewer_ids=%s",
                 mr_labels,
                 assignee_ids,
+                reviewer_ids,
             )
         except Exception as exc:
             logger.warning("MRへのラベル・アサイニーコピーに失敗しました: %s", exc)
