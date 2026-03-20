@@ -40,6 +40,7 @@ class IssueToMRConfig:
         branch_prefix: ブランチ名のプレフィックス（デフォルト "feature/"）
         target_branch: MR のターゲットブランチ（デフォルト "main"）
         mr_title_template: MR タイトルのテンプレート（デフォルト "WIP: {issue_title}"）
+        bot_label: bot処理対象ラベル名。MRに付与して後続処理をトリガーする（デフォルト "coding agent"）
         done_label: Issue を Done 化するラベル名（デフォルト "coding agent done"）
         processing_label: 処理中ラベル名。Done 化時に削除する（デフォルト "coding agent processing"）
     """
@@ -47,6 +48,7 @@ class IssueToMRConfig:
     branch_prefix: str = field(default="feature/")
     target_branch: str = field(default="main")
     mr_title_template: str = field(default="WIP: {issue_title}")
+    bot_label: str = field(default="coding agent")
     done_label: str = field(default="coding agent done")
     processing_label: str = field(default="coding agent processing")
 
@@ -339,15 +341,20 @@ class IssueToMRConverter:
             assignee_ids: list[int] = [
                 u.id for u in issue.assignees if u.id is not None
             ]
+            # Issue のラベルから processing_label を除去し、bot_label を付与する
+            mr_labels: list[str] = list(
+                (set(issue.labels or []) - {self.config.processing_label})
+                | {self.config.bot_label}
+            )
             mr = self.gitlab_client.update_merge_request(
                 project_id=project_id,
                 mr_iid=mr.iid,
-                labels=issue.labels or None,
+                labels=mr_labels or None,
                 assignee_ids=assignee_ids or None,
             )
             logger.info(
                 "MRへのラベル・アサイニーコピー完了: labels=%s, assignee_ids=%s",
-                issue.labels,
+                mr_labels,
                 assignee_ids,
             )
         except Exception as exc:

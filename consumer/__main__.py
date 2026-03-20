@@ -183,6 +183,7 @@ async def main() -> None:
             branch_prefix=issue_to_mr_app_config.branch_prefix,
             target_branch=issue_to_mr_app_config.target_branch,
             mr_title_template=issue_to_mr_app_config.mr_title_template,
+            bot_label=gitlab_config.bot_label,
             done_label=gitlab_config.done_label,
             processing_label=gitlab_config.processing_label,
         ),
