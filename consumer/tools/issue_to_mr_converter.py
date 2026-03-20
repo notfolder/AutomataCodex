@@ -170,28 +170,10 @@ class IssueToMRConverter:
 
         for attempt in range(_BRANCH_NAME_MAX_RETRIES):
             try:
-                response = await agent.run([{"role": "user", "content": prompt}])
-                # AgentResponseから応答テキストを取得する
-                branch_name = ""
-                if hasattr(response, "content") and isinstance(response.content, list):
-                    # content がリストの場合は text 属性を持つ最初のアイテムを取得する
-                    for item in response.content:
-                        if hasattr(item, "text"):
-                            branch_name = item.text.strip()
-                            break
-                    if not branch_name:
-                        # text 属性を持つアイテムが存在しない場合はデフォルト形式にフォールバックする
-                        logger.warning(
-                            "LLM応答のcontentリストにtext属性が見つかりません（試行%d/%d）。"
-                            "再試行します。",
-                            attempt + 1,
-                            _BRANCH_NAME_MAX_RETRIES,
-                        )
-                        continue
-                elif hasattr(response, "content") and isinstance(response.content, str):
-                    branch_name = response.content.strip()
-                else:
-                    branch_name = str(response).strip()
+                # Agent.run() には文字列を直接渡す（自動的にuserメッセージに変換される）
+                response = await agent.run(prompt)
+                # AgentResponse.text で応答テキストを取得する
+                branch_name = (response.text or "").strip()
 
                 # 不正文字を除去して正規化する（英小文字・数字・ハイフン・スラッシュのみ許可）
                 branch_name = re.sub(r"[^a-zA-Z0-9\-/]", "-", branch_name)
