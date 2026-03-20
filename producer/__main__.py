@@ -22,9 +22,8 @@ import asyncio
 import logging
 import sys
 
-import asyncpg
-
 from shared.config.config_manager import ConfigManager
+from shared.database.connection import create_pool, close_pool
 from shared.database.repositories.task_repository import TaskRepository
 from shared.gitlab_client.gitlab_client import GitlabClient
 from shared.messaging.rabbitmq_client import RabbitMQClient
@@ -68,7 +67,7 @@ async def main() -> None:
 
     # データベース接続プールの初期化
     database_config = config_manager.get_database_config()
-    pool = await asyncpg.create_pool(database_config.url)
+    pool = await create_pool(database_config.url)
     task_repository = TaskRepository(pool)
 
     # Producer の初期化
@@ -107,8 +106,7 @@ async def main() -> None:
     finally:
         # 接続リソースを確実に解放する
         await rabbitmq_client.close()
-        if pool is not None:
-            await pool.close()
+        await close_pool()
         logger.info("Producer を終了します")
 
 
