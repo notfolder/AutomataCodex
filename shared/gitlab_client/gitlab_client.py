@@ -208,6 +208,7 @@ class GitlabClient:
             url=resolved_url,
             private_token=resolved_pat,
             timeout=timeout,
+            keep_base_url=True,
         )
         logger.info("GitlabClientを初期化しました: url=%s", resolved_url)
 
