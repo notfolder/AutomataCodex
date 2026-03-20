@@ -59,4 +59,34 @@ GitLab上のIssue/MRを自動的に処理するコードエージェントオー
 
 1. PostgreSQL・RabbitMQを含むDockerコンテナを起動する
 2. DBマイグレーションスクリプトを実行してテーブル作成・システムプリセット（standard_mr_processing等）の初期データを投入する（`docs/DATABASE_SCHEMA_SPEC.md` §9参照）
-3. ProducerとConsumerを起動する
+3. 初期管理者ユーザーを作成する（下記「初期管理者ユーザーの作成」を参照）
+4. ProducerとConsumerを起動する
+
+### 初期管理者ユーザーの作成
+
+システム初回セットアップ時に管理者ユーザーを作成する必要がある。
+CLIツールを使って `backend` コンテナ内で実行する。
+
+```bash
+# 対話式モード（推奨）
+docker compose exec backend \
+  python -m backend.user_management.cli.create_admin
+
+# コマンドライン引数モード
+docker compose exec backend \
+  python -m backend.user_management.cli.create_admin \
+    --username <GitLabユーザー名> \
+    --password <パスワード>
+
+# 環境変数モード
+docker compose exec -e ADMIN_USERNAME=<GitLabユーザー名> -e ADMIN_PASSWORD=<パスワード> \
+  backend python -m backend.user_management.cli.create_admin
+```
+
+パスワードは以下の要件を満たす必要がある：
+
+- 8文字以上
+- 大文字・小文字・数字・記号をそれぞれ1文字以上含む
+
+作成後、Web管理画面（`http://localhost:<ポート>`）に作成した管理者アカウントでログインできる。
+管理画面から一般ユーザーの追加やLLM設定の変更が可能。

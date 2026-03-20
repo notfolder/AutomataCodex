@@ -108,7 +108,9 @@ class TaskGetterFromGitLab:
         # bot_name未設定の場合はチェックをスキップ（後方互換性を維持）
         if not bot_name:
             return True
-        return any(user.username == bot_name for user in assignees)
+        # GitLabのusernameは大文字小文字を区別しないため、case-insensitiveで比較
+        bot_name_lower = bot_name.lower()
+        return any(user.username.lower() == bot_name_lower for user in assignees)
 
     def get_unprocessed_issues(self) -> list[GitLabIssue]:
         """

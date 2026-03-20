@@ -6,7 +6,7 @@ gitlab:
   url: "https://gitlab.com"  # 環境変数: GITLAB_URL（GitLabベースURL）
   api_url: "https://gitlab.com/api/v4"  # 環境変数: GITLAB_API_URL（フルAPI URL）
   owner: "notfolder"  # 環境変数: GITLAB_OWNER
-  bot_name: "AutomataCodex"  # 環境変数: GITLAB_BOT_NAME
+  bot_name: "automatacodex"  # 環境変数: GITLAB_BOT_NAME
   bot_label: "coding agent"  # 環境変数: GITLAB_BOT_LABEL
   processing_label: "coding agent processing"  # 環境変数: GITLAB_PROCESSING_LABEL
   done_label: "coding agent done"  # 環境変数: GITLAB_DONE_LABEL

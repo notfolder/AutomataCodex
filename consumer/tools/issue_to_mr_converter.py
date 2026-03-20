@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,10 @@ if TYPE_CHECKING:
     from agent_framework.openai import OpenAIChatClient
     from shared.gitlab_client.gitlab_client import GitlabClient
     from shared.models.gitlab import GitLabIssue, GitLabMergeRequest
+
+# chat_client ファクトリ関数の型エイリアス
+# username を受け取り、OpenAIChatClient | None を返す非同期関数
+ChatClientFactory = Callable[[str], Awaitable[Any]]
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +68,7 @@ class IssueToMRConverter:
     Attributes:
         gitlab_client: GitLab API クライアント
         chat_client: AF ChatClient（ブランチ名生成用）
+        chat_client_factory: username から ChatClient を動的生成するファクトリ関数
         config: IssueToMRConfig 設定オブジェクト
     """
 
@@ -71,6 +77,7 @@ class IssueToMRConverter:
         gitlab_client: "GitlabClient",
         chat_client: "OpenAIChatClient | None" = None,
         config: IssueToMRConfig | None = None,
+        chat_client_factory: ChatClientFactory | None = None,
     ) -> None:
         """
         初期化。
@@ -79,9 +86,12 @@ class IssueToMRConverter:
             gitlab_client: GitLab API クライアント
             chat_client: AF の ChatClient（ブランチ名生成用。None の場合はデフォルト形式を使用）
             config: Issue → MR 変換設定（省略時はデフォルト設定を使用）
+            chat_client_factory: username から ChatClient を動的生成するファクトリ関数。
+                chat_client が None の場合に使用される。
         """
         self.gitlab_client = gitlab_client
         self.chat_client = chat_client
+        self.chat_client_factory = chat_client_factory
         self.config = config if config is not None else IssueToMRConfig()
 
     def _make_default_branch_name(self, issue: "GitLabIssue") -> str:
@@ -100,7 +110,9 @@ class IssueToMRConverter:
         safe_title = issue.title[:30].replace(" ", "-")
         return f"{self.config.branch_prefix}{issue.iid}-{safe_title}"
 
-    async def _generate_branch_name(self, issue: "GitLabIssue") -> str:
+    async def _generate_branch_name(
+        self, issue: "GitLabIssue", username: str | None = None
+    ) -> str:
         """
         AF Agent を使ってブランチ名を生成する。
 
@@ -110,11 +122,28 @@ class IssueToMRConverter:
 
         Args:
             issue: 変換対象の GitLab Issue
+            username: タスク実行ユーザーの GitLab ユーザー名（chat_client_factory 呼び出しに使用）
 
         Returns:
             生成されたブランチ名文字列
         """
-        if self.chat_client is None:
+        # chat_client が未設定の場合、ファクトリ関数で動的に生成を試みる
+        chat_client = self.chat_client
+        if chat_client is None and self.chat_client_factory is not None and username:
+            try:
+                chat_client = await self.chat_client_factory(username)
+                logger.info(
+                    "chat_client_factoryからchat_clientを生成しました: username=%s",
+                    username,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "chat_client_factoryによるchat_client生成に失敗しました: username=%s, error=%s",
+                    username,
+                    exc,
+                )
+
+        if chat_client is None:
             branch_name = self._make_default_branch_name(issue)
             logger.info(
                 "chat_clientが未設定のためデフォルトブランチ名を使用します: %s",
@@ -137,7 +166,7 @@ class IssueToMRConverter:
             f"- ブランチ名のみを出力する（説明文は不要）"
         )
 
-        agent = Agent(client=self.chat_client)
+        agent = Agent(client=chat_client)
 
         for attempt in range(_BRANCH_NAME_MAX_RETRIES):
             try:
@@ -244,9 +273,13 @@ class IssueToMRConverter:
         """
         from shared.models.task import Task as _Task
 
+        # タスク実行ユーザー名（chat_client_factory で使用する）
+        username: str | None = None
+
         if isinstance(issue_or_task, _Task):
             # Task が渡された場合は GitLab API から GitLabIssue を取得する
             task = issue_or_task
+            username = task.username
             issue = self.gitlab_client.get_issue(
                 project_id=task.project_id,
                 issue_iid=task.issue_iid,
@@ -263,7 +296,7 @@ class IssueToMRConverter:
         )
 
         # ① ブランチ名の生成
-        branch_name = await self._generate_branch_name(issue)
+        branch_name = await self._generate_branch_name(issue, username=username)
 
         # ② ブランチ作成
         self.gitlab_client.create_branch(

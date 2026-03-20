@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from typing import Any
 
 import docker
 
@@ -166,9 +167,16 @@ async def main() -> None:
     # IssueToMRConverter の設定を組み立てる
     issue_to_mr_app_config = config_manager.get_issue_to_mr_config()
     gitlab_config = config_manager.get_gitlab_config()
+
+    # username から ChatClient を動的生成するファクトリ関数
+    async def _chat_client_factory(username: str) -> Any:
+        """UserConfigClient から設定を取得し、AgentFactory で ChatClient を生成する。"""
+        user_config = await user_config_client.get_user_config(username)
+        return agent_factory.create_chat_client(user_config)
+
     issue_to_mr_converter = IssueToMRConverter(
         gitlab_client=gitlab_client,
-        chat_client=None,  # ブランチ名生成はデフォルト形式にフォールバックする
+        chat_client_factory=_chat_client_factory,
         config=IssueToMRConverterConfig(
             branch_prefix=issue_to_mr_app_config.branch_prefix,
             target_branch=issue_to_mr_app_config.target_branch,

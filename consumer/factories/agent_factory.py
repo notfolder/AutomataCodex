@@ -133,7 +133,7 @@ class AgentFactory:
         user_config = await self.user_config_client.get_user_config(username)
 
         # 4. ChatClient生成（Agent Framework の OpenAIChatClient / AzureOpenAIChatClient を使用）
-        chat_client = self._create_chat_client(user_config)
+        chat_client = self.create_chat_client(user_config)
 
         # 5. システムプロンプト構築
         system_prompt = self._build_system_prompt(prompt_config.system_prompt)
@@ -193,12 +193,10 @@ class AgentFactory:
                 tools.append(ft)
             return tools
         except Exception as exc:
-            logger.warning(
-                "TodoManagementToolの生成に失敗しました: %s", exc
-            )
+            logger.warning("TodoManagementToolの生成に失敗しました: %s", exc)
             return []
 
-    def _create_chat_client(self, user_config: Any) -> Any:
+    def create_chat_client(self, user_config: Any) -> Any:
         """
         ユーザー設定に基づいてChatClientを生成する。
 
