@@ -74,6 +74,8 @@ services:
       RABBITMQ_PASS: ${RABBITMQ_PASS}
       DATABASE_URL: postgresql://agent:${POSTGRES_PASSWORD}@postgres:5432/coding_agent
       USER_CONFIG_API_URL: http://backend:8080
+      USER_CONFIG_API_SERVICE_USERNAME: ${USER_CONFIG_API_SERVICE_USERNAME}
+      USER_CONFIG_API_SERVICE_PASSWORD: ${USER_CONFIG_API_SERVICE_PASSWORD}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     volumes:
       # Docker-outside-of-Docker: ホストのDocker daemonに接続

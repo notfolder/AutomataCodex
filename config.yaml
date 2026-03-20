@@ -42,8 +42,10 @@ openai:
 # User Config API設定
 user_config_api:
   enabled: true  # 環境変数: USER_CONFIG_API_ENABLED（値: true, false）
-  url: "http://user-config-api:8080"  # 環境変数: USER_CONFIG_API_URL
-  api_key: "${USER_CONFIG_API_KEY}"  # 必須: User Config APIの認証キー
+  url: "http://backend:8080"  # 環境変数: USER_CONFIG_API_URL
+  api_key: "${USER_CONFIG_API_KEY}"  # 後方互換用認証キー
+  service_username: "${USER_CONFIG_API_SERVICE_USERNAME}"  # Backend JWTログイン用ユーザー名
+  service_password: "${USER_CONFIG_API_SERVICE_PASSWORD}"  # Backend JWTログイン用パスワード
   timeout: 30  # 環境変数: USER_CONFIG_API_TIMEOUT（秒）
 
 # PostgreSQL設定

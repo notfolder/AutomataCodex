@@ -107,12 +107,18 @@ class UserConfigClient:
     ConsumerコンテナがUSER_CONFIG_API_URL経由でUser Config APIへHTTPで問い合わせる。
     ユーザーのLLM設定・APIキー取得に使用し、AgentFactoryとUserResolverExecutorが依存する。
 
+    Backend は JWT 認証を要求するため、初回リクエスト時にログインして
+    アクセストークンを取得・キャッシュする。
+
     IMPLEMENTATION_PLAN.md フェーズ6-2、USER_MANAGEMENT_SPEC.md § 6.1 に準拠する。
 
     Attributes:
         base_url: User Config APIのベースURL
-        api_key: 認証用APIキー
+        api_key: 認証用APIキー（後方互換。JWT未使用時のフォールバック）
         timeout: リクエストタイムアウト秒数
+        _service_username: Backend ログイン用ユーザー名
+        _service_password: Backend ログイン用パスワード
+        _jwt_token: キャッシュされた JWT アクセストークン
     """
 
     def __init__(
@@ -120,28 +126,68 @@ class UserConfigClient:
         base_url: str,
         api_key: str = "",
         timeout: int = 30,
+        service_username: str = "",
+        service_password: str = "",
     ) -> None:
         """
         UserConfigClientを初期化する。
 
         Args:
-            base_url: User Config APIのベースURL（例: "http://user-config-api:8080"）
-            api_key: 認証用APIキー
+            base_url: User Config APIのベースURL（例: "http://backend:8080"）
+            api_key: 認証用APIキー（後方互換用）
             timeout: リクエストタイムアウト秒数
+            service_username: Backend ログイン用ユーザー名
+            service_password: Backend ログイン用パスワード
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self._service_username = service_username
+        self._service_password = service_password
+        self._jwt_token: str = ""
 
-    def _build_headers(self) -> dict[str, str]:
+    async def _login(self) -> str:
+        """
+        Backend の /api/v1/auth/login でJWTトークンを取得してキャッシュする。
+
+        Returns:
+            JWT アクセストークン文字列
+
+        Raises:
+            httpx.HTTPStatusError: ログインに失敗した場合
+        """
+        url = f"{self.base_url}/api/v1/auth/login"
+        payload = {
+            "username": self._service_username,
+            "password": self._service_password,
+        }
+        logger.info("Backend へのJWTログインを実行します: url=%s", url)
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            data: dict[str, Any] = response.json()
+        self._jwt_token = data["access_token"]
+        logger.info("JWTトークンを取得しました")
+        return self._jwt_token
+
+    async def _build_headers(self) -> dict[str, str]:
         """
         認証ヘッダーを構築する。
+
+        service_username/service_password が設定されている場合は JWT でログインする。
+        それ以外の場合は api_key をBearerトークンとして使用する（後方互換）。
 
         Returns:
             ヘッダー辞書
         """
         headers: dict[str, str] = {"Content-Type": "application/json"}
-        if self.api_key:
+        # JWT 認証（service_username/password 設定時）
+        if self._service_username and self._service_password:
+            if not self._jwt_token:
+                await self._login()
+            headers["Authorization"] = f"Bearer {self._jwt_token}"
+        elif self.api_key:
+            # 後方互換: api_key を直接 Bearer トークンとして使用する
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
@@ -167,8 +213,15 @@ class UserConfigClient:
         url = f"{self.base_url}/api/v1/config/{username}"
         logger.info("ユーザー設定を取得します: username=%s, url=%s", username, url)
 
+        headers = await self._build_headers()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.get(url, headers=self._build_headers())
+            response = await client.get(url, headers=headers)
+            # 401の場合はJWTトークンを再取得してリトライする
+            if response.status_code == 401 and self._service_username:
+                logger.info("JWTトークンが期限切れのため再ログインします")
+                self._jwt_token = ""
+                headers = await self._build_headers()
+                response = await client.get(url, headers=headers)
             response.raise_for_status()
             data: dict[str, Any] = response.json()
 
@@ -198,8 +251,15 @@ class UserConfigClient:
             "ユーザーのワークフロー設定を取得します: user_id=%s, url=%s", user_id, url
         )
 
+        headers = await self._build_headers()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.get(url, headers=self._build_headers())
+            response = await client.get(url, headers=headers)
+            # 401の場合はJWTトークンを再取得してリトライする
+            if response.status_code == 401 and self._service_username:
+                logger.info("JWTトークンが期限切れのため再ログインします")
+                self._jwt_token = ""
+                headers = await self._build_headers()
+                response = await client.get(url, headers=headers)
             response.raise_for_status()
             data: dict[str, Any] = response.json()
 

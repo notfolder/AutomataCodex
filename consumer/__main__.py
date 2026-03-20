@@ -97,6 +97,8 @@ async def main() -> None:
         base_url=user_config_api.url,
         api_key=user_config_api.api_key,
         timeout=user_config_api.timeout,
+        service_username=user_config_api.service_username,
+        service_password=user_config_api.service_password,
     )
 
     # リポジトリの初期化
