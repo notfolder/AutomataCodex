@@ -382,7 +382,7 @@ async def refresh_token(
     現在の有効なトークンからユーザー情報を取得し、新しいトークンを発行する。
     """
     # DB から最新のユーザー情報を取得して role を確認する
-    user = await user_repo.get_user_by_username(current_user["email"])
+    user = await user_repo.get_user_by_username(current_user["username"])
     if not user or not user.get("is_active", False):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -432,7 +432,7 @@ async def get_user_config(
     管理者は全ユーザーの設定を取得可能。
     """
     # 権限チェック: 一般ユーザーは自分自身のみ
-    if current_user["role"] != "admin" and current_user["email"] != username:
+    if current_user["role"] != "admin" and current_user["username"] != username:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="他のユーザーの設定を取得する権限がありません",
@@ -542,7 +542,7 @@ async def update_user(
     管理者は全ユーザーの全設定を変更可能。
     """
     is_admin = current_user["role"] == "admin"
-    is_self = current_user["email"] == username
+    is_self = current_user["username"] == username
 
     # 権限チェック
     if not is_admin and not is_self:
@@ -651,7 +651,7 @@ async def change_password(
     管理者は全ユーザーのパスワードを代理変更可能（current_password 不要）。
     """
     is_admin = current_user["role"] == "admin"
-    is_self = current_user["email"] == username
+    is_self = current_user["username"] == username
 
     # 権限チェック
     if not is_admin and not is_self:
@@ -759,7 +759,7 @@ async def create_workflow_definition(
             prompt_definition=body.prompt_definition,
             description=body.description,
             is_preset=False,
-            created_by=current_user["email"],
+            created_by=current_user["username"],
         )
     except asyncpg.UniqueViolationError:
         raise HTTPException(
@@ -868,7 +868,7 @@ async def get_user_workflow_setting(
     user_id はメールアドレス。一般ユーザーは自分の設定のみ取得可能。
     """
     is_admin = current_user["role"] == "admin"
-    is_self = current_user["email"] == user_id.lower()
+    is_self = current_user["username"] == user_id.lower()
 
     if not is_admin and not is_self:
         raise HTTPException(
@@ -903,7 +903,7 @@ async def update_user_workflow_setting(
     ワークフロー設定が未作成の場合は新規作成する。
     """
     is_admin = current_user["role"] == "admin"
-    is_self = current_user["email"] == user_id.lower()
+    is_self = current_user["username"] == user_id.lower()
 
     if not is_admin and not is_self:
         raise HTTPException(

@@ -122,9 +122,9 @@ class TaskHandler:
                     task_identifier = str(task.task_uuid)
                     task_db_type = task.task_type
 
-                if not task.user_email:
+                if not task.username:
                     logger.warning(
-                        "user_emailが未設定のためタスクのDB記録をスキップします: task_uuid=%s",
+                        "usernameが未設定のためタスクのDB記録をスキップします: task_uuid=%s",
                         task.task_uuid,
                     )
                 else:
@@ -133,7 +133,7 @@ class TaskHandler:
                         task_type=task_db_type,
                         task_identifier=task_identifier,
                         repository=str(task.project_id),
-                        user_email=task.user_email,
+                        username=task.username,
                         status="running",
                     )
                     logger.info(

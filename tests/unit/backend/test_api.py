@@ -41,18 +41,18 @@ def _make_token(email: str, role: str) -> str:
 
 def _admin_headers() -> dict[str, str]:
     """管理者認証ヘッダーを返す"""
-    return {"Authorization": f"Bearer {_make_token('admin@example.com', 'admin')}"}
+    return {"Authorization": f"Bearer {_make_token('admin', 'admin')}"}
 
 
 def _user_headers() -> dict[str, str]:
     """一般ユーザー認証ヘッダーを返す"""
-    return {"Authorization": f"Bearer {_make_token('user@example.com', 'user')}"}
+    return {"Authorization": f"Bearer {_make_token('testuser', 'user')}"}
 
 
 def _make_mock_user_repo() -> MagicMock:
     """UserRepository のモックを生成する"""
     mock = MagicMock()
-    mock.get_user_by_email = AsyncMock(return_value=None)
+    mock.get_user_by_username = AsyncMock(return_value=None)
     mock.list_users = AsyncMock(return_value=[])
     mock.create_user = AsyncMock(return_value={})
     mock.create_user_config = AsyncMock(return_value={})
@@ -137,7 +137,7 @@ class TestLogin:
         password = "ValidPass1!"
         hashed = hash_password(password)
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "username": "Test User",
             "password_hash": hashed,
@@ -150,7 +150,7 @@ class TestLogin:
             client = TestClient(app)
             resp = client.post(
                 "/api/v1/auth/login",
-                json={"email": "user@example.com", "password": password},
+                json={"username": "testuser", "password": password},
             )
 
         assert resp.status_code == 200
@@ -162,14 +162,14 @@ class TestLogin:
     def test_存在しないユーザーで401が返ること(self):
         """存在しないメールアドレスでHTTP 401が返ることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = None
+        user_repo.get_user_by_username.return_value = None
         app = _make_test_app(user_repo=user_repo)
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
             client = TestClient(app)
             resp = client.post(
                 "/api/v1/auth/login",
-                json={"email": "nobody@example.com", "password": "AnyPass1!"},
+                json={"username": "nobody", "password": "AnyPass1!"},
             )
 
         assert resp.status_code == 401
@@ -178,7 +178,7 @@ class TestLogin:
         """誤ったパスワードでHTTP 401が返ることを検証する"""
         hashed = hash_password("CorrectPass1!")
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "password_hash": hashed,
             "role": "user",
@@ -190,7 +190,7 @@ class TestLogin:
             client = TestClient(app)
             resp = client.post(
                 "/api/v1/auth/login",
-                json={"email": "user@example.com", "password": "WrongPass1!"},
+                json={"username": "testuser", "password": "WrongPass1!"},
             )
 
         assert resp.status_code == 401
@@ -200,7 +200,7 @@ class TestLogin:
         password = "ValidPass1!"
         hashed = hash_password(password)
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "inactive@example.com",
             "password_hash": hashed,
             "role": "user",
@@ -212,7 +212,7 @@ class TestLogin:
             client = TestClient(app)
             resp = client.post(
                 "/api/v1/auth/login",
-                json={"email": "inactive@example.com", "password": password},
+                json={"username": "inactive", "password": password},
             )
 
         assert resp.status_code == 401
@@ -400,7 +400,7 @@ class TestGetUserConfig:
     def test_ユーザーは自分の設定を取得できること(self):
         """一般ユーザーが自分自身の設定を取得できることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "username": "Test User",
             "role": "user",
@@ -444,7 +444,7 @@ class TestGetUserConfig:
     def test_存在しないユーザーで404が返ること(self):
         """存在しないユーザーの設定を取得しようとすると404が返ることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = None
+        user_repo.get_user_by_username.return_value = None
         app = _make_test_app(user_repo=user_repo)
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
@@ -458,7 +458,7 @@ class TestGetUserConfig:
     def test_管理者は任意ユーザーの設定を取得できること(self):
         """管理者が任意のユーザーの設定を取得できることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "role": "user",
             "is_active": True,
@@ -494,7 +494,7 @@ class TestUpdateUser:
     def test_管理者はユーザー情報を更新できること(self):
         """管理者が他ユーザーのrole/is_activeを変更できることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "username": "Old Name",
             "role": "user",
@@ -537,7 +537,7 @@ class TestUpdateUser:
     def test_一般ユーザーはLLM設定を自分で変更できること(self):
         """一般ユーザーが自分自身のLLM設定を変更できることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "username": "Test User",
             "role": "user",
@@ -572,7 +572,7 @@ class TestUpdateUser:
     def test_存在しないユーザーで404が返ること(self):
         """存在しないユーザーを更新しようとすると404が返ることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = None
+        user_repo.get_user_by_username.return_value = None
         app = _make_test_app(user_repo=user_repo)
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": _TEST_JWT_SECRET}):
@@ -1004,7 +1004,7 @@ class TestChangePassword:
         current_password = "OldPass1!"
         hashed = hash_password(current_password)
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "password_hash": hashed,
             "role": "user",
@@ -1075,7 +1075,7 @@ class TestChangePassword:
     ):
         """管理者が current_password なしで他ユーザーのパスワードを変更できることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "password_hash": hash_password("OldPass1!"),
             "role": "user",
@@ -1356,7 +1356,7 @@ class TestAuthRefresh:
     def test_有効なトークンで新しいトークンを取得できること(self):
         """有効な Bearer トークンで新しい JWT が発行されることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "username": "Test User",
             "role": "user",
@@ -1379,7 +1379,7 @@ class TestAuthRefresh:
     def test_無効化されたアカウントでリフレッシュ失敗すること(self):
         """is_active=Falseのアカウントでリフレッシュすると401が返ることを検証する"""
         user_repo = _make_mock_user_repo()
-        user_repo.get_user_by_email.return_value = {
+        user_repo.get_user_by_username.return_value = {
             "email": "user@example.com",
             "role": "user",
             "is_active": False,

@@ -119,14 +119,14 @@ class TestCreateAccessToken:
     def test_トークンが文字列で返ること(self):
         """JWTトークンが文字列で返ることを検証する"""
         with patch.dict(os.environ, {"JWT_SECRET_KEY": "test-secret-key"}):
-            token = create_access_token("user@example.com", "user")
+            token = create_access_token("testuser", "user")
         assert isinstance(token, str)
         assert len(token) > 0
 
     def test_トークンが3つのピリオド区切りであること(self):
         """JWTトークンがheader.payload.signatureの形式であることを検証する"""
         with patch.dict(os.environ, {"JWT_SECRET_KEY": "test-secret-key"}):
-            token = create_access_token("user@example.com", "user")
+            token = create_access_token("testuser", "user")
         parts = token.split(".")
         assert len(parts) == 3
 
@@ -136,7 +136,7 @@ class TestCreateAccessToken:
         env.pop("JWT_SECRET_KEY", None)
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(ValueError, match="JWT_SECRET_KEY"):
-                create_access_token("user@example.com", "user")
+                create_access_token("testuser", "user")
 
 
 class TestDecodeAccessToken:
@@ -169,7 +169,7 @@ class TestDecodeAccessToken:
     def test_異なるキーで署名されたトークンで401エラーが発生すること(self):
         """異なるキーで署名されたトークンの検証に失敗することを検証する"""
         with patch.dict(os.environ, {"JWT_SECRET_KEY": "original-key-xxxxxxxxxxxxx"}):
-            token = create_access_token("user@example.com", "user")
+            token = create_access_token("testuser", "user")
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": "different-key-xxxxxxxxxxxx"}):
             with pytest.raises(HTTPException) as exc_info:
@@ -190,13 +190,13 @@ class TestGetCurrentUser:
         from fastapi.security import HTTPAuthorizationCredentials
 
         with patch.dict(os.environ, {"JWT_SECRET_KEY": "test-secret-key-xyz"}):
-            token = create_access_token("user@example.com", "user")
+            token = create_access_token("testuser", "user")
             credentials = HTTPAuthorizationCredentials(
                 scheme="bearer", credentials=token
             )
             result = await get_current_user(credentials)
 
-        assert result["email"] == "user@example.com"
+        assert result["username"] == "user@example.com"
         assert result["role"] == "user"
 
     async def test_不正なトークンで401エラーが発生すること(self):
@@ -218,13 +218,13 @@ class TestGetAdminUser:
 
     async def test_管理者ユーザーで通過できること(self):
         """roleがadminのユーザー情報で403エラーが発生しないことを検証する"""
-        admin_user = {"email": "admin@example.com", "role": "admin"}
+        admin_user = {"username": "admin", "role": "admin"}
         result = await get_admin_user(admin_user)
         assert result["role"] == "admin"
 
     async def test_一般ユーザーで403エラーが発生すること(self):
         """roleがuserのユーザー情報でHTTP 403エラーが発生することを検証する"""
-        user = {"email": "user@example.com", "role": "user"}
+        user = {"username": "testuser", "role": "user"}
         with pytest.raises(HTTPException) as exc_info:
             await get_admin_user(user)
         assert exc_info.value.status_code == 403

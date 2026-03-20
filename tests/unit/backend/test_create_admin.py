@@ -102,7 +102,7 @@ class TestCheckUserExists:
 
     async def test_ユーザーが存在する場合にTrueが返ること(self):
         """既にメールアドレスが登録済みの場合にTrueが返ることを検証する"""
-        pool = self._make_pool({"email": "existing@example.com"})
+        pool = self._make_pool({"username": "existing"})
         result = await _check_user_exists(pool, "existing@example.com")
         assert result is True
 
@@ -152,7 +152,7 @@ class TestCreateAdminUser:
 
         await _create_admin_user(
             pool,
-            email="admin@example.com",
+            
             username="Administrator",
             password_hash="$2b$12$hashed_password",
         )
@@ -166,7 +166,7 @@ class TestCreateAdminUser:
 
         await _create_admin_user(
             pool,
-            email="ADMIN@EXAMPLE.COM",
+            
             username="Administrator",
             password_hash="$2b$12$hashed",
         )

@@ -176,10 +176,10 @@ class TestUserResolverExecutor:
         mock_ctx: WorkflowContext,
         mock_gitlab_client: MagicMock,
     ) -> None:
-        """author.username が None の場合に空文字列が user_email として保存されることを確認する"""
+        """author.username が None の場合に空文字列が username として保存されることを確認する"""
         mock_ctx.set_state("task_identifier", {"project_id": 10, "mr_iid": 5})
 
-        # author が存在するが email が None の MR モックを作成する
+        # author が存在するが username が None の MR モックを作成する
         mock_author = MagicMock()
         mock_author.username = None
         mock_mr = MagicMock()
@@ -195,7 +195,7 @@ class TestUserResolverExecutor:
         )
         await executor.handle({}, mock_ctx)
 
-        # author.email=None の場合は空文字列が設定されることを確認する
+        # author.username=None の場合は空文字列が設定されることを確認する
         assert mock_ctx.get_state("username") == ""
         # email が空でも get_user_config が呼ばれることを確認する
         mock_user_config_client.get_user_config.assert_called_once_with("")

@@ -201,10 +201,10 @@ class WorkflowFactory:
         )
 
         # 3. 学習ノード挿入（インプレースでgraph_defを変更する）
-        user_email = task_context.user_email or ""
+        username = task_context.username or ""
         user_config: UserConfig | None = None
         try:
-            user_config = await self.user_config_client.get_user_config(user_email)
+            user_config = await self.user_config_client.get_user_config(username)
             if user_config.learning_enabled:
                 self._inject_learning_node(graph_def)
         except Exception as exc:
@@ -271,7 +271,7 @@ class WorkflowFactory:
             builder: WorkflowBuilderインスタンス
             user_config: ユーザー設定（省略可能）
         """
-        user_email = task_context.user_email or ""
+        username = task_context.username or ""
 
         # ProgressReporter は全エージェントで共有するため、ループ外で初期化する。
         # 最初の agent ノード処理時に遅延生成する。
@@ -365,7 +365,7 @@ class WorkflowFactory:
                 configurable_agent = await self.agent_factory.create_agent(
                     agent_config=agent_node_config,
                     prompt_config=prompt_config,
-                    user_email=user_email,
+                    username=username,
                     progress_reporter=progress_reporter,
                     env_id=env_id,
                 )
@@ -679,7 +679,7 @@ class WorkflowFactory:
                     project_id=task_row.get("project_id", 0),
                     issue_iid=task_row.get("issue_iid"),
                     mr_iid=task_row.get("mr_iid"),
-                    user_email=task_row.get("user_email"),
+                    username=task_row.get("username"),
                     workflow_definition_id=state.get("workflow_definition_id"),
                 )
                 logger.debug(

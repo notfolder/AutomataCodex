@@ -171,5 +171,5 @@ class MergeRequestStrategy(ITaskStrategy):
             project_id=task.project_id,
             issue_iid=task.issue_iid,
             mr_iid=task.mr_iid,
-            user_email=task.user_email,
+            username=task.username,
         )

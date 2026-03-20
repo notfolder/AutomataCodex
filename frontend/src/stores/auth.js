@@ -28,7 +28,7 @@ export const useAuthStore = defineStore('auth', () => {
   // ローカルストレージからトークンとユーザー情報を復元
   // user_role が未保存の場合はトークンのペイロードからロールを復元する
   const token = ref(storedToken)
-  const userEmail = ref(localStorage.getItem('user_email') || null)
+  const username = ref(localStorage.getItem('username') || null)
   const _storedRole = localStorage.getItem('user_role')
   const userRole = ref(_storedRole || (storedToken ? decodeJwtPayload(storedToken)?.role : null) || null)
 
@@ -48,16 +48,16 @@ export const useAuthStore = defineStore('auth', () => {
     const response = await loginApi(email, password)
     const { access_token } = response.data
 
-    // JWTペイロードからロールとメールアドレスを取得する
+    // JWTペイロードからロールとユーザー名を取得する
     const payload = decodeJwtPayload(access_token)
 
     // トークンとユーザー情報をローカルストレージに保存
     token.value = access_token
-    userEmail.value = payload?.sub || email
+    username.value = payload?.sub || email
     userRole.value = payload?.role || null
 
     localStorage.setItem('access_token', access_token)
-    localStorage.setItem('user_email', userEmail.value)
+    localStorage.setItem('username', username.value)
     if (userRole.value) {
       localStorage.setItem('user_role', userRole.value)
     }
@@ -69,11 +69,11 @@ export const useAuthStore = defineStore('auth', () => {
    */
   const logout = () => {
     token.value = null
-    userEmail.value = null
+    username.value = null
     userRole.value = null
 
     localStorage.removeItem('access_token')
-    localStorage.removeItem('user_email')
+    localStorage.removeItem('username')
     localStorage.removeItem('user_role')
   }
 
@@ -95,7 +95,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token,
-    userEmail,
+    username,
     userRole,
     isAuthenticated,
     isAdmin,

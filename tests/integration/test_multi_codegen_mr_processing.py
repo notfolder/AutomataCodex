@@ -181,7 +181,7 @@ def _make_definition_loader(workflow_def_repo: MagicMock) -> Any:
 def _make_task_context(
     workflow_definition_id: int = 2,
     mr_iid: int = 10,
-    user_email: str = "user@example.com",
+    username: str = "testuser",
 ) -> Any:
     """テスト用TaskContextを生成する"""
     from shared.models.task import TaskContext
@@ -191,7 +191,7 @@ def _make_task_context(
         task_type="merge_request",
         project_id=1,
         mr_iid=mr_iid,
-        user_email=user_email,
+        username=username,
         workflow_definition_id=workflow_definition_id,
     )
 

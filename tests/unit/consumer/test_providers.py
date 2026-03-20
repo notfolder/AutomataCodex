@@ -97,7 +97,7 @@ class TestPostgreSqlChatHistoryProvider:
 
     @pytest.mark.asyncio
     async def test_save_messagesがcompression_serviceを呼び出す(self) -> None:
-        """compression_serviceとuser_emailが設定されている場合にcheck_and_compress_asyncが呼ばれることを確認する"""
+        """compression_serviceとusernameが設定されている場合にcheck_and_compress_asyncが呼ばれることを確認する"""
         pool = _make_mock_pool(fetchval_return=0)
 
         # 圧縮サービスのモックを作成する
@@ -114,12 +114,12 @@ class TestPostgreSqlChatHistoryProvider:
 
         # check_and_compress_asyncが呼ばれていることを確認する
         mock_compression.check_and_compress_async.assert_called_once_with(
-            "test-uuid", "user@example.com"
+            "test-uuid", "testuser"
         )
 
     @pytest.mark.asyncio
-    async def test_save_messagesがuser_emailなしの場合は圧縮を呼ばない(self) -> None:
-        """user_emailが提供されない場合はcheck_and_compress_asyncを呼ばないことを確認する"""
+    async def test_save_messagesがusernameなしの場合は圧縮を呼ばない(self) -> None:
+        """usernameが提供されない場合はcheck_and_compress_asyncを呼ばないことを確認する"""
         pool = _make_mock_pool(fetchval_return=0)
 
         mock_compression = MagicMock()
@@ -129,7 +129,7 @@ class TestPostgreSqlChatHistoryProvider:
             db_pool=pool, compression_service=mock_compression
         )
         messages = [{"role": "user", "content": "新規メッセージ"}]
-        # user_emailを渡さない
+        # usernameを渡さない
         await provider.save_messages("test-uuid", messages)
 
         # check_and_compress_asyncが呼ばれないことを確認する
