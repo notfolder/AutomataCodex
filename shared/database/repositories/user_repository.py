@@ -27,7 +27,7 @@ def _get_encryption_key() -> bytes:
     環境変数 ENCRYPTION_KEY から32バイトの暗号化キーを取得する。
 
     Base64エンコードされた値と生のUTF-8文字列の両方をサポートする。
-    - Base64デコード後に32バイトになる場合はBase64として扱う
+    - 標準Base64またはURL-safe Base64でデコード後に32バイトになる場合はBase64として扱う
     - UTF-8バイト列が32バイトの場合はそのまま使用する
 
     Returns:
@@ -40,13 +40,16 @@ def _get_encryption_key() -> bytes:
     if not raw:
         raise ValueError("環境変数 ENCRYPTION_KEY が設定されていません")
 
-    # Base64デコードを試みる
-    try:
-        decoded = base64.b64decode(raw)
-        if len(decoded) == 32:
-            return decoded
-    except Exception:
-        pass
+    # Base64デコードを試みる（標準Base64 および URL-safe Base64 の両方に対応）
+    # パディングが省略されている場合があるため補完する
+    padded = raw + "=" * (-len(raw) % 4)
+    for decoder in (base64.b64decode, base64.urlsafe_b64decode):
+        try:
+            decoded = decoder(padded)
+            if len(decoded) == 32:
+                return decoded
+        except Exception:
+            pass
 
     # UTF-8バイト列として使用
     key_bytes = raw.encode("utf-8")
