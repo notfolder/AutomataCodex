@@ -136,7 +136,7 @@ class TestGetUserByUsername:
     async def test_returns_user_when_found(self):
         """ユーザーが存在する場合にレコードを返すことを検証する"""
         pool, conn = _make_pool()
-        expected = {"email": "found@example.com", "username": "Found"}
+        expected = {"username": "Found"}
         conn.fetchrow = AsyncMock(return_value=expected)
 
         repo = UserRepository(pool)
@@ -162,7 +162,7 @@ class TestUpdateUser:
     async def test_update_role(self):
         """ロールを更新できることを検証する"""
         pool, conn = _make_pool()
-        expected = {"email": "user@example.com", "role": "admin"}
+        expected = {"username": "user", "role": "admin"}
         conn.fetchrow = AsyncMock(return_value=expected)
 
         repo = UserRepository(pool)
@@ -175,7 +175,7 @@ class TestUpdateUser:
     async def test_update_with_no_fields_returns_current(self):
         """更新フィールドが空の場合は既存レコードをそのまま返すことを検証する"""
         pool, conn = _make_pool()
-        expected = {"email": "user@example.com", "role": "user"}
+        expected = {"username": "user", "role": "user"}
         conn.fetchrow = AsyncMock(return_value=expected)
 
         repo = UserRepository(pool)
@@ -227,8 +227,8 @@ class TestListUsers:
         """全ユーザー一覧を取得できることを検証する"""
         pool, conn = _make_pool()
         expected_rows = [
-            {"email": "a@example.com", "username": "A"},
-            {"email": "b@example.com", "username": "B"},
+            {"username": "A"},
+            {"username": "B"},
         ]
         conn.fetch = AsyncMock(return_value=expected_rows)
 
