@@ -115,8 +115,18 @@ class TestTodoManagementTool:
 
         # DBからTodoレコードが返るようにモックする
         mock_rows = [
-            {"id": 1, "title": "Todoアイテム1", "status": "completed", "parent_todo_id": None},
-            {"id": 2, "title": "Todoアイテム2", "status": "not-started", "parent_todo_id": None},
+            {
+                "id": 1,
+                "title": "Todoアイテム1",
+                "status": "completed",
+                "parent_todo_id": None,
+            },
+            {
+                "id": 2,
+                "title": "Todoアイテム2",
+                "status": "not-started",
+                "parent_todo_id": None,
+            },
         ]
         mock_db_connection.fetch.return_value = mock_rows
 
@@ -151,10 +161,22 @@ class TestTodoManagementTool:
         )
 
         mock_rows = [
-            {"id": 1, "title": "タスク1", "description": "", "status": "completed",
-             "parent_todo_id": None, "order_index": 0},
-            {"id": 2, "title": "タスク2", "description": "", "status": "not-started",
-             "parent_todo_id": None, "order_index": 1},
+            {
+                "id": 1,
+                "title": "タスク1",
+                "description": "",
+                "status": "completed",
+                "parent_todo_id": None,
+                "order_index": 0,
+            },
+            {
+                "id": 2,
+                "title": "タスク2",
+                "description": "",
+                "status": "not-started",
+                "parent_todo_id": None,
+                "order_index": 1,
+            },
         ]
         mock_db_connection.fetch.return_value = mock_rows
 
@@ -193,9 +215,16 @@ class TestTodoManagementTool:
         """update_todo_statusにcontextを渡すとtodo_changedイベントが呈出されることを確認する"""
         mock_db_connection.execute = AsyncMock(return_value="UPDATE 1")
         # _get_todo_markdownで使われるfetchモック
-        mock_db_connection.fetch = AsyncMock(return_value=[
-            {"id": 1, "title": "タスク1", "status": "completed", "parent_todo_id": None},
-        ])
+        mock_db_connection.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": 1,
+                    "title": "タスク1",
+                    "status": "completed",
+                    "parent_todo_id": None,
+                },
+            ]
+        )
 
         mock_progress_reporter = MagicMock()
         mock_progress_reporter.report_progress = AsyncMock()
@@ -208,7 +237,9 @@ class TestTodoManagementTool:
         )
 
         mock_ctx = MagicMock()
-        result = await tool.update_todo_status(todo_id=1, status="completed", context=mock_ctx)
+        result = await tool.update_todo_status(
+            todo_id=1, status="completed", context=mock_ctx
+        )
 
         assert result["status"] == "success"
         # todo_changed イベントが ProgressReporter に呈出されることを確認する
@@ -222,10 +253,12 @@ class TestTodoManagementTool:
         mock_db_connection: MagicMock,
     ) -> None:
         """add_todoがDBにINSERTして新しいtodo_idを返すことを確認する"""
-        mock_db_connection.fetchrow = AsyncMock(side_effect=[
-            {"max_idx": 1},  # MAX(order_index) クエリ
-            {"id": 10},      # INSERT クエリ
-        ])
+        mock_db_connection.fetchrow = AsyncMock(
+            side_effect=[
+                {"max_idx": 1},  # MAX(order_index) クエリ
+                {"id": 10},  # INSERT クエリ
+            ]
+        )
         mock_db_connection.fetch = AsyncMock(return_value=[])
 
         tool = TodoManagementTool(
@@ -294,9 +327,16 @@ class TestTodoManagementTool:
     ) -> None:
         """create_todo_listにcontextを渡すとtodo_changedイベントが呈出されることを確認する"""
         mock_db_connection.fetchrow = AsyncMock(return_value={"id": 1})
-        mock_db_connection.fetch = AsyncMock(return_value=[
-            {"id": 1, "title": "タスク1", "status": "not-started", "parent_todo_id": None},
-        ])
+        mock_db_connection.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": 1,
+                    "title": "タスク1",
+                    "status": "not-started",
+                    "parent_todo_id": None,
+                },
+            ]
+        )
 
         mock_progress_reporter = MagicMock()
         mock_progress_reporter.report_progress = AsyncMock()
@@ -337,6 +377,10 @@ class TestIssueToMRConverter:
         mock_gitlab_client.create_merge_request.return_value = mock_created_mr
         # update_merge_requestが更新後のMRを返すようにモックする
         mock_gitlab_client.update_merge_request.return_value = mock_created_mr
+        # get_issueがmock_issueを返すようにモックする（ラベル再取得用）
+        mock_gitlab_client.get_issue.return_value = mock_issue
+        # list_branchesが空リストを返すようにモックする
+        mock_gitlab_client.list_branches.return_value = []
         # Issue Notesのモックを作成する（ユーザーコメント1件）
         user_note = MagicMock()
         user_note.system = False

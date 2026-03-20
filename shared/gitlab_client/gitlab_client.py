@@ -746,6 +746,20 @@ class GitlabClient:
         except gitlab.exceptions.GitlabGetError:
             return False
 
+    def list_branches(self, project_id: int) -> list[str]:
+        """
+        プロジェクトの全ブランチ名一覧を取得する。
+
+        Args:
+            project_id: GitLabプロジェクトID
+
+        Returns:
+            ブランチ名の文字列リスト
+        """
+        project = self._get_project(project_id)
+        branches = self._call_with_retry(project.branches.list, all=True)
+        return [b.name for b in branches]
+
     def delete_branch(self, project_id: int, branch_name: str) -> None:
         """
         ブランチを削除する。

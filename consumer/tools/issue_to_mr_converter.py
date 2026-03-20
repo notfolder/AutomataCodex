@@ -155,6 +155,13 @@ class IssueToMRConverter:
 
         from agent_framework import Agent
 
+        # 既存ブランチ名の一覧を取得してプロンプトに含める（重複回避のため）
+        existing_branches: list[str] = []
+        try:
+            existing_branches = self.gitlab_client.list_branches(issue.project_id)
+        except Exception as exc:
+            logger.warning("既存ブランチ一覧の取得に失敗しました: %s", exc)
+
         prompt = (
             f"次のIssueに対するGitブランチ名を生成してください。\n"
             f"プレフィックス: {self.config.branch_prefix}\n"
@@ -167,6 +174,12 @@ class IssueToMRConverter:
             f"- Issue IID を含める\n"
             f"- ブランチ名のみを出力する（説明文は不要）"
         )
+        if existing_branches:
+            branch_list_str = ", ".join(existing_branches)
+            prompt += (
+                f"\n\n以下のブランチ名は既に存在します。重複しないようにしてください:\n"
+                f"{branch_list_str}"
+            )
 
         agent = Agent(client=chat_client)
 
@@ -231,6 +244,71 @@ class IssueToMRConverter:
             branch_name,
         )
         return branch_name
+
+    async def _generate_mr_title(
+        self, issue: "GitLabIssue", username: str | None = None
+    ) -> str:
+        """
+        AF Agent を使って MR タイトルを生成する。
+
+        chat_client が設定されている場合は Agent.run() で Issueタイトル・説明から
+        適切な MR タイトルを生成する。生成に失敗した場合はデフォルトテンプレートを使用する。
+
+        Args:
+            issue: 変換対象の GitLab Issue
+            username: タスク実行ユーザーの GitLab ユーザー名（chat_client_factory 呼び出しに使用）
+
+        Returns:
+            生成された MR タイトル文字列
+        """
+        # chat_client が未設定の場合、ファクトリ関数で動的に生成を試みる
+        chat_client = self.chat_client
+        if chat_client is None and self.chat_client_factory is not None and username:
+            try:
+                chat_client = await self.chat_client_factory(username)
+            except Exception as exc:
+                logger.warning(
+                    "MRタイトル生成用chat_clientの生成に失敗しました: %s", exc
+                )
+
+        default_title = self.config.mr_title_template.format(issue_title=issue.title)
+
+        if chat_client is None:
+            logger.info(
+                "chat_clientが未設定のためデフォルトMRタイトルを使用します: %s",
+                default_title,
+            )
+            return default_title
+
+        from agent_framework import Agent
+
+        # Issue説明の先頭500文字を渡す（長すぎるとトークンの無駄になるため）
+        description_excerpt = (issue.description or "")[:500]
+        prompt = (
+            f"次のGitLab IssueからMerge Requestのタイトルを生成してください。\n"
+            f"Issue タイトル: {issue.title}\n"
+            f"Issue 説明: {description_excerpt}\n\n"
+            f"要件:\n"
+            f"- 先頭に 'Draft: ' を付ける\n"
+            f"- Issue の内容を簡潔に表す日本語または英語のタイトルにする\n"
+            f"- 50文字以内にする\n"
+            f"- タイトルの文字列のみを出力する（説明文は不要）"
+        )
+
+        try:
+            agent = Agent(client=chat_client)
+            response = await agent.run(prompt)
+            mr_title = (response.text or "").strip()
+            # 改行やMarkdown装飾が混入した場合は除去する
+            mr_title = mr_title.split("\n")[0].strip("`").strip()
+            if mr_title:
+                logger.info("LLMによるMRタイトル生成成功: %s", mr_title)
+                return mr_title
+        except Exception as exc:
+            logger.warning("LLMによるMRタイトル生成に失敗しました: %s", exc)
+
+        logger.info("デフォルトMRタイトルを使用します: %s", default_title)
+        return default_title
 
     async def convert(self, issue_or_task: "GitLabIssue | Any") -> "GitLabMergeRequest":
         """
@@ -306,8 +384,8 @@ class IssueToMRConverter:
         else:
             logger.info("create_commit が利用不可のため空コミット作成をスキップします")
 
-        # ④ MR 作成（タイトルと説明のみ設定。ラベル・アサイニーは次のステップで設定する）
-        mr_title = self.config.mr_title_template.format(issue_title=issue.title)
+        # ④ MR 作成（タイトルはLLMで生成。ラベル・アサイニーは次のステップで設定する）
+        mr_title = await self._generate_mr_title(issue, username=username)
 
         mr = self.gitlab_client.create_merge_request(
             project_id=project_id,
@@ -337,13 +415,17 @@ class IssueToMRConverter:
 
         # ⑥ Issueのラベル・アサイニー・レビュアーをMRに設定する
         try:
+            # ラベル操作の直前にIssueを再取得して最新のラベルを使用する
+            fresh_issue = self.gitlab_client.get_issue(
+                project_id=project_id, issue_iid=issue.iid
+            )
             # u.id が None になりうる場合（GitLabUser.email同様にオプション）に備えてフィルタリングする
             assignee_ids: list[int] = [
-                u.id for u in issue.assignees if u.id is not None
+                u.id for u in fresh_issue.assignees if u.id is not None
             ]
-            # Issue のラベルから processing_label を除去し、bot_label を付与する
+            # 最新の Issue ラベルから processing_label を除去し、bot_label を付与する
             mr_labels: list[str] = list(
-                (set(issue.labels or []) - {self.config.processing_label})
+                (set(fresh_issue.labels or []) - {self.config.processing_label})
                 | {self.config.bot_label}
             )
             # Issue の author をレビュアーとして設定する
@@ -379,8 +461,12 @@ class IssueToMRConverter:
 
         # ⑧ Issue に Done ラベルを追加する（processing_label を削除して done_label を追加: coding_agent 準拠）
         try:
+            # ラベル操作の直前にIssueを再取得して最新のラベルを使用する
+            fresh_issue_for_done = self.gitlab_client.get_issue(
+                project_id=project_id, issue_iid=issue.iid
+            )
             done_labels = list(
-                (set(issue.labels) - {self.config.processing_label})
+                (set(fresh_issue_for_done.labels) - {self.config.processing_label})
                 | {self.config.done_label}
             )
             self.gitlab_client.update_issue_labels(
