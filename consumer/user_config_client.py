@@ -48,7 +48,7 @@ class UserConfig:
         Args:
             data: User Config APIから取得したユーザー設定辞書
         """
-        self.email: str = data.get("email", "")
+        self.username: str = data.get("username", "")
         self.llm_provider: str = data.get("llm_provider", "openai")
         self.model_name: str = data.get("model_name", "gpt-4o")
         self.api_key: str = data.get("api_key", "")
@@ -83,7 +83,7 @@ class UserConfig:
             設定内容を表す辞書
         """
         return {
-            "email": self.email,
+            "username": self.username,
             "llm_provider": self.llm_provider,
             "model_name": self.model_name,
             "api_key": self.api_key,
@@ -145,17 +145,17 @@ class UserConfigClient:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
-    async def get_user_config(self, email: str) -> UserConfig:
+    async def get_user_config(self, username: str) -> UserConfig:
         """
-        メールアドレスからユーザー設定を取得する。
+        GitLabユーザー名からユーザー設定を取得する。
 
-        User Config APIの GET /api/v1/config/{email} エンドポイントを呼び出し、
+        User Config APIの GET /api/v1/config/{username} エンドポイントを呼び出し、
         ユーザーのLLM設定・APIキー・学習機能設定を取得する。
 
         USER_MANAGEMENT_SPEC.md § 6.1 に準拠する。
 
         Args:
-            email: ユーザーのメールアドレス
+            username: GitLabユーザー名
 
         Returns:
             UserConfigインスタンス
@@ -164,15 +164,15 @@ class UserConfigClient:
             httpx.HTTPStatusError: APIからエラーレスポンスが返された場合
             httpx.RequestError: ネットワークエラーが発生した場合
         """
-        url = f"{self.base_url}/api/v1/config/{email}"
-        logger.info("ユーザー設定を取得します: email=%s, url=%s", email, url)
+        url = f"{self.base_url}/api/v1/config/{username}"
+        logger.info("ユーザー設定を取得します: username=%s, url=%s", username, url)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.get(url, headers=self._build_headers())
             response.raise_for_status()
             data: dict[str, Any] = response.json()
 
-        logger.info("ユーザー設定を取得しました: email=%s", email)
+        logger.info("ユーザー設定を取得しました: username=%s", username)
         return UserConfig(data)
 
     async def get_user_workflow_setting(self, user_id: int) -> dict[str, Any]:

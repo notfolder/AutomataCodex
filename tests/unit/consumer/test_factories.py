@@ -99,7 +99,7 @@ def issue_task() -> Task:
         task_type="issue",
         project_id=1,
         issue_iid=42,
-        user_email="user@example.com",
+        username="testuser",
     )
 
 
@@ -111,7 +111,7 @@ def mr_task() -> Task:
         task_type="merge_request",
         project_id=1,
         mr_iid=10,
-        user_email="user@example.com",
+        username="testuser",
     )
 
 
@@ -491,7 +491,7 @@ class TestAgentFactory:
         agent = await agent_factory.create_agent(
             agent_config=agent_config,
             prompt_config=prompt_config,
-            user_email="test@example.com",
+            username="testuser",
             progress_reporter=None,
         )
 
@@ -523,7 +523,7 @@ class TestAgentFactory:
         agent = await agent_factory.create_agent(
             agent_config=agent_config,
             prompt_config=prompt_config,
-            user_email="test@example.com",
+            username="testuser",
             progress_reporter=None,
         )
 
@@ -623,7 +623,7 @@ class TestWorkflowFactory:
             task_type="merge_request",
             project_id=1,
             mr_iid=10,
-            user_email="user@example.com",
+            username="testuser",
             workflow_definition_id=1,
         )
 

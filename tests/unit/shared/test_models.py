@@ -113,11 +113,11 @@ class TestTask:
             task_type="merge_request",
             project_id=100,
             mr_iid=5,
-            user_email="user@example.com",
+            username="testuser",
             workflow_definition_id=1,
         )
         assert ctx.task_type == "merge_request"
-        assert ctx.user_email == "user@example.com"
+        assert ctx.username == "user@example.com"
         assert ctx.workflow_definition_id == 1
 
 

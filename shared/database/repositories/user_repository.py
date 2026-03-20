@@ -105,7 +105,6 @@ class UserRepository:
 
     async def create_user(
         self,
-        email: str,
         username: str,
         password_hash: str,
         role: str = "user",
@@ -114,11 +113,8 @@ class UserRepository:
         """
         ユーザーを作成する。
 
-        メールアドレスは小文字に正規化して保存する。
-
         Args:
-            email: メールアドレス（一意識別子）
-            username: ユーザー表示名
+            username: GitLabユーザー名（一意識別子・主キー）
             password_hash: bcryptハッシュ済みパスワード
             role: ユーザーロール（'admin' または 'user'）
             is_active: アカウント有効状態
@@ -127,17 +123,15 @@ class UserRepository:
             作成したユーザーのレコード辞書
 
         Raises:
-            asyncpg.UniqueViolationError: メールアドレスが重複する場合
+            asyncpg.UniqueViolationError: ユーザー名が重複する場合
         """
-        normalized_email = email.lower()
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO users (email, username, password_hash, role, is_active)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO users (username, password_hash, role, is_active)
+                VALUES ($1, $2, $3, $4)
                 RETURNING *
                 """,
-                normalized_email,
                 username,
                 password_hash,
                 role,
@@ -145,28 +139,28 @@ class UserRepository:
             )
         return dict(row)
 
-    async def get_user_by_email(self, email: str) -> dict[str, Any] | None:
+    async def get_user_by_username(self, username: str) -> dict[str, Any] | None:
         """
-        メールアドレスでユーザーを取得する。
+        GitLabユーザー名でユーザーを取得する。
 
         Args:
-            email: メールアドレス
+            username: GitLabユーザー名
 
         Returns:
             ユーザーレコード辞書。存在しない場合はNone。
         """
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM users WHERE email = $1",
-                email.lower(),
+                "SELECT * FROM users WHERE username = $1",
+                username,
             )
         return dict(row) if row else None
 
     async def update_user(
         self,
-        email: str,
+        username: str,
         *,
-        username: str | None = None,
+        display_name: str | None = None,
         role: str | None = None,
         is_active: bool | None = None,
     ) -> dict[str, Any] | None:
@@ -174,8 +168,8 @@ class UserRepository:
         ユーザー情報を更新する。
 
         Args:
-            email: 更新対象のメールアドレス
-            username: 新しいユーザー表示名（Noneの場合は更新しない）
+            username: 更新対象のGitLabユーザー名
+            display_name: 新しい表示名（Noneの場合は更新しない）
             role: 新しいロール（Noneの場合は更新しない）
             is_active: 新しい有効状態（Noneの場合は更新しない）
 
@@ -200,35 +194,35 @@ class UserRepository:
             idx += 1
 
         if not fields:
-            return await self.get_user_by_email(email)
+            return await self.get_user_by_username(username)
 
         # updated_at はDBのNOW()で設定する（Pythonのdatetimeとの型不一致を回避）
         fields.append("updated_at = NOW()")
-        values.append(email.lower())
+        values.append(username)
 
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                f"UPDATE users SET {', '.join(fields)} WHERE email = ${idx} RETURNING *",
+                f"UPDATE users SET {', '.join(fields)} WHERE username = ${idx} RETURNING *",
                 *values,
             )
         return dict(row) if row else None
 
-    async def delete_user(self, email: str) -> bool:
+    async def delete_user(self, username: str) -> bool:
         """
         ユーザーを削除する。
 
         CASCADE設定により、関連する全レコードも削除される。
 
         Args:
-            email: 削除対象のメールアドレス
+            username: 削除対象のGitLabユーザー名
 
         Returns:
             削除に成功した場合はTrue、対象が存在しない場合はFalse。
         """
         async with self._pool.acquire() as conn:
             result = await conn.execute(
-                "DELETE FROM users WHERE email = $1",
-                email.lower(),
+                "DELETE FROM users WHERE username = $1",
+                username,
             )
         return result == "DELETE 1"
 
@@ -286,7 +280,7 @@ class UserRepository:
 
     async def create_user_config(
         self,
-        user_email: str,
+        username: str,
         *,
         llm_provider: str = "openai",
         api_key: str | None = None,
@@ -316,7 +310,7 @@ class UserRepository:
         api_keyが指定された場合はAES-256-GCMで暗号化して保存する。
 
         Args:
-            user_email: ユーザーメールアドレス
+            username: GitLabユーザー名
             llm_provider: LLMプロバイダ名
             api_key: 平文APIキー（暗号化して保存される）
             model_name: 使用モデル名
@@ -353,7 +347,7 @@ class UserRepository:
             row = await conn.fetchrow(
                 """
                 INSERT INTO user_configs (
-                    user_email, llm_provider, api_key_encrypted, model_name,
+                    username, llm_provider, api_key_encrypted, model_name,
                     temperature, max_tokens, top_p, frequency_penalty, presence_penalty,
                     base_url, timeout, context_compression_enabled, token_threshold,
                     keep_recent_messages, min_to_compress, min_compression_ratio,
@@ -371,7 +365,7 @@ class UserRepository:
                 )
                 RETURNING *
                 """,
-                user_email.lower(),
+                username,
                 llm_provider,
                 api_key_encrypted,
                 model_name,
@@ -396,43 +390,43 @@ class UserRepository:
             )
         return dict(row)
 
-    async def get_user_config(self, user_email: str) -> dict[str, Any] | None:
+    async def get_user_config(self, username: str) -> dict[str, Any] | None:
         """
         ユーザー設定を取得する。
 
         api_key_encryptedは暗号化されたまま返す（復号には get_decrypted_api_key を使用する）。
 
         Args:
-            user_email: ユーザーメールアドレス
+            username: GitLabユーザー名
 
         Returns:
             user_configsレコード辞書。存在しない場合はNone。
         """
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM user_configs WHERE user_email = $1",
-                user_email.lower(),
+                "SELECT * FROM user_configs WHERE username = $1",
+                username,
             )
         return dict(row) if row else None
 
-    async def get_decrypted_api_key(self, user_email: str) -> str | None:
+    async def get_decrypted_api_key(self, username: str) -> str | None:
         """
         ユーザーのAPIキーを復号して返す。
 
         Args:
-            user_email: ユーザーメールアドレス
+            username: GitLabユーザー名
 
         Returns:
             復号されたAPIキー文字列。設定が存在しない、またはAPIキー未設定の場合はNone。
         """
-        config = await self.get_user_config(user_email)
+        config = await self.get_user_config(username)
         if not config or not config.get("api_key_encrypted"):
             return None
         return decrypt_api_key(config["api_key_encrypted"])
 
     async def update_user_config(
         self,
-        user_email: str,
+        username: str,
         *,
         llm_provider: str | None = None,
         api_key: str | None = None,
@@ -463,7 +457,7 @@ class UserRepository:
         Noneを指定したフィールドは更新されない。
 
         Args:
-            user_email: ユーザーメールアドレス
+            username: GitLabユーザー名
             その他の引数: 更新するフィールドと値
 
         Returns:
@@ -510,33 +504,33 @@ class UserRepository:
             idx += 1
 
         if not fields:
-            return await self.get_user_config(user_email)
+            return await self.get_user_config(username)
 
         # updated_at はDBのNOW()で設定する（Pythonのdatetimeとの型不一致を回避）
         fields.append("updated_at = NOW()")
-        values.append(user_email.lower())
+        values.append(username)
 
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                f"UPDATE user_configs SET {', '.join(fields)} WHERE user_email = ${idx} RETURNING *",
+                f"UPDATE user_configs SET {', '.join(fields)} WHERE username = ${idx} RETURNING *",
                 *values,
             )
         return dict(row) if row else None
 
-    async def delete_user_config(self, user_email: str) -> bool:
+    async def delete_user_config(self, username: str) -> bool:
         """
         ユーザー設定を削除する。
 
         Args:
-            user_email: ユーザーメールアドレス
+            username: GitLabユーザー名
 
         Returns:
             削除に成功した場合はTrue、対象が存在しない場合はFalse。
         """
         async with self._pool.acquire() as conn:
             result = await conn.execute(
-                "DELETE FROM user_configs WHERE user_email = $1",
-                user_email.lower(),
+                "DELETE FROM user_configs WHERE username = $1",
+                username,
             )
         return result == "DELETE 1"
 
@@ -546,7 +540,7 @@ class UserRepository:
 
     async def create_user_workflow_setting(
         self,
-        user_email: str,
+        username: str,
         workflow_definition_id: int,
         custom_settings: str | None = None,
     ) -> dict[str, Any]:
@@ -554,7 +548,7 @@ class UserRepository:
         ユーザーのワークフロー設定を作成する。
 
         Args:
-            user_email: ユーザーメールアドレス
+            username: GitLabユーザー名
             workflow_definition_id: ワークフロー定義ID
             custom_settings: ユーザー固有の追加設定（JSON文字列）
 
@@ -568,36 +562,36 @@ class UserRepository:
             row = await conn.fetchrow(
                 """
                 INSERT INTO user_workflow_settings
-                    (user_email, workflow_definition_id, custom_settings)
+                    (username, workflow_definition_id, custom_settings)
                 VALUES ($1, $2, $3)
                 RETURNING *
                 """,
-                user_email.lower(),
+                username,
                 workflow_definition_id,
                 custom_settings,
             )
         return dict(row)
 
-    async def get_user_workflow_setting(self, user_email: str) -> dict[str, Any] | None:
+    async def get_user_workflow_setting(self, username: str) -> dict[str, Any] | None:
         """
         ユーザーのワークフロー設定を取得する。
 
         Args:
-            user_email: ユーザーメールアドレス
+            username: GitLabユーザー名
 
         Returns:
             user_workflow_settingsレコード辞書。存在しない場合はNone。
         """
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM user_workflow_settings WHERE user_email = $1",
-                user_email.lower(),
+                "SELECT * FROM user_workflow_settings WHERE username = $1",
+                username,
             )
         return dict(row) if row else None
 
     async def update_user_workflow_setting(
         self,
-        user_email: str,
+        username: str,
         workflow_definition_id: int,
         custom_settings: str | None = None,
     ) -> dict[str, Any] | None:
@@ -605,7 +599,7 @@ class UserRepository:
         ユーザーのワークフロー設定を更新する。
 
         Args:
-            user_email: ユーザーメールアドレス
+            username: GitLabユーザー名
             workflow_definition_id: 新しいワークフロー定義ID
             custom_settings: ユーザー固有の追加設定（JSON文字列）
 
@@ -619,30 +613,30 @@ class UserRepository:
                 SET workflow_definition_id = $1,
                     custom_settings = $2,
                     updated_at = NOW()
-                WHERE user_email = $3
+                WHERE username = $3
                 RETURNING *
                 """,
                 workflow_definition_id,
                 custom_settings,
-                user_email.lower(),
+                username,
             )
         return dict(row) if row else None
 
-    async def delete_user_workflow_setting(self, user_email: str) -> bool:
+    async def delete_user_workflow_setting(self, username: str) -> bool:
         """
         ユーザーのワークフロー設定を削除する。
 
         ユーザーが選択中のワークフロー定義との関連付けを解除する。
 
         Args:
-            user_email: 削除対象のメールアドレス
+            username: 削除対象のGitLabユーザー名
 
         Returns:
             削除に成功した場合はTrue、対象が存在しない場合はFalse。
         """
         async with self._pool.acquire() as conn:
             result = await conn.execute(
-                "DELETE FROM user_workflow_settings WHERE user_email = $1",
-                user_email.lower(),
+                "DELETE FROM user_workflow_settings WHERE username = $1",
+                username,
             )
         return result == "DELETE 1"

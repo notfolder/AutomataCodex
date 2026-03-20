@@ -30,7 +30,7 @@ class TestRecordTokenUsage:
         pool, conn = _make_pool()
         expected = {
             "id": 1,
-            "user_email": "user@example.com",
+            "username": "testuser",
             "task_uuid": "task-1",
             "node_id": "code_generation",
             "model": "gpt-4o",
@@ -226,7 +226,7 @@ class TestGetUsageByModel:
         conn.fetch = AsyncMock(return_value=expected_rows)
 
         repo = TokenUsageRepository(pool)
-        result = await repo.get_usage_by_model(user_email="user@example.com")
+        result = await repo.get_usage_by_model(username="testuser")
 
         assert len(result) == 2
 

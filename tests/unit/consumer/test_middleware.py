@@ -74,7 +74,7 @@ def mock_ctx() -> _ConcreteWorkflowContext:
         "project_id": 10,
         "mr_iid": 5,
         "task_uuid": "test-uuid-001",
-        "user_email": "user@example.com",
+        "username": "testuser",
     }
     return ctx
 
@@ -361,7 +361,7 @@ class TestTokenUsageMiddleware:
         assert result is None
         # save_token_usageが呼ばれることを確認する
         mock_context_storage_manager.save_token_usage.assert_called_once_with(
-            user_email="user@example.com",
+            username="testuser",
             task_uuid="test-uuid-001",
             node_id="planning_agent",
             model="gpt-4",

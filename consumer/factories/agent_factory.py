@@ -28,7 +28,7 @@ class AgentFactory:
     エージェントファクトリクラス
 
     ConfigurableAgentインスタンスを生成する。エージェント定義とプロンプト定義を受け取り、
-    user_email・env_idを設定した上でConfigurableAgentを生成する。
+    username・env_idを設定した上でConfigurableAgentを生成する。
     User Config APIからユーザーのLLM設定を取得してエージェントに適用する。
 
     CLASS_IMPLEMENTATION_SPEC.md § 2.3 に準拠する。
@@ -69,7 +69,7 @@ class AgentFactory:
         self,
         agent_config: AgentNodeConfig,
         prompt_config: PromptConfig,
-        user_email: str,
+        username: str,
         progress_reporter: Any,
         env_id: str | None = None,
     ) -> ConfigurableAgent:
@@ -91,7 +91,7 @@ class AgentFactory:
         Args:
             agent_config: エージェントノード設定
             prompt_config: プロンプト設定
-            user_email: ユーザーのメールアドレス
+            username: GitLabユーザー名
             progress_reporter: 進捗報告インスタンス
             env_id: 使用するDocker環境ID（省略可能）
 
@@ -130,7 +130,7 @@ class AgentFactory:
                     )
 
         # 3. User Config取得
-        user_config = await self.user_config_client.get_user_config(user_email)
+        user_config = await self.user_config_client.get_user_config(username)
 
         # 4. ChatClient生成（Agent Framework の OpenAIChatClient / AzureOpenAIChatClient を使用）
         chat_client = self._create_chat_client(user_config)
@@ -156,9 +156,9 @@ class AgentFactory:
         )
 
         logger.info(
-            "ConfigurableAgentを生成しました: agent_id=%s, user_email=%s, env_id=%s",
+            "ConfigurableAgentを生成しました: agent_id=%s, username=%s, env_id=%s",
             agent_config.id,
-            user_email,
+            username,
             env_id,
         )
         return configurable_agent

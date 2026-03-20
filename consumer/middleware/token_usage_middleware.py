@@ -96,12 +96,12 @@ class TokenUsageMiddleware(IMiddleware):
 
         # コンテキストからタスク・ユーザー情報を取得する
         task_uuid: str | None = context.get_state("task_uuid")
-        user_email: str | None = context.get_state("user_email")
+        username: str | None = context.get_state("username")
 
         # トークン使用量をデータベースに保存する
         try:
             await self.context_storage_manager.save_token_usage(
-                user_email=user_email or "",
+                username=username or "",
                 task_uuid=task_uuid or "",
                 node_id=node.node_id,
                 model=model,
@@ -122,7 +122,7 @@ class TokenUsageMiddleware(IMiddleware):
             labels={
                 "model": model,
                 "node_id": node.node_id,
-                "user_email": user_email or "",
+                "username": username or "",
             },
             value=float(total_tokens),
         )

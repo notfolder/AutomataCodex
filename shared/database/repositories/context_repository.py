@@ -415,7 +415,7 @@ class ContextRepository:
         task_type: str,
         task_identifier: str,
         repository: str,
-        user_email: str,
+        username: str,
         *,
         workflow_name: str | None = None,
     ) -> dict[str, Any]:
@@ -427,7 +427,7 @@ class ContextRepository:
             task_type: タスク種別
             task_identifier: GitLab Issue/MR識別子
             repository: リポジトリ名
-            user_email: ユーザーメールアドレス
+            username: GitLabユーザー名
             workflow_name: 使用ワークフロー名
 
         Returns:
@@ -441,7 +441,7 @@ class ContextRepository:
                 """
                 INSERT INTO context_metadata (
                     task_uuid, task_type, task_identifier, repository,
-                    user_email, workflow_name
+                    username, workflow_name
                 ) VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *
                 """,
@@ -449,7 +449,7 @@ class ContextRepository:
                 task_type,
                 task_identifier,
                 repository,
-                user_email.lower(),
+                username,
                 workflow_name,
             )
         return dict(row)

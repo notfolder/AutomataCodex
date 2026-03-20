@@ -1,7 +1,7 @@
 """
 UserResolverExecutor モジュール
 
-GitLab の MR 情報からユーザーの email を取得し、
+GitLab の MR 情報からユーザーの username を取得し、
 ユーザー設定（UserConfig）をワークフローコンテキストに保存する Executor を定義する。
 
 CLASS_IMPLEMENTATION_SPEC.md § 3.2（UserResolverExecutor）に準拠する。
@@ -60,7 +60,7 @@ class UserResolverExecutor(BaseExecutor):
         1. task_identifier からプロジェクト ID と MR IID を取得する
         2. GitLab から MR 一覧を取得し author の email を取得する
         3. user_config_client からユーザー設定を取得する
-        4. コンテキストに user_email と user_config を保存する
+        4. コンテキストに username と user_config を保存する
 
         Args:
             msg: 受け取るメッセージ（未使用）
@@ -77,29 +77,29 @@ class UserResolverExecutor(BaseExecutor):
             "ユーザー情報を解決します: project_id=%s, mr_iid=%s", project_id, mr_iid
         )
 
-        # GitLabからMRの詳細を直接取得してauthorのemailを抽出する
+        # GitLabからMRの詳細を直接取得してauthorのusernameを抽出する
         target_mr = self.gitlab_client.get_merge_request(
             project_id=project_id,
             mr_iid=mr_iid,
         )
 
-        # MR authorのemailを取得する
+        # MR authorのusernameを取得する
         author = target_mr.author
-        if author is None or author.email is None:
+        if author is None or author.username is None:
             logger.warning(
-                "MR authorのemailが取得できませんでした: mr_iid=%s", mr_iid
+                "MR authorのusernameが取得できませんでした: mr_iid=%s", mr_iid
             )
-            user_email: str = ""
+            username: str = ""
         else:
-            user_email = author.email
+            username = author.username
 
-        logger.info("MR authorのemailを取得しました: email=%s", user_email)
+        logger.info("MR authorのusernameを取得しました: username=%s", username)
 
         # ユーザー設定を取得する
-        user_config: Any = await self.user_config_client.get_user_config(user_email)
+        user_config: Any = await self.user_config_client.get_user_config(username)
 
         # コンテキストにユーザー情報を保存する
-        self.set_context_value(ctx, "user_email", user_email)
+        self.set_context_value(ctx, "username", username)
         self.set_context_value(ctx, "user_config", user_config)
 
-        logger.info("ユーザー情報をコンテキストに保存しました: email=%s", user_email)
+        logger.info("ユーザー情報をコンテキストに保存しました: username=%s", username)

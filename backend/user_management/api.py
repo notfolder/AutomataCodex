@@ -51,7 +51,7 @@ router = APIRouter(prefix="/api/v1")
 class LoginRequest(BaseModel):
     """ログインリクエストスキーマ"""
 
-    email: str
+    username: str
     password: str
 
 
@@ -353,7 +353,7 @@ async def login(
     メールアドレスとパスワードを照合し、成功した場合はトークンを返す。
     アカウントが無効の場合も認証失敗として扱う。
     """
-    user = await user_repo.get_user_by_email(body.email)
+    user = await user_repo.get_user_by_username(body.username)
     if not user or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -367,7 +367,7 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = create_access_token(user["email"], user["role"])
+    token = create_access_token(user["username"], user["role"])
     return TokenResponse(access_token=token)
 
 
@@ -382,13 +382,13 @@ async def refresh_token(
     現在の有効なトークンからユーザー情報を取得し、新しいトークンを発行する。
     """
     # DB から最新のユーザー情報を取得して role を確認する
-    user = await user_repo.get_user_by_email(current_user["email"])
+    user = await user_repo.get_user_by_username(current_user["email"])
     if not user or not user.get("is_active", False):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="ユーザーが存在しないか無効化されています",
         )
-    token = create_access_token(user["email"], user["role"])
+    token = create_access_token(user["username"], user["role"])
     return TokenResponse(access_token=token)
 
 
@@ -410,7 +410,6 @@ async def list_users(
     users = await user_repo.list_users()
     return [
         {
-            "email": u["email"],
             "username": u["username"],
             "role": u["role"],
             "is_active": u["is_active"],
@@ -420,9 +419,9 @@ async def list_users(
     ]
 
 
-@router.get("/config/{email}", tags=["ユーザー管理"])
+@router.get("/config/{username}", tags=["ユーザー管理"])
 async def get_user_config(
-    email: str,
+    username: str,
     current_user: dict[str, Any] = Depends(get_current_user),
     user_repo: UserRepository = Depends(_get_user_repository),
 ) -> dict[str, Any]:
@@ -433,34 +432,33 @@ async def get_user_config(
     管理者は全ユーザーの設定を取得可能。
     """
     # 権限チェック: 一般ユーザーは自分自身のみ
-    if current_user["role"] != "admin" and current_user["email"] != email.lower():
+    if current_user["role"] != "admin" and current_user["email"] != username:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="他のユーザーの設定を取得する権限がありません",
         )
 
-    user = await user_repo.get_user_by_email(email)
+    user = await user_repo.get_user_by_username(username)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="ユーザーが見つかりません",
         )
 
-    config = await user_repo.get_user_config(email)
+    config = await user_repo.get_user_config(username)
     if not config:
         # 設定レコードが未作成の場合はデフォルト値で自動作成する
-        config = await user_repo.create_user_config(user_email=email)
+        config = await user_repo.create_user_config(username=username)
 
     # APIキーを復号して返す
-    decrypted_key = await user_repo.get_decrypted_api_key(email)
+    decrypted_key = await user_repo.get_decrypted_api_key(username)
     result = dict(config)
     # 暗号化済みフィールドを除外して復号済みを設定する
     result.pop("api_key_encrypted", None)
     result["api_key"] = decrypted_key
 
     # users テーブルの基本情報をマージする（フロントエンドが参照するフィールド）
-    result["email"] = user["email"]
-    result["username"] = user.get("username")
+    result["username"] = user["username"]
     result["role"] = user.get("role")
     result["is_active"] = user.get("is_active")
     result["created_at"] = user.get("created_at")
@@ -486,7 +484,6 @@ async def create_user(
     try:
         # users テーブルにユーザーを作成する
         user = await user_repo.create_user(
-            email=body.email,
             username=body.username,
             password_hash=password_hash,
             role=body.role,
@@ -494,7 +491,7 @@ async def create_user(
         )
         # user_configs テーブルに設定を作成する
         await user_repo.create_user_config(
-            user_email=body.email,
+            username=body.username,
             llm_provider=body.llm_provider,
             api_key=body.api_key,
             model_name=body.model_name,
@@ -524,7 +521,6 @@ async def create_user(
         )
 
     return {
-        "email": user["email"],
         "username": user["username"],
         "role": user["role"],
         "is_active": user["is_active"],
@@ -532,9 +528,9 @@ async def create_user(
     }
 
 
-@router.put("/users/{email}", tags=["ユーザー管理"])
+@router.put("/users/{username}", tags=["ユーザー管理"])
 async def update_user(
-    email: str,
+    username: str,
     body: UserUpdateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
     user_repo: UserRepository = Depends(_get_user_repository),
@@ -546,7 +542,7 @@ async def update_user(
     管理者は全ユーザーの全設定を変更可能。
     """
     is_admin = current_user["role"] == "admin"
-    is_self = current_user["email"] == email.lower()
+    is_self = current_user["email"] == username
 
     # 権限チェック
     if not is_admin and not is_self:
@@ -564,7 +560,7 @@ async def update_user(
             )
 
     # ユーザーの存在確認
-    user = await user_repo.get_user_by_email(email)
+    user = await user_repo.get_user_by_username(username)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -576,8 +572,8 @@ async def update_user(
         v is not None for v in [body.username, body.role, body.is_active]
     ):
         updated_user = await user_repo.update_user(
-            email,
-            username=body.username,
+            username,
+            display_name=body.username,
             role=body.role,
             is_active=body.is_active,
         )
@@ -610,7 +606,7 @@ async def update_user(
     ]
     if any(v is not None for v in llm_fields):
         await user_repo.update_user_config(
-            email,
+            username,
             llm_provider=body.llm_provider,
             api_key=body.api_key,
             model_name=body.model_name,
@@ -635,16 +631,15 @@ async def update_user(
         )
 
     return {
-        "email": user["email"],
         "username": user["username"],
         "role": user["role"],
         "is_active": user["is_active"],
     }
 
 
-@router.put("/users/{email}/password", tags=["ユーザー管理"])
+@router.put("/users/{username}/password", tags=["ユーザー管理"])
 async def change_password(
-    email: str,
+    username: str,
     body: PasswordChangeRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
     user_repo: UserRepository = Depends(_get_user_repository),
@@ -656,7 +651,7 @@ async def change_password(
     管理者は全ユーザーのパスワードを代理変更可能（current_password 不要）。
     """
     is_admin = current_user["role"] == "admin"
-    is_self = current_user["email"] == email.lower()
+    is_self = current_user["email"] == username
 
     # 権限チェック
     if not is_admin and not is_self:
@@ -666,7 +661,7 @@ async def change_password(
         )
 
     # ユーザーの存在確認
-    user = await user_repo.get_user_by_email(email)
+    user = await user_repo.get_user_by_username(username)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -691,9 +686,9 @@ async def change_password(
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE email = $2",
+            "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE username = $2",
             new_hash,
-            email.lower(),
+            username,
         )
 
     return {"message": "パスワードを変更しました"}
@@ -1008,7 +1003,7 @@ async def get_dashboard_stats(
                 "task_type": t["task_type"],
                 "task_identifier": t["task_identifier"],
                 "repository": t["repository"],
-                "user_email": t["user_email"],
+                "username": t["username"],
                 "status": t["status"],
                 "created_at": t["created_at"],
             }
@@ -1024,8 +1019,8 @@ async def get_dashboard_stats(
 
 @router.get("/statistics/tokens", tags=["統計"])
 async def get_token_statistics(
-    user_email: str | None = Query(
-        default=None, description="フィルタリングするユーザーメールアドレス"
+    username: str | None = Query(
+        default=None, description="フィルタリングするGitLabユーザー名"
     ),
     period: int = Query(default=30, ge=1, description="集計期間（日数）"),
     admin: dict[str, Any] = Depends(get_admin_user),
@@ -1034,30 +1029,30 @@ async def get_token_statistics(
     トークン使用量統計を取得する（管理者専用）。
 
     ユーザー別にトークン使用量を集計して返す。
-    user_email を指定した場合はそのユーザーのみ集計する。
+    username を指定した場合はそのユーザーのみ集計する。
     period で集計期間（日数）を指定する（デフォルト30日）。
     """
     pool = await get_pool()
 
     # ユーザー別トークン使用量集計クエリ
-    if user_email:
+    if username:
         # 特定ユーザーの集計
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT
-                    user_email,
+                    username,
                     COUNT(*) AS call_count,
                     SUM(prompt_tokens) AS prompt_tokens,
                     SUM(completion_tokens) AS completion_tokens,
                     SUM(total_tokens) AS total_tokens
                 FROM token_usage
-                WHERE user_email = $1
+                WHERE username = $1
                   AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - ($2 || ' days')::INTERVAL)
-                GROUP BY user_email
+                GROUP BY username
                 ORDER BY total_tokens DESC
                 """,
-                user_email.lower(),
+                username,
                 str(period),
             )
     else:
@@ -1066,14 +1061,14 @@ async def get_token_statistics(
             rows = await conn.fetch(
                 """
                 SELECT
-                    user_email,
+                    username,
                     COUNT(*) AS call_count,
                     SUM(prompt_tokens) AS prompt_tokens,
                     SUM(completion_tokens) AS completion_tokens,
                     SUM(total_tokens) AS total_tokens
                 FROM token_usage
                 WHERE created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - ($1 || ' days')::INTERVAL)
-                GROUP BY user_email
+                GROUP BY username
                 ORDER BY total_tokens DESC
                 """,
                 str(period),
@@ -1081,10 +1076,10 @@ async def get_token_statistics(
 
     return {
         "period_days": period,
-        "user_email_filter": user_email,
+        "username_filter": username,
         "stats": [
             {
-                "user_email": row["user_email"],
+                "username": row["username"],
                 "call_count": int(row["call_count"]),
                 "prompt_tokens": int(row["prompt_tokens"]),
                 "completion_tokens": int(row["completion_tokens"]),
@@ -1102,8 +1097,8 @@ async def get_token_statistics(
 
 @router.get("/tasks", tags=["タスク"])
 async def list_tasks(
-    user_email: str | None = Query(
-        default=None, description="ユーザーメールアドレスでフィルタ"
+    username: str | None = Query(
+        default=None, description="GitLabユーザー名でフィルタ"
     ),
     status: str | None = Query(
         default=None,
@@ -1118,12 +1113,12 @@ async def list_tasks(
     """
     タスク実行履歴一覧を取得する（管理者専用）。
 
-    user_email・status・task_type でフィルタリングし、ページネーションをサポートする。
+    username・status・task_type でフィルタリングし、ページネーションをサポートする。
     """
     offset = (page - 1) * per_page
 
     tasks = await task_repo.list_tasks(
-        user_email=user_email,
+        username=username,
         status=status,
         task_type=task_type,
         limit=per_page,
@@ -1139,7 +1134,7 @@ async def list_tasks(
                 "task_type": t["task_type"],
                 "task_identifier": t["task_identifier"],
                 "repository": t["repository"],
-                "user_email": t["user_email"],
+                "username": t["username"],
                 "status": t["status"],
                 "created_at": t["created_at"],
                 "completed_at": t.get("completed_at"),

@@ -407,7 +407,7 @@ class TestGetUserConfig:
             "is_active": True,
         }
         user_repo.get_user_config.return_value = {
-            "user_email": "user@example.com",
+            "username": "testuser",
             "llm_provider": "openai",
             "api_key_encrypted": None,
             "model_name": "gpt-4o",
@@ -425,7 +425,7 @@ class TestGetUserConfig:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["user_email"] == "user@example.com"
+        assert data["username"] == "testuser"
         assert "api_key" in data
         assert "api_key_encrypted" not in data
 
@@ -464,7 +464,7 @@ class TestGetUserConfig:
             "is_active": True,
         }
         user_repo.get_user_config.return_value = {
-            "user_email": "user@example.com",
+            "username": "testuser",
             "llm_provider": "openai",
             "api_key_encrypted": "enc_value",
             "model_name": "gpt-4o",
@@ -598,7 +598,7 @@ class TestWorkflowSetting:
         """一般ユーザーが自分のワークフロー設定を取得できることを検証する"""
         user_repo = _make_mock_user_repo()
         user_repo.get_user_workflow_setting.return_value = {
-            "user_email": "user@example.com",
+            "username": "testuser",
             "workflow_definition_id": 1,
         }
         app = _make_test_app(user_repo=user_repo)
@@ -647,7 +647,7 @@ class TestWorkflowSetting:
         user_repo = _make_mock_user_repo()
         user_repo.get_user_workflow_setting.return_value = None
         user_repo.create_user_workflow_setting.return_value = {
-            "user_email": "user@example.com",
+            "username": "testuser",
             "workflow_definition_id": 2,
         }
         wf_repo = _make_mock_wf_repo()
@@ -676,11 +676,11 @@ class TestWorkflowSetting:
         """ワークフロー設定が既に存在する場合は update パスが呼ばれることを検証する"""
         user_repo = _make_mock_user_repo()
         user_repo.get_user_workflow_setting.return_value = {
-            "user_email": "user@example.com",
+            "username": "testuser",
             "workflow_definition_id": 1,
         }
         user_repo.update_user_workflow_setting.return_value = {
-            "user_email": "user@example.com",
+            "username": "testuser",
             "workflow_definition_id": 3,
         }
         wf_repo = _make_mock_wf_repo()
@@ -801,7 +801,7 @@ class TestTokenStatistics:
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
-                    "user_email": "user@example.com",
+                    "username": "testuser",
                     "call_count": 10,
                     "prompt_tokens": 500,
                     "completion_tokens": 300,
@@ -824,7 +824,7 @@ class TestTokenStatistics:
         assert "period_days" in data
         assert "stats" in data
         assert len(data["stats"]) == 1
-        assert data["stats"][0]["user_email"] == "user@example.com"
+        assert data["stats"][0]["username"] == "user@example.com"
 
     def test_一般ユーザーはトークン統計を取得できないこと(self):
         """一般ユーザーがGET /api/v1/statistics/tokensにアクセスすると403が返ることを検証する"""
@@ -836,7 +836,7 @@ class TestTokenStatistics:
 
         assert resp.status_code == 403
 
-    def test_user_emailフィルタが動作すること(self):
+    def test_usernameフィルタが動作すること(self):
         """user_emailクエリパラメータでフィルタリングできることを検証する"""
         app = _make_test_app()
 
@@ -852,13 +852,13 @@ class TestTokenStatistics:
         ):
             client = TestClient(app)
             resp = client.get(
-                "/api/v1/statistics/tokens?user_email=user@example.com",
+                "/api/v1/statistics/tokens?username=testuser",
                 headers=_admin_headers(),
             )
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["user_email_filter"] == "user@example.com"
+        assert data["username_filter"] == "user@example.com"
 
 
 # =====================================================================
@@ -1284,7 +1284,7 @@ class TestTaskHistory:
                 "task_type": "issue_to_mr",
                 "task_identifier": "#42",
                 "repository": "owner/repo",
-                "user_email": "user@example.com",
+                "username": "testuser",
                 "status": "completed",
                 "created_at": None,
                 "completed_at": None,

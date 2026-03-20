@@ -28,7 +28,7 @@ class Task(BaseModel):
     project_id: int = Field(description="GitLabプロジェクトID")
     issue_iid: int | None = Field(default=None, description="Issue IID（Issueタスクの場合）")
     mr_iid: int | None = Field(default=None, description="MR IID（MRタスクの場合）")
-    user_email: str | None = Field(default=None, description="タスク実行ユーザーのメールアドレス")
+    username: str | None = Field(default=None, description="タスク実行ユーザーのGitLabユーザー名")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc), description="タスク作成日時（UTC）"
     )
@@ -50,7 +50,7 @@ class TaskContext(BaseModel):
     original_branch: str | None = Field(default=None, description="元のブランチ名")
     assigned_branch: str | None = Field(default=None, description="割り当てられたブランチ名")
     user_id: int | None = Field(default=None, description="GitLabユーザーID")
-    user_email: str | None = Field(default=None, description="ユーザーのメールアドレス")
+    username: str | None = Field(default=None, description="GitLabユーザー名")
     openai_api_key: str | None = Field(default=None, description="ユーザー固有のOpenAI APIキー")
     workflow_definition_id: int | None = Field(
         default=None, description="使用するワークフロー定義ID"

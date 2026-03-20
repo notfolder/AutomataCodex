@@ -208,13 +208,13 @@ class TaskGetterFromGitLab:
         )
         return unprocessed
 
-    def issue_to_task(self, issue: GitLabIssue, user_email: str | None = None) -> Task:
+    def issue_to_task(self, issue: GitLabIssue, username: str | None = None) -> Task:
         """
         GitLabIssueをTaskオブジェクトに変換する。
 
         Args:
             issue: 変換対象のGitLabIssue
-            user_email: タスク実行ユーザーのメールアドレス
+            username: タスク実行ユーザーのGitLabユーザー名
 
         Returns:
             Taskオブジェクト
@@ -232,16 +232,16 @@ class TaskGetterFromGitLab:
             project_id=resolved_project_id,
             issue_iid=issue.iid,
             mr_iid=None,
-            user_email=user_email,
+            username=username,
         )
 
-    def mr_to_task(self, mr: GitLabMergeRequest, user_email: str | None = None) -> Task:
+    def mr_to_task(self, mr: GitLabMergeRequest, username: str | None = None) -> Task:
         """
         GitLabMergeRequestをTaskオブジェクトに変換する。
 
         Args:
             mr: 変換対象のGitLabMergeRequest
-            user_email: タスク実行ユーザーのメールアドレス
+            username: タスク実行ユーザーのGitLabユーザー名
 
         Returns:
             Taskオブジェクト
@@ -259,38 +259,38 @@ class TaskGetterFromGitLab:
             project_id=resolved_project_id,
             issue_iid=None,
             mr_iid=mr.iid,
-            user_email=user_email,
+            username=username,
         )
 
-    def get_all_unprocessed_tasks(self, user_email: str | None = None) -> list[Task]:
+    def get_all_unprocessed_tasks(self, username: str | None = None) -> list[Task]:
         """
         すべての未処理タスク（Issue・MR）を取得してTaskリストに変換する。
 
         Args:
-            user_email: タスク実行ユーザーのメールアドレス
+            username: タスク実行ユーザーのGitLabユーザー名
 
         Returns:
             未処理タスクのTaskリスト（Issue→MR順）
         """
         tasks: list[Task] = []
 
-        # Issue取得（author.email を優先して user_email として使用する）
+        # Issue取得（author.username を優先して username として使用する）
         issues = self.get_unprocessed_issues()
         for issue in issues:
-            issue_user_email = (
-                issue.author.email
-                if issue.author and issue.author.email
-                else user_email
+            issue_username = (
+                issue.author.username
+                if issue.author and issue.author.username
+                else username
             )
-            tasks.append(self.issue_to_task(issue, user_email=issue_user_email))
+            tasks.append(self.issue_to_task(issue, username=issue_username))
 
-        # MR取得（author.email を優先して user_email として使用する）
+        # MR取得（author.username を優先して username として使用する）
         mrs = self.get_unprocessed_merge_requests()
         for mr in mrs:
-            mr_user_email = (
-                mr.author.email if mr.author and mr.author.email else user_email
+            mr_username = (
+                mr.author.username if mr.author and mr.author.username else username
             )
-            tasks.append(self.mr_to_task(mr, user_email=mr_user_email))
+            tasks.append(self.mr_to_task(mr, username=mr_username))
 
         logger.info(
             "未処理タスク合計: issues=%d, mrs=%d, total=%d",
