@@ -91,14 +91,14 @@
             size="small"
             variant="text"
             icon="mdi-eye"
-            :to="{ name: 'UserDetail', params: { id: item.email } }"
+            :to="{ name: 'UserDetail', params: { id: item.username } }"
             title="詳細"
           />
           <v-btn
             size="small"
             variant="text"
             icon="mdi-pencil"
-            :to="{ name: 'UserEdit', params: { id: item.email } }"
+            :to="{ name: 'UserEdit', params: { id: item.username } }"
             title="編集"
           />
         </template>
@@ -149,7 +149,6 @@ const filteredUsers = computed(() => {
     const q = searchQuery.value.toLowerCase()
     result = result.filter(
       (u) =>
-        u.email?.toLowerCase().includes(q) ||
         u.username?.toLowerCase().includes(q)
     )
   }

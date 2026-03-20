@@ -178,8 +178,8 @@ const filteredTasks = computed(() => {
     result = result.filter((t) => t.status === filters.value.status)
   }
 
-  if (filters.value.email) {
-    result = result.filter((t) => t.username === filters.value.email)
+  if (filters.value.username) {
+    result = result.filter((t) => t.username === filters.value.username)
   }
 
   return result
