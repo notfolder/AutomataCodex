@@ -24,18 +24,11 @@
             <!-- メールアドレスは読み取り専用 -->
             <v-col cols="12" md="6">
               <v-text-field
-                v-model="form.email"
-                label="メールアドレス"
+                v-model="form.username"
+                label="ユーザー名（GitLab）"
                 variant="outlined"
                 readonly
                 disabled
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.username"
-                label="ユーザー名"
-                variant="outlined"
               />
             </v-col>
           </v-row>
@@ -313,7 +306,6 @@ const tokenUsage = ref({})
 
 // フォームデータ
 const form = ref({
-  email: '',
   username: '',
   llm_provider: '',
   model_name: '',
@@ -352,10 +344,10 @@ const fetchData = async () => {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const email = authStore.userEmail
+    const username = authStore.username
     const [userRes, tokenRes] = await Promise.allSettled([
-      getUserConfig(email),
-      getTokenUsageStats({ email, days: 30 }),
+      getUserConfig(username),
+      getTokenUsageStats({ username, days: 30 }),
     ])
 
     if (userRes.status === 'fulfilled') {
@@ -392,7 +384,7 @@ const handleSave = async () => {
     // APIキーが空の場合は送信データから除外
     if (!updateData.api_key) delete updateData.api_key
 
-    await updateUser(form.value.email, updateData)
+    await updateUser(form.value.username, updateData)
     successSnackbar.value = true
   } catch (error) {
     errorMessage.value = error.response?.data?.detail || '設定の更新に失敗しました'

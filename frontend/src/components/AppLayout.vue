@@ -67,7 +67,7 @@
               variant="text"
               :prepend-icon="'mdi-account-circle'"
             >
-              {{ authStore.userEmail }}
+              {{ authStore.username }}
             </v-btn>
           </template>
           <v-list>

@@ -9,7 +9,7 @@
         class="mr-2"
       />
       <h1 class="text-h5 font-weight-bold">
-        {{ isAdminProxyChange ? `パスワード変更（管理者代理）: ${targetEmail}` : 'パスワード変更' }}
+        {{ isAdminProxyChange ? `パスワード変更（管理者代理）: ${targetUsername}` : 'パスワード変更' }}
       </h1>
     </div>
 
@@ -117,17 +117,17 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 // 変更対象のメールアドレス: クエリパラメータ優先、なければ自分自身
-const targetEmail = computed(() => route.query.email || authStore.userEmail)
+const targetUsername = computed(() => route.query.username || authStore.username)
 
 // 管理者が他ユーザーのパスワードを代理変更するケース
 const isAdminProxyChange = computed(
-  () => authStore.isAdmin && targetEmail.value !== authStore.userEmail
+  () => authStore.isAdmin && targetUsername.value !== authStore.username
 )
 
 // キャンセル・成功後の遷移先
 const cancelRoute = computed(() =>
   isAdminProxyChange.value
-    ? { name: 'UserEdit', params: { id: targetEmail.value } }
+    ? { name: 'UserEdit', params: { id: targetUsername.value } }
     : { name: 'UserSettings' }
 )
 
@@ -176,7 +176,7 @@ const handleChange = async () => {
     if (!isAdminProxyChange.value) {
       payload.current_password = form.value.current_password
     }
-    await changePassword(targetEmail.value, payload)
+    await changePassword(targetUsername.value, payload)
     successSnackbar.value = true
     setTimeout(() => router.push(cancelRoute.value), 1500)
   } catch (error) {

@@ -6,7 +6,7 @@
 
 使用方法:
     python -m backend.user_management.cli.create_admin
-    python -m backend.user_management.cli.create_admin --email admin@example.com --username Admin --password SecurePass1!
+    python -m backend.user_management.cli.create_admin --username Admin --password SecurePass1!
 """
 
 from __future__ import annotations
@@ -230,12 +230,10 @@ def _parse_args() -> argparse.Namespace:
 
   # コマンドライン引数モード
   python -m backend.user_management.cli.create_admin \\
-    --email admin@example.com \\
     --username Administrator \\
     --password SecurePassword123!
 
   # 環境変数モード
-  ADMIN_EMAIL=admin@example.com \\
   ADMIN_USERNAME=Administrator \\
   ADMIN_PASSWORD=SecurePassword123! \\
   python -m backend.user_management.cli.create_admin
@@ -315,8 +313,8 @@ def main() -> None:
     CLIエントリーポイント。
 
     入力取得の優先順位:
-    1. コマンドライン引数（--email, --username, --password が全て指定された場合）
-    2. 環境変数（ADMIN_EMAIL, ADMIN_USERNAME, ADMIN_PASSWORD が全て設定された場合）
+    1. コマンドライン引数（--username, --password が全て指定された場合）
+    2. 環境変数（ADMIN_USERNAME, ADMIN_PASSWORD が全て設定された場合）
     3. 対話式入力
     """
     args = _parse_args()
