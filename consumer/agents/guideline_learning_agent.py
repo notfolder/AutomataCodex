@@ -150,9 +150,7 @@ class GuidelineLearningAgent(Executor):
         """
         # 1. 有効チェック
         if not self.user_config.learning_enabled:
-            logger.info(
-                "学習機能が無効のためGuidelineLearningAgentをスキップします"
-            )
+            logger.info("学習機能が無効のためGuidelineLearningAgentをスキップします")
             return AgentResponse(success=True)
 
         # 2. タスク情報取得
@@ -266,7 +264,11 @@ class GuidelineLearningAgent(Executor):
                 self.user_config.learning_only_after_task_start
                 and task_start_time is not None
             ):
-                created_at = comment.get("created_at") if isinstance(comment, dict) else getattr(comment, "created_at", None)
+                created_at = (
+                    comment.get("created_at")
+                    if isinstance(comment, dict)
+                    else getattr(comment, "created_at", None)
+                )
                 if created_at is not None:
                     # datetimeオブジェクトに変換して比較する
                     created_at_norm = self._normalize_datetime(created_at)
@@ -277,9 +279,17 @@ class GuidelineLearningAgent(Executor):
 
             # botコメントを除外する
             if self.user_config.learning_exclude_bot_comments:
-                author = comment.get("author") if isinstance(comment, dict) else getattr(comment, "author", None)
+                author = (
+                    comment.get("author")
+                    if isinstance(comment, dict)
+                    else getattr(comment, "author", None)
+                )
                 if author is not None:
-                    is_bot = author.get("bot") if isinstance(author, dict) else getattr(author, "bot", False)
+                    is_bot = (
+                        author.get("bot")
+                        if isinstance(author, dict)
+                        else getattr(author, "bot", False)
+                    )
                     if is_bot:
                         continue
 
@@ -314,9 +324,7 @@ class GuidelineLearningAgent(Executor):
                 # ISO 8601形式（Z後置など）をパースする
                 return datetime.fromisoformat(value.replace("Z", "+00:00"))
             except ValueError:
-                logger.debug(
-                    "日時文字列のパースに失敗しました: %s", value
-                )
+                logger.debug("日時文字列のパースに失敗しました: %s", value)
         return None
 
     def _get_guidelines(self, project_id: int, branch: str) -> str:
@@ -410,30 +418,18 @@ class GuidelineLearningAgent(Executor):
             from agent_framework import Agent
             from agent_framework.openai import OpenAIChatClient
 
-            model_name: str = getattr(
-                self.user_config, "learning_llm_model", "gpt-4o"
-            )
+            model_name: str = getattr(self.user_config, "learning_llm_model", "gpt-4o")
             chat_client = OpenAIChatClient(model_id=model_name)
             agent = Agent(
                 client=chat_client,
                 instructions=system_prompt,
             )
 
-            response = await agent.run(
-                [{"role": "user", "content": user_prompt}]
-            )
+            # Agent.run() には文字列を直接渡す（自動的にuserメッセージに変換される）
+            response = await agent.run(user_prompt)
 
-            # AgentResponseからテキストを抽出する
-            response_text: str = ""
-            if hasattr(response, "content") and isinstance(response.content, list):
-                for item in response.content:
-                    if hasattr(item, "text"):
-                        response_text = item.text
-                        break
-            elif hasattr(response, "content") and isinstance(response.content, str):
-                response_text = response.content
-            else:
-                response_text = str(response)
+            # AgentResponse.text で応答テキストを取得する
+            response_text: str = response.text or ""
 
             # JSON応答をパースする
             return json.loads(response_text)

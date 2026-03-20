@@ -131,16 +131,18 @@ class ConfigurableAgent(Executor):
             # ステップ 5: Agent.run() 呼び出し
             response: Any
             if hasattr(self.agent, "run"):
-                response = await self.agent.run([{"role": "user", "content": prompt}])
+                # Agent.run() には文字列を直接渡す（自動的にuserメッセージに変換される）
+                response = await self.agent.run(prompt)
             else:
                 response = None
 
             # ステップ 6: LLM 応答取得
+            # AgentResponse.text で応答テキストを取得する
             response_text: str
-            if isinstance(response, str):
+            if response is not None and hasattr(response, "text"):
+                response_text = response.text or ""
+            elif isinstance(response, str):
                 response_text = response
-            elif isinstance(response, dict):
-                response_text = response.get("content", "")
             else:
                 response_text = ""
 
