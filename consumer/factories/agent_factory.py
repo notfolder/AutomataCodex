@@ -22,6 +22,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# OpenAI Responses API (/v1/responses) 専用モデルのセット。
+# これらのモデルは Chat Completions API (/v1/chat/completions) をサポートしないため、
+# OpenAIResponsesClient を使用する必要がある。
+# 参照: https://platform.openai.com/docs/models
+_RESPONSES_ONLY_MODELS: frozenset[str] = frozenset(
+    [
+        "codex-mini-latest",
+        "gpt-5-codex",
+        "gpt-5.1-codex",
+        "gpt-5.1-codex-max",
+        "gpt-5.1-codex-mini",
+    ]
+)
+
 
 class AgentFactory:
     """
@@ -232,7 +246,13 @@ class AgentFactory:
         ユーザー設定に基づいてChatClientを生成する。
 
         user_config.llm_provider が "azure" の場合は AzureOpenAIChatClient を、
-        それ以外（openai/ollama/lmstudio）の場合は OpenAIChatClient を生成する。
+        それ以外（openai/ollama/lmstudio）の場合はモデル名に応じて
+        OpenAIChatClient または OpenAIResponsesClient を生成する。
+
+        モデルが _RESPONSES_ONLY_MODELS に含まれる場合は OpenAIResponsesClient を使用する。
+        これらのモデルは Chat Completions API をサポートせず、Responses API 専用である。
+        それ以外のモデルは OpenAIChatClient（Chat Completions API）を使用する。
+
         ユーザーの api_key が空の場合、環境変数 OPENAI_API_KEY が使用される。
 
         Args:
@@ -262,13 +282,27 @@ class AgentFactory:
                 deployment_name=model_name,
             )
         else:
-            from agent_framework.openai import OpenAIChatClient
-
             # OpenAI互換（openai/ollama/lmstudio）: base_urlにOpenAI互換エンドポイントを指定
             # provider=openaiかつuser_configにbase_urlが未設定の場合はシステム設定のopenai_base_urlをフォールバックとして使用する
             effective_base_url: str | None = base_url
             if effective_base_url is None and provider == "openai":
                 effective_base_url = self.openai_base_url
+
+            # Responses API 専用モデルの場合は OpenAIResponsesClient を使用する
+            if model_name in _RESPONSES_ONLY_MODELS:
+                from agent_framework.openai import OpenAIResponsesClient
+
+                logger.info(
+                    "Responses API 専用モデルのため OpenAIResponsesClient を使用します: model=%s",
+                    model_name,
+                )
+                return OpenAIResponsesClient(
+                    api_key=api_key or None,
+                    model_id=model_name,
+                    base_url=effective_base_url or None,
+                )
+
+            from agent_framework.openai import OpenAIChatClient
 
             return OpenAIChatClient(
                 api_key=api_key or None,

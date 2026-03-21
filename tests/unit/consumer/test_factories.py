@@ -646,6 +646,156 @@ class TestAgentFactory:
         # ollama は openai_base_url にフォールバックしない（None のまま渡る）
         assert captured.get("base_url") is None
 
+    def test_create_chat_clientでResponses専用モデルはOpenAIResponsesClientが使われる(
+        self,
+        mock_user_config_client: MagicMock,
+    ) -> None:
+        """
+        _RESPONSES_ONLY_MODELS に含まれるモデルを指定した場合に
+        OpenAIResponsesClient が生成されることを確認する。
+        """
+        from factories.agent_factory import _RESPONSES_ONLY_MODELS
+
+        factory = AgentFactory(
+            mcp_server_configs={},
+            chat_history_provider=MagicMock(),
+            planning_context_provider=MagicMock(),
+            tool_result_context_provider=MagicMock(),
+            user_config_client=mock_user_config_client,
+        )
+
+        # _RESPONSES_ONLY_MODELS から代表モデルを取得
+        responses_model = "gpt-5.1-codex-max"
+        assert responses_model in _RESPONSES_ONLY_MODELS
+
+        user_config = MagicMock()
+        user_config.llm_provider = "openai"
+        user_config.model_name = responses_model
+        user_config.api_key = "test-key"
+        user_config.base_url = None
+
+        created_instances: list = []
+
+        class _DummyResponsesClient:
+            def __init__(self, **kwargs: object) -> None:
+                created_instances.append(("responses", kwargs))
+
+        class _DummyChatClient:
+            def __init__(self, **kwargs: object) -> None:
+                created_instances.append(("chat", kwargs))
+
+        with (
+            patch(
+                "agent_framework.openai.OpenAIResponsesClient", _DummyResponsesClient
+            ),
+            patch("agent_framework.openai.OpenAIChatClient", _DummyChatClient),
+        ):
+            factory.create_chat_client(user_config)
+
+        # OpenAIResponsesClient だけが生成されたことを確認
+        assert len(created_instances) == 1
+        assert created_instances[0][0] == "responses"
+
+    def test_create_chat_clientでResponses専用モデルにapi_keyとmodel_idが渡る(
+        self,
+        mock_user_config_client: MagicMock,
+    ) -> None:
+        """
+        Responses API 専用モデルに切り替わった際に
+        api_key・model_id・base_url が正しく渡ることを確認する。
+        """
+        factory = AgentFactory(
+            mcp_server_configs={},
+            chat_history_provider=MagicMock(),
+            planning_context_provider=MagicMock(),
+            tool_result_context_provider=MagicMock(),
+            user_config_client=mock_user_config_client,
+            openai_base_url="https://api.openai.com/v1",
+        )
+
+        user_config = MagicMock()
+        user_config.llm_provider = "openai"
+        user_config.model_name = "gpt-5.1-codex-max"
+        user_config.api_key = "my-api-key"
+        user_config.base_url = None  # フォールバックとして openai_base_url が使われる
+
+        captured: dict = {}
+
+        class _DummyResponsesClient:
+            def __init__(self, **kwargs: object) -> None:
+                captured.update(kwargs)
+
+        with (
+            patch(
+                "agent_framework.openai.OpenAIResponsesClient", _DummyResponsesClient
+            ),
+            patch("agent_framework.openai.OpenAIChatClient", MagicMock()),
+        ):
+            factory.create_chat_client(user_config)
+
+        assert captured.get("model_id") == "gpt-5.1-codex-max"
+        assert captured.get("api_key") == "my-api-key"
+        assert captured.get("base_url") == "https://api.openai.com/v1"
+
+    def test_create_chat_clientで通常モデルはOpenAIChatClientが使われる(
+        self,
+        mock_user_config_client: MagicMock,
+    ) -> None:
+        """
+        _RESPONSES_ONLY_MODELS に含まれない通常モデルを指定した場合に
+        OpenAIChatClient が生成されることを確認する。
+        """
+        factory = AgentFactory(
+            mcp_server_configs={},
+            chat_history_provider=MagicMock(),
+            planning_context_provider=MagicMock(),
+            tool_result_context_provider=MagicMock(),
+            user_config_client=mock_user_config_client,
+        )
+
+        user_config = MagicMock()
+        user_config.llm_provider = "openai"
+        user_config.model_name = "gpt-4o"
+        user_config.api_key = "test-key"
+        user_config.base_url = None
+
+        created_instances: list = []
+
+        class _DummyChatClient:
+            def __init__(self, **kwargs: object) -> None:
+                created_instances.append(("chat", kwargs))
+
+        class _DummyResponsesClient:
+            def __init__(self, **kwargs: object) -> None:
+                created_instances.append(("responses", kwargs))
+
+        with (
+            patch("agent_framework.openai.OpenAIChatClient", _DummyChatClient),
+            patch(
+                "agent_framework.openai.OpenAIResponsesClient", _DummyResponsesClient
+            ),
+        ):
+            factory.create_chat_client(user_config)
+
+        # OpenAIChatClient だけが生成されたことを確認
+        assert len(created_instances) == 1
+        assert created_instances[0][0] == "chat"
+
+    def test_RESPONSES_ONLY_MODELSに期待するモデルが含まれる(self) -> None:
+        """
+        _RESPONSES_ONLY_MODELS が Responses API 専用モデルを正しく含むことを確認する。
+        """
+        from factories.agent_factory import _RESPONSES_ONLY_MODELS
+
+        expected_models = {
+            "codex-mini-latest",
+            "gpt-5-codex",
+            "gpt-5.1-codex",
+            "gpt-5.1-codex-max",
+            "gpt-5.1-codex-mini",
+        }
+        assert expected_models <= _RESPONSES_ONLY_MODELS
+
 
 # ========================================
 # TestWorkflowFactory
