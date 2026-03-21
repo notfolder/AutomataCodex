@@ -572,3 +572,40 @@ class TestIssueToMRConverter:
             node_id="issue_to_mr_branch_name",
             chat_client=MagicMock(),
         )
+
+    async def test_record_token_usage_estimates_with_tiktoken_when_usage_details_none(
+        self,
+        mock_gitlab_client: MagicMock,
+    ) -> None:
+        """usage_detailsがNoneでもprompt_textがあればtiktokenで推定して記録することを確認する"""
+        mock_token_usage_repo = AsyncMock()
+        mock_token_usage_repo.record_token_usage = AsyncMock()
+
+        converter = IssueToMRConverter(
+            gitlab_client=mock_gitlab_client,
+            config=IssueToMRConfig(),
+            token_usage_repository=mock_token_usage_repo,
+        )
+
+        mock_response = MagicMock()
+        mock_response.usage_details = None
+        mock_response.text = "feature/7-test-issue"  # LLM の応答テキスト
+
+        mock_chat_client = MagicMock()
+        mock_chat_client.model = "gpt-4o"
+
+        await converter._record_token_usage(
+            response=mock_response,
+            username="testuser",
+            task_uuid="task-uuid-001",
+            node_id="issue_to_mr_branch_name",
+            chat_client=mock_chat_client,
+            prompt_text="ブランチ名を生成してください。Issue: テストイシュー",
+        )
+
+        # tiktoken 推定後に record_token_usage が呼ばれることを確認する
+        mock_token_usage_repo.record_token_usage.assert_called_once()
+        call_kwargs = mock_token_usage_repo.record_token_usage.call_args.kwargs
+        # トークン数は 0 より大きいことを確認する（tiktoken 推定値）
+        assert call_kwargs["prompt_tokens"] > 0
+        assert call_kwargs["completion_tokens"] > 0

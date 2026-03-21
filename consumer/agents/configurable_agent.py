@@ -180,6 +180,19 @@ class ConfigurableAgent(Executor):
                 output_data[key] = value_to_store
                 ctx.set_state(key, value_to_store)
 
+            # token_usage をミドルウェアが読み取れるよう output_data に格納する
+            # usage_details が None の場合は token_usage_middleware 側で tiktoken 推定する
+            if response is not None:
+                model_name: str = getattr(
+                    getattr(self.agent, "client", None), "model_id", "unknown"
+                )
+                output_data["token_usage"] = {
+                    "usage_details": getattr(response, "usage_details", None),
+                    "prompt_text": prompt,
+                    "response_text": response_text,
+                    "model": model_name,
+                }
+
         except Exception as exc:
             # エラー発生時は progress_reporter に通知してから再送出する
             logger.exception(

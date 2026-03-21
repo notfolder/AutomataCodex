@@ -381,9 +381,15 @@ class TaskRepository:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"""
-                SELECT * FROM tasks
+                SELECT t.*,
+                    (
+                        SELECT SUM(tu.total_tokens)
+                        FROM token_usage tu
+                        WHERE tu.task_uuid = t.uuid
+                    ) AS total_tokens
+                FROM tasks t
                 {where_clause}
-                ORDER BY created_at DESC
+                ORDER BY t.created_at DESC
                 LIMIT ${idx} OFFSET ${idx + 1}
                 """,
                 *values,

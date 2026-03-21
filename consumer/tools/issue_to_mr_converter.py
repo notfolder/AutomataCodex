@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from shared.models.gitlab import GitLabIssue, GitLabMergeRequest
     from shared.database.repositories.token_usage_repository import TokenUsageRepository
 
+from consumer.utils.token_utils import estimate_token_count
+
 # chat_client ファクトリ関数の型エイリアス
 # username を受け取り、OpenAIChatClient | None を返す非同期関数
 ChatClientFactory = Callable[[str], Awaitable[Any]]
@@ -123,11 +125,13 @@ class IssueToMRConverter:
         task_uuid: str | None,
         node_id: str,
         chat_client: Any,
+        prompt_text: str | None = None,
     ) -> None:
         """
         LLM 呼び出し結果のトークン使用量を token_usage_repository に記録する。
 
-        token_usage_repository が未設定の場合や usage_details が取得できない場合は何もしない。
+        token_usage_repository が未設定の場合や使用量情報が取得できない場合は何もしない。
+        usage_details が None（非公式エンドポイント等）の場合は tiktoken でトークン数を推定する。
         記録失敗は警告ログのみとし、処理フローに影響させない。
 
         Args:
@@ -136,23 +140,44 @@ class IssueToMRConverter:
             task_uuid: タスク UUID
             node_id: トークン使用量レコードのノード ID
             chat_client: 使用した ChatClient（モデル名取得に使用）
+            prompt_text: LLM に渡したプロンプト文字列（tiktoken 推定用、省略可）
         """
         if self.token_usage_repository is None:
             return
 
         try:
             usage = getattr(response, "usage_details", None)
-            if usage is None:
-                return
-
-            # UsageDetails は TypedDict（辞書型）のため getattr ではなく dict アクセスを使う
-            prompt_tokens: int = int(usage.get("input_token_count") or 0)
-            completion_tokens: int = int(usage.get("output_token_count") or 0)
-            if prompt_tokens == 0 and completion_tokens == 0:
-                return
 
             # chat_client からモデル名を取得する（取得できない場合は "unknown"）
             model: str = str(getattr(chat_client, "model", "unknown"))
+
+            # UsageDetails は TypedDict（辞書型）のため getattr ではなく dict アクセスを使う
+            prompt_tokens: int = 0
+            completion_tokens: int = 0
+            if usage is not None:
+                prompt_tokens = int(usage.get("input_token_count") or 0)
+                completion_tokens = int(usage.get("output_token_count") or 0)
+
+            # usage_details が None または両方 0 の場合は tiktoken で推定する
+            if prompt_tokens == 0 and completion_tokens == 0:
+                if not prompt_text:
+                    # 推定に必要なテキストがない場合はスキップする
+                    return
+
+                response_text: str = getattr(response, "text", None) or ""
+                prompt_tokens = estimate_token_count(prompt_text, model)
+                completion_tokens = estimate_token_count(response_text, model)
+
+                logger.warning(
+                    "tiktokenによるトークン数推定: node_id=%s, model=%s, prompt=%d, completion=%d",
+                    node_id,
+                    model,
+                    prompt_tokens,
+                    completion_tokens,
+                )
+
+            if prompt_tokens == 0 and completion_tokens == 0:
+                return
 
             await self.token_usage_repository.record_token_usage(
                 username=username or "",
@@ -306,6 +331,7 @@ class IssueToMRConverter:
                         task_uuid=task_uuid,
                         node_id="issue_to_mr_branch_name",
                         chat_client=chat_client,
+                        prompt_text=prompt,
                     )
                     return branch_name
 
@@ -430,6 +456,7 @@ class IssueToMRConverter:
                     task_uuid=task_uuid,
                     node_id="issue_to_mr_mr_title",
                     chat_client=chat_client,
+                    prompt_text=prompt,
                 )
                 return mr_title
         except Exception as exc:

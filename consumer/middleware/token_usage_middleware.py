@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from consumer.middleware.i_middleware import IMiddleware, MiddlewareSignal, WorkflowNode
 from consumer.middleware.metrics_collector import MetricsCollector
+from consumer.utils.token_utils import estimate_token_count
 
 if TYPE_CHECKING:
     from agent_framework import WorkflowContext
@@ -135,7 +136,14 @@ def _extract_token_info(result: Any) -> dict[str, Any] | None:
     実行結果からトークン使用量情報を抽出する
 
     result が dict の場合は token_usage キーから取得を試みる。
-    トークン情報が存在しない場合は None を返す。
+    以下の 2 つのフォーマットに対応する。
+
+    旧フォーマット（後方互換）:
+        {"token_usage": {"prompt_tokens": N, "completion_tokens": N, "total_tokens": N, "model": "..."}}
+
+    新フォーマット（ConfigurableAgent から渡される）:
+        {"token_usage": {"usage_details": <UsageDetails|None>, "prompt_text": str, "response_text": str, "model": str}}
+        usage_details が None の場合は tiktoken でトークン数を推定する。
 
     Args:
         result: エージェント実行結果（dict の場合は token_usage キーを参照する）
@@ -157,8 +165,67 @@ def _extract_token_info(result: Any) -> dict[str, Any] | None:
     if not token_usage:
         return None
 
-    # 最低限 total_tokens が含まれていることを確認する
+    # --- 新フォーマット: usage_details キーが存在する場合 ---
+    if "usage_details" in token_usage:
+        return _extract_token_info_new_format(token_usage)
+
+    # --- 旧フォーマット: prompt_tokens / total_tokens キーが存在する場合 ---
     if "total_tokens" not in token_usage and "prompt_tokens" not in token_usage:
         return None
 
     return token_usage
+
+
+def _extract_token_info_new_format(
+    token_usage: dict[str, Any],
+) -> dict[str, Any] | None:
+    """
+    新フォーマットの token_usage からトークン情報を抽出する。
+
+    usage_details が存在する場合はその値を使用し、
+    存在しない（非公式エンドポイント等）場合は tiktoken で推定する。
+
+    Args:
+        token_usage: 新フォーマットの token_usage 辞書
+
+    Returns:
+        旧フォーマット互換のトークン情報辞書。抽出不能な場合は None。
+    """
+    model: str = token_usage.get("model") or "unknown"
+    usage_details: dict[str, Any] | None = token_usage.get("usage_details")
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+    if usage_details is not None:
+        # usage_details は UsageDetails（TypedDict / 辞書）
+        prompt_tokens = int(usage_details.get("input_token_count") or 0)
+        completion_tokens = int(usage_details.get("output_token_count") or 0)
+
+    # usage_details が None、または両方 0 の場合は tiktoken で推定する
+    if prompt_tokens == 0 and completion_tokens == 0:
+        prompt_text: str = token_usage.get("prompt_text") or ""
+        response_text: str = token_usage.get("response_text") or ""
+
+        if not prompt_text and not response_text:
+            # 推定に必要なテキストが存在しないため処理をスキップする
+            return None
+
+        prompt_tokens = estimate_token_count(prompt_text, model)
+        completion_tokens = estimate_token_count(response_text, model)
+
+        logger.warning(
+            "tiktokenによるトークン数推定: model=%s, prompt=%d, completion=%d",
+            model,
+            prompt_tokens,
+            completion_tokens,
+        )
+
+    total_tokens = prompt_tokens + completion_tokens
+
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "model": model,
+    }

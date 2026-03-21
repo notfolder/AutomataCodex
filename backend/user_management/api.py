@@ -1275,6 +1275,8 @@ async def list_tasks(
                 "started_at": t["created_at"],
                 "created_at": t["created_at"],
                 "completed_at": t.get("completed_at"),
+                # token_usage テーブルの合計値（データなしの場合は None）
+                "total_tokens": t.get("total_tokens"),
             }
             for t in tasks
         ],
