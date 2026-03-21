@@ -50,6 +50,7 @@ class AgentFactory:
         user_config_client: UserConfigClient,
         db_connection: Any = None,
         gitlab_client: Any = None,
+        openai_base_url: str = "https://api.openai.com/v1",
     ) -> None:
         """
         AgentFactoryを初期化する。
@@ -62,6 +63,8 @@ class AgentFactory:
             user_config_client: ユーザー設定クライアント
             db_connection: データベース接続プール（TodoManagementTool用）
             gitlab_client: GitLabクライアント（TodoManagementTool用）
+            openai_base_url: OpenAI APIのベースURL。OPENAI_BASE_URL環境変数で指定可能。
+                             provider=openaiかつuser_config.base_urlがNoneの場合のフォールバック。
         """
         self.mcp_server_configs = mcp_server_configs
         self.chat_history_provider = chat_history_provider
@@ -70,6 +73,7 @@ class AgentFactory:
         self.user_config_client = user_config_client
         self.db_connection = db_connection
         self.gitlab_client = gitlab_client
+        self.openai_base_url = openai_base_url
 
     async def create_agent(
         self,
@@ -261,10 +265,15 @@ class AgentFactory:
             from agent_framework.openai import OpenAIChatClient
 
             # OpenAI互換（openai/ollama/lmstudio）: base_urlにOpenAI互換エンドポイントを指定
+            # provider=openaiかつuser_configにbase_urlが未設定の場合はシステム設定のopenai_base_urlをフォールバックとして使用する
+            effective_base_url: str | None = base_url
+            if effective_base_url is None and provider == "openai":
+                effective_base_url = self.openai_base_url
+
             return OpenAIChatClient(
                 api_key=api_key or None,
                 model_id=model_name,
-                base_url=base_url or None,
+                base_url=effective_base_url or None,
             )
 
     def _build_system_prompt(self, prompt_content: str) -> str:

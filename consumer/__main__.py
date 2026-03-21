@@ -149,6 +149,7 @@ async def main() -> None:
         user_config_client=user_config_client,
         db_connection=pool,
         gitlab_client=gitlab_client,
+        openai_base_url=config_manager.get_openai_config().base_url,
     )
     definition_loader = DefinitionLoader(
         workflow_definition_repo=workflow_def_repo,

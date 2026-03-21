@@ -77,6 +77,7 @@ services:
       USER_CONFIG_API_SERVICE_USERNAME: ${USER_CONFIG_API_SERVICE_USERNAME}
       USER_CONFIG_API_SERVICE_PASSWORD: ${USER_CONFIG_API_SERVICE_PASSWORD}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
     volumes:
       # Docker-outside-of-Docker: ホストのDocker daemonに接続
       - /var/run/docker.sock:/var/run/docker.sock

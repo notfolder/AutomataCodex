@@ -535,6 +535,117 @@ class TestAgentFactory:
 
         assert agent is not None
 
+    def test_create_chat_clientでprovider_openaiかつbase_url_Noneのときopenai_base_urlが使われる(
+        self,
+        mock_user_config_client: MagicMock,
+    ) -> None:
+        """
+        provider=openai かつ user_config.base_url=None のとき、
+        openai_base_url がフォールバックとして OpenAIChatClient に渡されることを確認する。
+        """
+        from unittest.mock import patch
+
+        custom_url = "http://my-openai-proxy.example.com/v1"
+        factory = AgentFactory(
+            mcp_server_configs={},
+            chat_history_provider=MagicMock(),
+            planning_context_provider=MagicMock(),
+            tool_result_context_provider=MagicMock(),
+            user_config_client=mock_user_config_client,
+            openai_base_url=custom_url,
+        )
+
+        user_config = MagicMock()
+        user_config.llm_provider = "openai"
+        user_config.model_name = "gpt-4o"
+        user_config.api_key = "test-key"
+        user_config.base_url = None  # ユーザー側の base_url 未設定
+
+        captured: dict = {}
+
+        class _DummyChatClient:
+            def __init__(self, **kwargs: object) -> None:
+                captured.update(kwargs)
+
+        with patch("agent_framework.openai.OpenAIChatClient", _DummyChatClient):
+            factory.create_chat_client(user_config)
+
+        assert captured.get("base_url") == custom_url
+
+    def test_create_chat_clientでprovider_openaiかつuser_config_base_url設定済みはそのまま渡る(
+        self,
+        mock_user_config_client: MagicMock,
+    ) -> None:
+        """
+        provider=openai かつ user_config.base_url に値がある場合、
+        openai_base_url よりもユーザー設定の値が優先されることを確認する。
+        """
+        from unittest.mock import patch
+
+        factory = AgentFactory(
+            mcp_server_configs={},
+            chat_history_provider=MagicMock(),
+            planning_context_provider=MagicMock(),
+            tool_result_context_provider=MagicMock(),
+            user_config_client=mock_user_config_client,
+            openai_base_url="https://api.openai.com/v1",
+        )
+
+        user_url = "http://user-custom-endpoint.local/v1"
+        user_config = MagicMock()
+        user_config.llm_provider = "openai"
+        user_config.model_name = "gpt-4o"
+        user_config.api_key = "test-key"
+        user_config.base_url = user_url  # ユーザー側の base_url 設定済み
+
+        captured: dict = {}
+
+        class _DummyChatClient:
+            def __init__(self, **kwargs: object) -> None:
+                captured.update(kwargs)
+
+        with patch("agent_framework.openai.OpenAIChatClient", _DummyChatClient):
+            factory.create_chat_client(user_config)
+
+        assert captured.get("base_url") == user_url
+
+    def test_create_chat_clientでprovider_ollamaのときopenai_base_urlは使われない(
+        self,
+        mock_user_config_client: MagicMock,
+    ) -> None:
+        """
+        provider=ollama かつ user_config.base_url=None の場合、
+        openai_base_url はフォールバックに使われないことを確認する。
+        """
+        from unittest.mock import patch
+
+        factory = AgentFactory(
+            mcp_server_configs={},
+            chat_history_provider=MagicMock(),
+            planning_context_provider=MagicMock(),
+            tool_result_context_provider=MagicMock(),
+            user_config_client=mock_user_config_client,
+            openai_base_url="https://api.openai.com/v1",
+        )
+
+        user_config = MagicMock()
+        user_config.llm_provider = "ollama"
+        user_config.model_name = "llama3"
+        user_config.api_key = ""
+        user_config.base_url = None  # ollama の base_url 未設定
+
+        captured: dict = {}
+
+        class _DummyChatClient:
+            def __init__(self, **kwargs: object) -> None:
+                captured.update(kwargs)
+
+        with patch("agent_framework.openai.OpenAIChatClient", _DummyChatClient):
+            factory.create_chat_client(user_config)
+
+        # ollama は openai_base_url にフォールバックしない（None のまま渡る）
+        assert captured.get("base_url") is None
+
 
 # ========================================
 # TestWorkflowFactory
