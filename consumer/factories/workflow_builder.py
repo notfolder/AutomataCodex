@@ -11,6 +11,8 @@ CLASS_IMPLEMENTATION_SPEC.md § 2.6（WorkflowBuilder）に準拠する。
 from __future__ import annotations
 
 import logging
+import re
+from types import SimpleNamespace
 from typing import Any
 
 from agent_framework import (
@@ -150,9 +152,7 @@ class WorkflowBuilder:
             # to_node が None は終了エッジ（AF では output_executors で表現する）
             # ここではスキップする（start_executor 以外に出力先がない場合はそのまま終了する）
             if to_id is None:
-                logger.debug(
-                    "終了エッジをスキップしました: from=%s -> None", from_id
-                )
+                logger.debug("終了エッジをスキップしました: from=%s -> None", from_id)
                 continue
 
             from_instance = self.node_registry.get(from_id)
@@ -178,7 +178,9 @@ class WorkflowBuilder:
                 # 複数条件がある場合は OR 結合して単一の条件関数にする
                 combined = " or ".join(f"({c})" for c in valid_conditions)
                 condition_func = self._make_condition_func(combined)
-                af_builder.add_edge(from_instance, to_instance, condition=condition_func)
+                af_builder.add_edge(
+                    from_instance, to_instance, condition=condition_func
+                )
 
         workflow = af_builder.build()
 
@@ -194,11 +196,17 @@ class WorkflowBuilder:
         """
         DSL条件式文字列をAF互換の条件関数に変換する。
 
-        "true" は常に True を返す関数、それ以外はメッセージ内容に対する
-        評価関数を返す。実行時エラーが発生した場合は False を返す。
+        グラフ定義の条件式（JavaScript/DSL記法）をPythonのeval()で評価できる形式に変換し、
+        msg辞書のキーを ``context.xxx.yyy`` ドット記法でアクセスできるようにする。
+
+        対応する変換:
+        - ``&&`` → ``and``
+        - ``||`` → ``or``
+        - ``true`` / ``false`` → ``True`` / ``False``（文字列リテラル外のみ）
+        - ``context`` → msg辞書をSimpleNamespaceで包んだプロキシオブジェクト
 
         Args:
-            condition_expr: DSL条件式（例: "true", "task_type == 'code_generation'"）
+            condition_expr: DSL条件式（例: "true", "context.task_type == 'code_generation'"）
 
         Returns:
             条件判定関数（msg を引数に取り bool を返す）
@@ -206,17 +214,47 @@ class WorkflowBuilder:
         if condition_expr.strip().lower() == "true":
             return lambda msg: True
 
+        # DSL → Python 構文変換
+        py_expr = condition_expr
+        # && → and、|| → or
+        py_expr = py_expr.replace("&&", " and ").replace("||", " or ")
+        # 文字列リテラル外の true/false → True/False
+        py_expr = re.sub(r"\btrue\b", "True", py_expr)
+        py_expr = re.sub(r"\bfalse\b", "False", py_expr)
+        # 前後の空白を整理する
+        py_expr = " ".join(py_expr.split())
+
+        # capturedで変換済み式をクロージャに取り込む
+        captured_expr = py_expr
+
+        def _to_namespace(obj: Any) -> Any:
+            """辞書を再帰的にSimpleNamespaceへ変換してドット記法アクセスを可能にする。"""
+            if isinstance(obj, dict):
+                return SimpleNamespace(**{k: _to_namespace(v) for k, v in obj.items()})
+            return obj
+
         def _evaluate(msg: Any) -> bool:
             try:
-                # メッセージが辞書の場合はキーをローカル変数として評価する
+                # msg が辞書の場合はキーをローカル変数として展開する
                 local_vars: dict[str, Any] = {}
                 if isinstance(msg, dict):
                     local_vars.update(msg)
-                return bool(eval(condition_expr, {"__builtins__": {}}, local_vars))  # noqa: S307
+                # context プロキシ: msg 辞書へのドット記法アクセスを提供する
+                # グラフ定義の条件式 "context.xxx.yyy" に対応する
+                context_proxy = _to_namespace(local_vars)
+                eval_globals = {
+                    "__builtins__": {},
+                    "True": True,
+                    "False": False,
+                }
+                eval_locals = {**local_vars, "context": context_proxy}
+                return bool(
+                    eval(captured_expr, eval_globals, eval_locals)
+                )  # noqa: S307
             except Exception:
                 logger.debug(
                     "条件式の評価に失敗しました: condition=%s, msg=%s",
-                    condition_expr,
+                    captured_expr,
                     msg,
                 )
                 return False

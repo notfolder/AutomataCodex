@@ -10,7 +10,9 @@ CLASS_IMPLEMENTATION_SPEC.md § 1（ConfigurableAgent）に準拠する。
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from typing import Any
 
 from agent_framework import Executor, WorkflowContext, handler
@@ -168,10 +170,15 @@ class ConfigurableAgent(Executor):
             )
 
             # ステップ 11: 出力データ保存
-            # response_text から出力を抽出し、output_keys に対して ctx.set_state() を呼び出す
+            # response_text から出力を抽出し、output_keys に対して ctx.set_state() を呼び出す。
+            # LLM がJSON形式で応答した場合は辞書として保存し、条件式評価で参照できるようにする。
             for key in self.config.output_keys:
-                output_data[key] = response_text
-                ctx.set_state(key, response_text)
+                parsed_value: Any = self._try_parse_json(response_text)
+                value_to_store: Any = (
+                    parsed_value if parsed_value is not None else response_text
+                )
+                output_data[key] = value_to_store
+                ctx.set_state(key, value_to_store)
 
         except Exception as exc:
             # エラー発生時は progress_reporter に通知してから再送出する
@@ -191,6 +198,32 @@ class ConfigurableAgent(Executor):
 
         # ステップ 12: output_data を返す
         return output_data
+
+    @staticmethod
+    def _try_parse_json(text: str) -> dict[str, Any] | None:
+        """
+        LLM応答テキストをJSONとしてパースし、辞書を返す。
+
+        コードブロック（```json ... ```）で囲まれた JSON も対応する。
+        パースに失敗した場合、または結果が辞書でない場合は None を返す。
+
+        Args:
+            text: LLM応答テキスト
+
+        Returns:
+            パースされた辞書。パース失敗/非辞書の場合は None。
+        """
+        stripped = (text or "").strip()
+        # ```json ... ``` または ``` ... ``` ブロックを抽出する
+        code_block_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", stripped)
+        candidate = code_block_match.group(1) if code_block_match else stripped
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return None
 
     async def _handle_role_specific(
         self, role: str, response_text: str, ctx: WorkflowContext

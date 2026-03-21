@@ -57,7 +57,7 @@ class PlanEnvSetupExecutor(BaseExecutor):
         super().__init__(id=self.__class__.__name__)
 
     @handler(input=Any)
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
+    async def handle(self, msg: Any, ctx: WorkflowContext) -> Any:
         """
         計画フェーズの Docker 環境を準備してリポジトリをクローンする。
 
@@ -96,9 +96,7 @@ class PlanEnvSetupExecutor(BaseExecutor):
         # plan環境IDをコンテキストに保存する
         self.set_context_value(ctx, "plan_environment_id", plan_env_id)
 
-        logger.info(
-            "計画環境を作成しました: env_id=%s", plan_env_id
-        )
+        logger.info("計画環境を作成しました: env_id=%s", plan_env_id)
 
         # リポジトリURLとブランチ名をコンテキストから取得する
         repo_url: str = self.get_context_value(ctx, "repo_url")
@@ -122,3 +120,5 @@ class PlanEnvSetupExecutor(BaseExecutor):
             plan_env_id,
             original_branch,
         )
+        # 後続ノードへ msg を伝播させる（None を返すとフレームワークが終端と判断する）
+        return msg

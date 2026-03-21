@@ -95,11 +95,11 @@ class ExecEnvSetupExecutor(BaseExecutor):
         """
         suffix = self.node_id
         if suffix.startswith(_NODE_ID_PREFIX):
-            suffix = suffix[len(_NODE_ID_PREFIX):]
+            suffix = suffix[len(_NODE_ID_PREFIX) :]
         return suffix.replace("_", "-")
 
     @handler(input=Any)
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
+    async def handle(self, msg: Any, ctx: WorkflowContext) -> Any:
         """
         実行フェーズの Docker 環境を準備し、必要に応じてサブブランチを作成する。
 
@@ -125,9 +125,7 @@ class ExecEnvSetupExecutor(BaseExecutor):
         env_count: int = node_config.get("env_count", 1)
 
         # 使用する環境名をコンテキストから取得する
-        selected_environment: str = self.get_context_value(
-            ctx, "selected_environment"
-        )
+        selected_environment: str = self.get_context_value(ctx, "selected_environment")
 
         logger.info(
             "実行環境を準備します: node_id=%s, env_count=%d, environment=%s, mr_iid=%s",
@@ -138,9 +136,7 @@ class ExecEnvSetupExecutor(BaseExecutor):
         )
 
         # env_count個の実行環境を作成する
-        node_ids_for_envs = [
-            f"{self.node_id}-{n}" for n in range(1, env_count + 1)
-        ]
+        node_ids_for_envs = [f"{self.node_id}-{n}" for n in range(1, env_count + 1)]
         env_ids: list[str] = self.env_manager.prepare_environments(
             count=env_count,
             environment_name=selected_environment,
@@ -148,9 +144,7 @@ class ExecEnvSetupExecutor(BaseExecutor):
             node_ids=node_ids_for_envs,
         )
 
-        logger.info(
-            "実行環境を作成しました: env_ids=%s", env_ids
-        )
+        logger.info("実行環境を作成しました: env_ids=%s", env_ids)
 
         # original_branchとproject_idをコンテキストから取得する
         original_branch: str = self.get_context_value(ctx, "original_branch")
@@ -228,3 +222,5 @@ class ExecEnvSetupExecutor(BaseExecutor):
             self.node_id,
             branch_envs,
         )
+        # 後続ノードへ msg を伝播させる（None を返すとフレームワークが終端と判断する）
+        return msg

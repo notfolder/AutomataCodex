@@ -43,7 +43,7 @@ class ContentTransferExecutor(BaseExecutor):
         super().__init__(id=self.__class__.__name__)
 
     @handler(input=Any)
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
+    async def handle(self, msg: Any, ctx: WorkflowContext) -> Any:
         """
         Issue のコメントを MR に転記する。
 
@@ -94,23 +94,15 @@ class ContentTransferExecutor(BaseExecutor):
                     body=note.body,
                 )
                 transferred_count += 1
-                logger.debug(
-                    "コメントを転記しました: note_id=%s", note.id
-                )
+                logger.debug("コメントを転記しました: note_id=%s", note.id)
             except Exception:
-                logger.exception(
-                    "コメントの転記に失敗しました: note_id=%s", note.id
-                )
+                logger.exception("コメントの転記に失敗しました: note_id=%s", note.id)
                 failed_note_ids.append(note.id)
 
         # 転記結果をコンテキストに保存する
-        self.set_context_value(
-            ctx, "transferred_comments_count", transferred_count
-        )
+        self.set_context_value(ctx, "transferred_comments_count", transferred_count)
         # 転記失敗したコメントIDを保存して後続処理・デバッグで活用できるようにする
-        self.set_context_value(
-            ctx, "failed_transfer_note_ids", failed_note_ids
-        )
+        self.set_context_value(ctx, "failed_transfer_note_ids", failed_note_ids)
 
         logger.info(
             "コメント転記が完了しました: mr_iid=%s, transferred=%d/%d",
@@ -118,3 +110,5 @@ class ContentTransferExecutor(BaseExecutor):
             transferred_count,
             len(non_system_notes),
         )
+        # 後続ノードへ msg を伝播させる（None を返すとフレームワークが終端と判断する）
+        return msg
