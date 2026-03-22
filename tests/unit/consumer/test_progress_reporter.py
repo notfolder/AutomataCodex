@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agents.configurable_agent import WorkflowContext
-from tools.mermaid_graph_renderer import MermaidGraphRenderer
+from shared.graph.mermaid_renderer import MermaidGraphRenderer
 from tools.progress_comment_manager import ProgressCommentManager
 from tools.progress_reporter import ProgressReporter
 
@@ -28,11 +28,11 @@ class _ConcreteWorkflowContext(WorkflowContext):
     def __init__(self) -> None:
         self._state: dict = {}
 
-    async def get_state(self, key: str):
+    def get_state(self, key: str, default=None):
         """指定キーの状態値を返す"""
-        return self._state.get(key)
+        return self._state.get(key, default)
 
-    async def set_state(self, key: str, value) -> None:
+    def set_state(self, key: str, value) -> None:
         """指定キーに値を保存する"""
         self._state[key] = value
 

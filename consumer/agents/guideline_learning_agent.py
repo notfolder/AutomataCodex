@@ -15,7 +15,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from consumer.agents.configurable_agent import BaseExecutor, WorkflowContext
+from agent_framework import Executor, WorkflowContext, handler
 
 if TYPE_CHECKING:
     from consumer.user_config_client import UserConfig
@@ -38,30 +38,7 @@ about: プロジェクト固有の品質基準とガイドライン
 """
 
 
-class AgentResponse:
-    """
-    エージェント応答データクラス
-
-    GuidelineLearningAgentの処理結果を保持する。
-
-    Attributes:
-        success: 処理が成功したかどうか
-        message: 補足メッセージ（省略可能）
-    """
-
-    def __init__(self, success: bool, message: str | None = None) -> None:
-        """
-        AgentResponseを初期化する。
-
-        Args:
-            success: 処理成功フラグ
-            message: 補足メッセージ（省略可能）
-        """
-        self.success = success
-        self.message = message
-
-
-class GuidelineLearningAgent(BaseExecutor):
+class GuidelineLearningAgent(Executor):
     """
     ガイドライン学習エージェント
 
@@ -100,8 +77,10 @@ class GuidelineLearningAgent(BaseExecutor):
         self.user_config = user_config
         self.gitlab_client = gitlab_client
         self.progress_reporter = progress_reporter
+        super().__init__(id=self.__class__.__name__)
 
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> AgentResponse:
+    @handler(input=Any)
+    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
         """
         ガイドライン学習処理を実行する。
 
@@ -115,17 +94,13 @@ class GuidelineLearningAgent(BaseExecutor):
         5. LLM単一呼び出し（更新判定）
         6. ガイドライン更新（should_update=trueの場合のみ）
         7. エラーハンドリング（例外をキャッチしてログ記録のみ、ワークフローは継続）
-        8. 応答返却
 
         Args:
             msg: 受け取るメッセージ（未使用）
             ctx: ワークフローコンテキスト
-
-        Returns:
-            AgentResponse（常にsuccess=True）
         """
         try:
-            return await self._process(ctx)
+            await self._process(ctx)
         except Exception as exc:
             # 7. エラーハンドリング: 例外をキャッチしてログのみ。ワークフローは継続。
             logger.error(
@@ -134,29 +109,36 @@ class GuidelineLearningAgent(BaseExecutor):
                 exc,
                 exc_info=True,
             )
-            return AgentResponse(success=True)
+        finally:
+            # ワークフロー最終ノードとして ProgressReporter を finalize する
+            if self.progress_reporter is not None:
+                try:
+                    mr_iid: int | None = ctx.get_state("task_mr_iid")
+                    if mr_iid is not None:
+                        await self.progress_reporter.finalize(
+                            ctx, mr_iid, "ワークフロー処理が完了しました"
+                        )
+                except Exception:
+                    logger.exception(
+                        "ProgressReporter の finalize 中にエラーが発生しました。"
+                    )
 
-    async def _process(self, ctx: WorkflowContext) -> AgentResponse:
+    async def _process(self, ctx: WorkflowContext) -> None:
         """
         ガイドライン学習の実際の処理を実行する。
 
         Args:
             ctx: ワークフローコンテキスト
-
-        Returns:
-            AgentResponse
         """
         # 1. 有効チェック
         if not self.user_config.learning_enabled:
-            logger.info(
-                "学習機能が無効のためGuidelineLearningAgentをスキップします"
-            )
-            return AgentResponse(success=True)
+            logger.info("学習機能が無効のためGuidelineLearningAgentをスキップします")
+            return
 
         # 2. タスク情報取得
-        task_mr_iid = await ctx.get_state("task_mr_iid")
-        task_project_id = await ctx.get_state("task_project_id")
-        task_start_time = await ctx.get_state("task_start_time")
+        task_mr_iid = ctx.get_state("task_mr_iid")
+        task_project_id = ctx.get_state("task_project_id")
+        task_start_time = ctx.get_state("task_start_time")
 
         if task_mr_iid is None or task_project_id is None:
             logger.warning(
@@ -166,7 +148,7 @@ class GuidelineLearningAgent(BaseExecutor):
                 task_mr_iid,
                 task_project_id,
             )
-            return AgentResponse(success=True)
+            return
 
         # 3. MRコメント取得・フィルタリング
         comments = self._get_filtered_comments(
@@ -181,10 +163,10 @@ class GuidelineLearningAgent(BaseExecutor):
                 "mr_iid=%s",
                 task_mr_iid,
             )
-            return AgentResponse(success=True)
+            return
 
         # 4. ガイドライン読み込み
-        branch = await ctx.get_state("assigned_branch") or "main"
+        branch = ctx.get_state("assigned_branch") or "main"
         current_guidelines = self._get_guidelines(
             project_id=task_project_id,
             branch=branch,
@@ -217,9 +199,6 @@ class GuidelineLearningAgent(BaseExecutor):
                 task_mr_iid,
                 llm_result.get("rationale"),
             )
-
-        # 8. 応答返却
-        return AgentResponse(success=True)
 
     def _get_filtered_comments(
         self,
@@ -264,7 +243,11 @@ class GuidelineLearningAgent(BaseExecutor):
                 self.user_config.learning_only_after_task_start
                 and task_start_time is not None
             ):
-                created_at = comment.get("created_at") if isinstance(comment, dict) else getattr(comment, "created_at", None)
+                created_at = (
+                    comment.get("created_at")
+                    if isinstance(comment, dict)
+                    else getattr(comment, "created_at", None)
+                )
                 if created_at is not None:
                     # datetimeオブジェクトに変換して比較する
                     created_at_norm = self._normalize_datetime(created_at)
@@ -275,9 +258,17 @@ class GuidelineLearningAgent(BaseExecutor):
 
             # botコメントを除外する
             if self.user_config.learning_exclude_bot_comments:
-                author = comment.get("author") if isinstance(comment, dict) else getattr(comment, "author", None)
+                author = (
+                    comment.get("author")
+                    if isinstance(comment, dict)
+                    else getattr(comment, "author", None)
+                )
                 if author is not None:
-                    is_bot = author.get("bot") if isinstance(author, dict) else getattr(author, "bot", False)
+                    is_bot = (
+                        author.get("bot")
+                        if isinstance(author, dict)
+                        else getattr(author, "bot", False)
+                    )
                     if is_bot:
                         continue
 
@@ -312,9 +303,7 @@ class GuidelineLearningAgent(BaseExecutor):
                 # ISO 8601形式（Z後置など）をパースする
                 return datetime.fromisoformat(value.replace("Z", "+00:00"))
             except ValueError:
-                logger.debug(
-                    "日時文字列のパースに失敗しました: %s", value
-                )
+                logger.debug("日時文字列のパースに失敗しました: %s", value)
         return None
 
     def _get_guidelines(self, project_id: int, branch: str) -> str:
@@ -397,19 +386,44 @@ class GuidelineLearningAgent(BaseExecutor):
             '"updated_guidelines": "更新後のPROJECT_GUIDELINES.md全文（should_update=trueのみ）"}'
         )
 
-        # LLM呼び出し（スタブ: 実際のAgent Framework統合時に実装）
         logger.debug(
             "LLMでガイドライン更新判定を実行します: mr_iid=%s, model=%s",
             task_mr_iid,
             self.user_config.learning_llm_model,
         )
 
-        # スタブ実装: 更新不要を返す
-        return {
-            "should_update": False,
-            "rationale": "LLM統合は将来実装されます",
-            "category": "general",
-        }
+        # Agent FrameworkのAgentを使用してLLM呼び出しを実行する
+        try:
+            from agent_framework import Agent
+            from agent_framework.openai import OpenAIChatClient
+
+            model_name: str = getattr(self.user_config, "learning_llm_model", "gpt-4o")
+            chat_client = OpenAIChatClient(model_id=model_name)
+            agent = Agent(
+                client=chat_client,
+                instructions=system_prompt,
+            )
+
+            # Agent.run() には文字列を直接渡す（自動的にuserメッセージに変換される）
+            response = await agent.run(user_prompt)
+
+            # AgentResponse.text で応答テキストを取得する
+            response_text: str = response.text or ""
+
+            # JSON応答をパースする
+            return json.loads(response_text)
+
+        except Exception as exc:
+            logger.warning(
+                "LLMによるガイドライン更新判定に失敗しました: mr_iid=%s, error=%s",
+                task_mr_iid,
+                exc,
+            )
+            return {
+                "should_update": False,
+                "rationale": f"LLM呼び出しエラー: {exc}",
+                "category": "general",
+            }
 
     async def _update_guidelines(
         self,

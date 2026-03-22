@@ -38,7 +38,6 @@
           <v-row>
             <v-col cols="12" md="6">
               <v-list density="compact">
-                <v-list-item title="メールアドレス" :subtitle="user.email" />
                 <v-list-item title="ユーザー名" :subtitle="user.username || '-'" />
                 <v-list-item title="ロール">
                   <template #subtitle>
@@ -269,7 +268,7 @@ const fetchData = async () => {
     // ワークフロー設定とトークン使用量を並列取得
     const [workflowRes, tokenRes] = await Promise.allSettled([
       getUserWorkflowSetting(props.id),
-      getTokenUsageStats({ email: user.value.email, days: 30 }),
+      getTokenUsageStats({ username: user.value.username, days: 30 }),
     ])
 
     if (workflowRes.status === 'fulfilled') {

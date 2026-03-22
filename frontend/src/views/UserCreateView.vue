@@ -24,19 +24,11 @@
           <v-row>
             <v-col cols="12" md="6">
               <v-text-field
-                v-model="form.email"
-                label="メールアドレス *"
-                type="email"
-                variant="outlined"
-                :rules="emailRules"
-                required
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
                 v-model="form.username"
-                label="ユーザー名"
+                label="ユーザー名 *"
                 variant="outlined"
+                :rules="usernameRules"
+                required
               />
             </v-col>
             <v-col cols="12" md="6">
@@ -322,7 +314,6 @@ const workflowOptions = ref([{ label: 'システムデフォルト', value: null
 
 // フォームデータ
 const form = ref({
-  email: '',
   username: '',
   password: '',
   role: 'user',
@@ -347,9 +338,8 @@ const form = ref({
 })
 
 // バリデーションルール
-const emailRules = [
-  (v) => !!v || 'メールアドレスを入力してください',
-  (v) => /.+@.+\..+/.test(v) || '有効なメールアドレスを入力してください',
+const usernameRules = [
+  (v) => !!v || 'ユーザー名を入力してください',
 ]
 const passwordRules = [
   (v) => !!v || 'パスワードを入力してください',

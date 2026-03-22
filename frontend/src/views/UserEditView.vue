@@ -28,20 +28,13 @@
         <v-card-text>
           <v-row>
             <v-col cols="12" md="6">
-              <!-- メールアドレスは読み取り専用 -->
-              <v-text-field
-                v-model="form.email"
-                label="メールアドレス"
-                variant="outlined"
-                readonly
-                disabled
-              />
-            </v-col>
-            <v-col cols="12" md="6">
+              <!-- ユーザー名は読み取り専用 -->
               <v-text-field
                 v-model="form.username"
                 label="ユーザー名"
                 variant="outlined"
+                readonly
+                disabled
               />
             </v-col>
             <!-- 管理者のみロール変更可能 -->
@@ -269,11 +262,13 @@
 
       <!-- 操作ボタン -->
       <div class="d-flex justify-space-between">
+        <!-- 管理者のみ他ユーザーのパスワード代理変更ボタンを表示 -->
         <v-btn
+          v-if="authStore.isAdmin"
           variant="outlined"
           color="warning"
           prepend-icon="mdi-lock-reset"
-          :to="{ name: 'PasswordChange' }"
+          :to="{ name: 'PasswordChange', query: { username: originalUsername } }"
         >
           パスワード変更（管理者代理）
         </v-btn>
@@ -326,11 +321,10 @@ const errorMessage = ref('')
 const successSnackbar = ref(false)
 const showApiKey = ref(false)
 const workflowOptions = ref([{ label: 'システムデフォルト', value: null }])
-const originalEmail = ref('')
+const originalUsername = ref('')
 
 // フォームデータ
 const form = ref({
-  email: '',
   username: '',
   role: 'user',
   is_active: true,
@@ -388,7 +382,7 @@ const fetchData = async () => {
 
     if (userRes.status === 'fulfilled') {
       const user = userRes.value.data
-      originalEmail.value = user.email
+      originalUsername.value = user.username
       // フォームに既存値を反映
       Object.keys(form.value).forEach((key) => {
         if (user[key] !== undefined) form.value[key] = user[key]
@@ -429,7 +423,7 @@ const handleSave = async () => {
     }
 
     // ユーザー情報の更新
-    await updateUser(originalEmail.value, updateData)
+    await updateUser(originalUsername.value, updateData)
 
     // ワークフロー設定の更新
     if (form.value.workflow_definition_id !== null) {

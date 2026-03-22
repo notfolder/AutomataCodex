@@ -16,10 +16,10 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY shared/ ./shared/
 COPY consumer/ ./consumer/
+COPY docs/definitions/ ./docs/definitions/
 
 # Consumerの依存関係をインストール
 RUN uv pip install --system -e ./shared -e ./consumer
 
-WORKDIR /app/consumer
-
+# /app をワーキングディレクトリとして python -m consumer を実行
 CMD ["python", "-m", "consumer"]
