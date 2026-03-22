@@ -142,6 +142,24 @@ class ConfigurableAgent(Executor):
             else:
                 response_text = ""
 
+            # ステップ 5.1: トークン使用量を ctx に中間保存する
+            # agent.run() 成功直後に保存することで、後続ステップでエラーが起きても
+            # on_error フェーズの TokenUsageMiddleware が記録できるようにする。
+            # （クォータエラーはここに到達しないため自然に除外される）
+            if response is not None:
+                model_name: str = getattr(
+                    getattr(self.agent, "client", None), "model_id", "unknown"
+                )
+                ctx.set_state(
+                    "_pending_token_usage",
+                    {
+                        "usage_details": getattr(response, "usage_details", None),
+                        "prompt_text": prompt,
+                        "response_text": response_text,
+                        "model": model_name,
+                    },
+                )
+
             # ステップ 6: 進捗報告（LLM 応答）
             response_summary: str = response_text[:200]
             await self.report_progress(

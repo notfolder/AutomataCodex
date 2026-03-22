@@ -60,33 +60,52 @@ class TokenUsageMiddleware(IMiddleware):
         """
         トークン使用量記録介入処理
 
-        after_execution フェーズかつ agent ノードのみ動作する。
-        実行結果からトークン情報を抽出してデータベースとメトリクスに記録する。
+        after_execution フェーズではノード実行結果の token_usage から記録する。
+        on_error フェーズでは ctx に中間保存された _pending_token_usage から記録する。
+        これにより、agent.run() 成功後に後続ステップ（進捗報告など）でエラーが
+        起きた場合でもトークン使用量を記録できる。
+        クォータエラーなど agent.run() 自体が失敗した場合は _pending_token_usage が
+        セットされないため自然に除外される。
+
+        フェーズが after_execution / on_error 以外、またはノード種別が agent 以外の
+        場合はスキップする。
 
         Args:
             phase: 実行フェーズ
             node: 実行対象ノード情報
             context: ワークフローコンテキスト
-            **kwargs: 追加引数（result: エージェント実行結果を含む）
+            **kwargs: 追加引数（result: エージェント実行結果、exception: 発生した例外）
 
         Returns:
             None: 常に通常フローを継続する
         """
-        # after_execution フェーズ以外はスキップする
-        if phase != "after_execution":
+        # after_execution / on_error 以外はスキップする
+        if phase not in ("after_execution", "on_error"):
             return None
 
         # agent ノード以外はスキップする
         if node.node_type != "agent":
             return None
 
-        # 実行結果を取得する
-        result: Any = kwargs.get("result")
-        if result is None:
-            return None
+        token_info: dict[str, Any] | None = None
 
-        # 実行結果からトークン使用量情報を抽出する
-        token_info = _extract_token_info(result)
+        if phase == "after_execution":
+            # after_execution フェーズ: 実行結果の token_usage から抽出する
+            result: Any = kwargs.get("result")
+            if result is not None:
+                token_info = _extract_token_info(result)
+
+        elif phase == "on_error":
+            # on_error フェーズ: agent.run() 成功後に ctx へ中間保存された
+            # _pending_token_usage から抽出する。
+            # クォータエラーなど agent.run() 自体が失敗した場合は
+            # _pending_token_usage がセットされていないためスキップされる。
+            pending: Any = context.get_state("_pending_token_usage")
+            if pending is not None:
+                token_info = _extract_token_info({"token_usage": pending})
+                # 次のリトライや再実行で二重計上しないよう中間保存を消去する
+                context.set_state("_pending_token_usage", None)
+
         if token_info is None:
             return None
 

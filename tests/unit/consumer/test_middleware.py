@@ -289,7 +289,7 @@ class TestTokenUsageMiddleware:
         mock_context_storage_manager: MagicMock,
         mock_metrics_collector: MagicMock,
     ) -> None:
-        """phaseがafter_executionでない場合はNoneを返すことを確認する"""
+        """phaseがafter_execution/on_error以外の場合はNoneを返すことを確認する"""
         middleware = TokenUsageMiddleware(
             context_storage_manager=mock_context_storage_manager,
             metrics_collector=mock_metrics_collector,
@@ -456,6 +456,80 @@ class TestTokenUsageMiddleware:
         # トークン数は 0 より大きいことを確認する（tiktoken 推定値）
         assert call_kwargs["prompt_tokens"] > 0
         assert call_kwargs["completion_tokens"] > 0
+
+    async def test_token_usage_middleware_on_error_with_pending(
+        self,
+        mock_ctx: _ConcreteWorkflowContext,
+        mock_context_storage_manager: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """on_errorフェーズで_pending_token_usageがある場合にsave_token_usageが呼ばれることを確認する"""
+        middleware = TokenUsageMiddleware(
+            context_storage_manager=mock_context_storage_manager,
+            metrics_collector=mock_metrics_collector,
+        )
+        node = _make_node(node_id="code_generation", node_type="agent")
+
+        # agent.run() 成功後に ctx へ中間保存されたトークン情報を設定する
+        mock_ctx.set_state(
+            "_pending_token_usage",
+            {
+                "usage_details": {
+                    "input_token_count": 300,
+                    "output_token_count": 150,
+                    "total_token_count": 450,
+                },
+                "prompt_text": "コードを生成してください",
+                "response_text": "def hello(): pass",
+                "model": "gpt-4o",
+            },
+        )
+
+        result = await middleware.intercept(
+            phase="on_error",
+            node=node,
+            context=mock_ctx,
+            exception=RuntimeError("GitLab進捗報告に失敗"),
+        )
+
+        assert result is None
+        # save_token_usage が呼ばれることを確認する
+        mock_context_storage_manager.save_token_usage.assert_called_once_with(
+            username="testuser",
+            task_uuid="test-uuid-001",
+            node_id="code_generation",
+            model="gpt-4o",
+            prompt_tokens=300,
+            completion_tokens=150,
+            total_tokens=450,
+        )
+        # _pending_token_usage が消去されることを確認する（二重計上防止）
+        assert mock_ctx.get_state("_pending_token_usage") is None
+
+    async def test_token_usage_middleware_on_error_without_pending(
+        self,
+        mock_ctx: _ConcreteWorkflowContext,
+        mock_context_storage_manager: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """on_errorフェーズで_pending_token_usageがない場合（クォータエラー等）はスキップされることを確認する"""
+        middleware = TokenUsageMiddleware(
+            context_storage_manager=mock_context_storage_manager,
+            metrics_collector=mock_metrics_collector,
+        )
+        node = _make_node(node_id="task_classifier", node_type="agent")
+
+        # _pending_token_usage をセットしない（agent.run() が失敗した場合を模擬する）
+
+        result = await middleware.intercept(
+            phase="on_error",
+            node=node,
+            context=mock_ctx,
+            exception=RuntimeError("insufficient_quota"),
+        )
+
+        assert result is None
+        mock_context_storage_manager.save_token_usage.assert_not_called()
 
 
 # ========================================
