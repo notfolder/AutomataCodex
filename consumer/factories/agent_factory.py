@@ -203,6 +203,10 @@ class AgentFactory:
         """
         TodoManagementToolのFunctionTool群を生成して返す。
 
+        LLMが直接扱えるよう、project_id/mr_iid/contextをラップして隠蔽し、
+        todos引数のスキーマをTodoItem TypedDictで明確に定義したクロージャ関数を
+        FunctionToolとして登録する。
+
         Agent FrameworkのFunctionToolとしてラップして返す。
 
         Args:
@@ -215,7 +219,7 @@ class AgentFactory:
         try:
             from agent_framework import FunctionTool
 
-            from consumer.tools.todo_management_tool import TodoManagementTool
+            from consumer.tools.todo_management_tool import TodoItem, TodoManagementTool
 
             todo_tool = TodoManagementTool(
                 db_connection=self.db_connection,
@@ -223,17 +227,86 @@ class AgentFactory:
                 task_uuid=task_uuid,
                 progress_reporter=progress_reporter,
             )
-            # Agent FrameworkのFunctionToolとして登録可能な関数群を返す
+
+            # --- LLM向けラッパー関数群 ---
+            # project_id / mr_iid / context は LLM に渡させると問題が起きるため隠蔽する。
+            # todos の型を TodoItem TypedDict にすることで JSON スキーマを明確にする。
+            # 注意: from __future__ import annotations によりアノテーションが文字列化されるため、
+            #       __annotations__ を直接型オブジェクトで上書きして解決回避する。
+
+            async def create_todo_list(todos: Any) -> dict[str, Any]:
+                """
+                作業手順（Todoリスト）をデータベースに一括登録する。
+
+                タスク開始時に全工程を一度にまとめて登録するために使う。
+
+                Args:
+                    todos: 登録するTodo項目のリスト。
+                           各要素は以下のキーを持つオブジェクト:
+                           - title (str, 必須): Todoのタイトル
+                           - description (str, 省略可): Todoの説明
+                           - status (str, 省略可): 初期ステータス
+                             （not-started / in-progress / completed のいずれか。省略時は not-started）
+
+                Returns:
+                    {"status": "success", "todo_ids": [登録されたTodoのIDリスト]}
+                """
+                todos_dicts: list[dict[str, Any]] = [dict(t) for t in todos]
+                return await todo_tool.create_todo_list(
+                    project_id=0,
+                    mr_iid=0,
+                    todos=todos_dicts,
+                    context=None,
+                )
+
+            # TodoItem を型オブジェクトとして直接セットし、文字列評価を回避する
+            create_todo_list.__annotations__ = {
+                "todos": list[TodoItem],
+                "return": dict[str, Any],
+            }
+
+            async def get_todo_list() -> dict[str, Any]:
+                """
+                現在のTodoリストをデータベースから取得する。
+
+                Returns:
+                    {"status": "success", "todos": [Todoオブジェクトのリスト]}
+                    各Todoオブジェクト: {id, title, description, status, parent_todo_id, order_index}
+                """
+                return await todo_tool.get_todo_list(project_id=0, mr_iid=0)
+
+            get_todo_list.__annotations__ = {"return": dict[str, Any]}
+
+            async def update_todo_status(todo_id: int, status: str) -> dict[str, Any]:
+                """
+                TodoのステータスをID指定で更新する。
+
+                Args:
+                    todo_id: 更新対象のTodo ID（get_todo_listで取得したid）
+                    status: 新しいステータス
+                            not-started / in-progress / completed / failed のいずれか
+
+                Returns:
+                    {"status": "success", "todo_id": todo_id, "new_status": status}
+                """
+                return await todo_tool.update_todo_status(
+                    todo_id=todo_id,
+                    status=status,
+                    context=None,
+                )
+
+            update_todo_status.__annotations__ = {
+                "todo_id": int,
+                "status": str,
+                "return": dict[str, Any],
+            }
+
             tools: list[Any] = []
-            for method in [
-                todo_tool.create_todo_list,
-                todo_tool.get_todo_list,
-                todo_tool.update_todo_status,
-            ]:
+            for func in [create_todo_list, get_todo_list, update_todo_status]:
                 ft = FunctionTool(
-                    name=method.__name__,
-                    description=getattr(method, "__doc__", "") or method.__name__,
-                    func=method,
+                    name=func.__name__,
+                    description=func.__doc__ or func.__name__,
+                    func=func,
                 )
                 tools.append(ft)
             return tools
