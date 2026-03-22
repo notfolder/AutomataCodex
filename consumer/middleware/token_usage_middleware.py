@@ -118,11 +118,17 @@ class TokenUsageMiddleware(IMiddleware):
         task_uuid: str | None = context.get_state("task_uuid")
         username: str | None = context.get_state("username")
 
+        # task_uuid が未設定の場合は外部キー制約違反を引き起こすため明示的にエラーにする
+        if not task_uuid:
+            raise ValueError(
+                f"TokenUsageMiddleware: task_uuid がコンテキストに存在しません: node_id={node.node_id}"
+            )
+
         # トークン使用量をデータベースに保存する
         try:
             await self.context_storage_manager.save_token_usage(
                 username=username or "",
-                task_uuid=task_uuid or "",
+                task_uuid=task_uuid,
                 node_id=node.node_id,
                 model=model,
                 prompt_tokens=prompt_tokens,

@@ -53,6 +53,7 @@ class TaskContextInitExecutor(BaseExecutor):
             ctx: ワークフローコンテキスト
         """
         # TaskContext からフィールドを取得する
+        task_uuid: str = getattr(msg, "task_uuid", None) or ""
         username: str = getattr(msg, "username", None) or ""
         user_config: Any = getattr(msg, "cached_user_config", None)
         project_id: int = getattr(msg, "project_id", 0)
@@ -61,13 +62,15 @@ class TaskContextInitExecutor(BaseExecutor):
 
         logger.info(
             "TaskContextをワークフローコンテキストに転写します: "
-            "username=%s, project_id=%s, mr_iid=%s",
+            "task_uuid=%s, username=%s, project_id=%s, mr_iid=%s",
+            task_uuid,
             username,
             project_id,
             mr_iid,
         )
 
         # WorkflowContext state にコピーする
+        self.set_context_value(ctx, "task_uuid", task_uuid)
         self.set_context_value(ctx, "username", username)
         self.set_context_value(ctx, "user_config", user_config)
         self.set_context_value(ctx, "task_mr_iid", mr_iid)
