@@ -98,7 +98,7 @@ class ExecEnvSetupExecutor(BaseExecutor):
             suffix = suffix[len(_NODE_ID_PREFIX) :]
         return suffix.replace("_", "-")
 
-    @handler(input=Any)
+    @handler(input=Any, output=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         実行フェーズの Docker 環境を準備し、必要に応じてサブブランチを作成する。

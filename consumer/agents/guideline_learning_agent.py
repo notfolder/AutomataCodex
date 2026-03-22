@@ -79,7 +79,7 @@ class GuidelineLearningAgent(Executor):
         self.progress_reporter = progress_reporter
         super().__init__(id=self.__class__.__name__)
 
-    @handler(input=Any)
+    @handler(input=Any, output=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         ガイドライン学習処理を実行する。

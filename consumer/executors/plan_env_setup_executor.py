@@ -56,7 +56,7 @@ class PlanEnvSetupExecutor(BaseExecutor):
         self.config = config
         super().__init__(id=self.__class__.__name__)
 
-    @handler(input=Any)
+    @handler(input=Any, output=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         計画フェーズの Docker 環境を準備してリポジトリをクローンする。

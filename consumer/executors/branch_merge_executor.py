@@ -43,7 +43,7 @@ class BranchMergeExecutor(BaseExecutor):
         self.gitlab_client = gitlab_client
         super().__init__(id=self.__class__.__name__)
 
-    @handler(input=Any)
+    @handler(input=Any, output=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         選択された実装ブランチをオリジナルブランチにマージする。

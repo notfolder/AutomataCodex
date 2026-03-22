@@ -81,7 +81,7 @@ class PassthroughExecutor(Executor):  # type: ignore[type-arg]
     受け取ったメッセージをそのまま返す。
     """
 
-    @handler(input=Any)
+    @handler(input=Any, output=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         メッセージをそのまま後続ノードへ送信する。

@@ -41,7 +41,7 @@ class ProgressFinalizeExecutor(Executor):
         super().__init__(id=self.__class__.__name__)
         self.progress_reporter = progress_reporter
 
-    @handler(input=Any)
+    @handler(input=Any, output=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         ProgressReporter を finalize して後続ノードへメッセージを転送する。

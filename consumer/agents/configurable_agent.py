@@ -75,7 +75,7 @@ class ConfigurableAgent(Executor):
         self.environment_id: str | None = environment_id
         super().__init__(id=config.node_id or config.id)
 
-    @handler(input=Any)
+    @handler(input=Any, output=Any)
     async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         エージェントノードのメインハンドラ。
