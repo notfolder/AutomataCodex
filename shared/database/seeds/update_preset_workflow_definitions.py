@@ -1,7 +1,7 @@
 """
 プリセットワークフロー定義更新スクリプト
 
-docs/definitions/配下のJSONファイルで、DB上の既存システムプリセットを上書き更新する。
+docs/definitions/配下のYAMLファイルで、DB上の既存システムプリセットを上書き更新する。
 定義ファイルを修正した後に手動実行して DB へ反映する。
 
 起動時の自動実行（seed_workflow_definitions）は既存レコードをスキップする冪等な処理
@@ -25,8 +25,11 @@ if TYPE_CHECKING:
         WorkflowDefinitionRepository,
     )
 
-# _PRESETS と _load_json を seed スクリプトから再利用する
-from shared.database.seeds.seed_workflow_definitions import _PRESETS, _load_json
+# _PRESETS と _load_definition_file を seed スクリプトから再利用する
+from shared.database.seeds.seed_workflow_definitions import (
+    _PRESETS,
+    _load_definition_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +51,18 @@ async def update_preset_workflow_definitions(
         "failed"（失敗）。それぞれの値は対象プリセット名のリスト。
 
     Raises:
-        FileNotFoundError: 定義JSONファイルが見つからない場合
-        json.JSONDecodeError: JSONのパースに失敗した場合
+        FileNotFoundError: 定義YAMLファイルが見つからない場合
+        yaml.YAMLError: YAMLのパースに失敗した場合
     """
     result: dict[str, list[str]] = {"updated": [], "created": [], "failed": []}
 
     for preset in _PRESETS:
         name = preset["name"]
         try:
-            # 定義JSONファイルを読み込む
-            graph_def = _load_json(preset["graph_file"])
-            agent_def = _load_json(preset["agent_file"])
-            prompt_def = _load_json(preset["prompt_file"])
+            # 定義YAMLファイルを読み込む
+            graph_def = _load_definition_file(preset["graph_file"])
+            agent_def = _load_definition_file(preset["agent_file"])
+            prompt_def = _load_definition_file(preset["prompt_file"])
         except (FileNotFoundError, Exception) as exc:
             logger.error(
                 "プリセット '%s' の定義ファイル読み込みに失敗しました: %s", name, exc

@@ -182,16 +182,16 @@ class TestUpdatePresetWorkflowDefinitions:
             assert isinstance(call_args.kwargs.get("agent_definition"), dict)
             assert isinstance(call_args.kwargs.get("prompt_definition"), dict)
 
-    async def test_JSONファイルが見つからない場合はfailedに入る(self) -> None:
+    async def test_YAMLファイルが見つからない場合はfailedに入る(self) -> None:
         """
-        定義JSONファイルが存在しない場合にそのプリセットが「failed」に入ることを確認する。
+        定義YAMLファイルが存在しない場合にそのプリセットが「failed」に入ることを確認する。
         """
         repo = MagicMock(spec=WorkflowDefinitionRepository)
         repo.get_workflow_definition_by_name = AsyncMock(return_value=None)
         repo.create_workflow_definition = AsyncMock()
 
         with patch(
-            "database.seeds.update_preset_workflow_definitions._load_json",
+            "database.seeds.update_preset_workflow_definitions._load_definition_file",
             side_effect=FileNotFoundError("ファイルが見つかりません"),
         ):
             result = await update_preset_workflow_definitions(repo)
