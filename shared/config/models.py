@@ -424,7 +424,9 @@ class MCPServerConfig(BaseModel):
 class DockerConfig(BaseModel):
     """Docker実行環境設定"""
 
-    image: str = Field(default="python:3.11-slim", description="Dockerイメージ")
+    image: str = Field(
+        default="automatacodex-executor-python:latest", description="Dockerイメージ"
+    )
     network: str = Field(
         default="coding-agent-network", description="Dockerネットワーク名"
     )

@@ -198,4 +198,5 @@ volumes:
 networks:
   coding-agent-network:
     driver: bridge
+    name: coding-agent-network  # プロジェクトプレフィックスなしの名前を明示（executor コンテナから直接参照するため）
 

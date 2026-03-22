@@ -14,6 +14,7 @@ WORKDIR /app
 
 # ワークスペース全体をコピー
 COPY pyproject.toml ./
+COPY config.yaml ./config.yaml
 COPY shared/ ./shared/
 COPY consumer/ ./consumer/
 COPY docs/definitions/ ./docs/definitions/
