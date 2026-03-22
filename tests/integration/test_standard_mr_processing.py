@@ -17,6 +17,8 @@ IMPLEMENTATION_PLAN.md フェーズ9-2 に準拠する。
 from __future__ import annotations
 
 import json
+
+import yaml
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, call
@@ -24,9 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, call
 import pytest
 
 # 定義ファイルパス
-_DEFINITIONS_DIR = (
-    Path(__file__).parents[2] / "docs" / "definitions"
-)
+_DEFINITIONS_DIR = Path(__file__).parents[2] / "docs" / "definitions"
 
 
 # ========================================
@@ -35,9 +35,11 @@ _DEFINITIONS_DIR = (
 
 
 def _load_definition(filename: str) -> dict[str, Any]:
-    """docs/definitions/ 配下のJSONを読み込む"""
+    """docs/definitions/ 配下のJSONまたはYAMLファイルを読み込む"""
     filepath = _DEFINITIONS_DIR / filename
     with open(filepath, encoding="utf-8") as f:
+        if filepath.suffix in (".yaml", ".yml"):
+            return yaml.safe_load(f)
         return json.load(f)
 
 
@@ -49,9 +51,9 @@ def _make_workflow_definition_row(
 
     標準MR処理フローの定義を使用する。
     """
-    graph_def = _load_definition("standard_mr_processing_graph.json")
-    agent_def = _load_definition("standard_mr_processing_agents.json")
-    prompt_def = _load_definition("standard_mr_processing_prompts.json")
+    graph_def = _load_definition("standard_mr_processing_graph.yaml")
+    agent_def = _load_definition("standard_mr_processing_agents.yaml")
+    prompt_def = _load_definition("standard_mr_processing_prompts.yaml")
 
     return {
         "id": workflow_id,
@@ -106,12 +108,14 @@ def mock_user_config_client() -> MagicMock:
 def mock_gitlab_client() -> MagicMock:
     """GitlabClientのモックを返す"""
     client = MagicMock()
-    client.get_merge_request = AsyncMock(return_value={
-        "iid": 10,
-        "title": "テストMR",
-        "description": "テスト用MRの説明",
-        "source_branch": "feature/test",
-    })
+    client.get_merge_request = AsyncMock(
+        return_value={
+            "iid": 10,
+            "title": "テストMR",
+            "description": "テスト用MRの説明",
+            "source_branch": "feature/test",
+        }
+    )
     client.create_mr_note = AsyncMock()
     return client
 
@@ -162,7 +166,9 @@ def _make_agent_factory() -> MagicMock:
     # AF WorkflowBuilder は Executor インスタンスを要求するため、
     # MagicMock ではなく PassthroughExecutor を返す
     factory.create_agent = AsyncMock(
-        side_effect=lambda agent_config, **kwargs: PassthroughExecutor(id=agent_config.id)
+        side_effect=lambda agent_config, **kwargs: PassthroughExecutor(
+            id=agent_config.id
+        )
     )
     return factory
 
@@ -285,9 +291,9 @@ class TestStandardMrProcessingWorkflowBuild:
             "exec_env_setup_doc",
         }
         registered_nodes = set(workflow.executors.keys())
-        assert expected_executor_nodes.issubset(registered_nodes), (
-            f"未登録のExecutorノード: {expected_executor_nodes - registered_nodes}"
-        )
+        assert expected_executor_nodes.issubset(
+            registered_nodes
+        ), f"未登録のExecutorノード: {expected_executor_nodes - registered_nodes}"
 
     async def test_task_classifierノードが登録される(
         self,
@@ -325,9 +331,9 @@ class TestStandardMrProcessingWorkflowBuild:
             "documentation_planning",
         }
         registered_nodes = set(workflow.executors.keys())
-        assert expected_planning_nodes.issubset(registered_nodes), (
-            f"未登録のPlanningノード: {expected_planning_nodes - registered_nodes}"
-        )
+        assert expected_planning_nodes.issubset(
+            registered_nodes
+        ), f"未登録のPlanningノード: {expected_planning_nodes - registered_nodes}"
 
     async def test_4タスク種別のExecutionエージェントが全て登録される(
         self,
@@ -351,9 +357,9 @@ class TestStandardMrProcessingWorkflowBuild:
             "documentation",
         }
         registered_nodes = set(workflow.executors.keys())
-        assert expected_execution_nodes.issubset(registered_nodes), (
-            f"未登録のExecutionノード: {expected_execution_nodes - registered_nodes}"
-        )
+        assert expected_execution_nodes.issubset(
+            registered_nodes
+        ), f"未登録のExecutionノード: {expected_execution_nodes - registered_nodes}"
 
     async def test_Reflectionエージェントが全て登録される(
         self,
@@ -377,9 +383,9 @@ class TestStandardMrProcessingWorkflowBuild:
             "plan_reflection",
         }
         registered_nodes = set(workflow.executors.keys())
-        assert expected_reflection_nodes.issubset(registered_nodes), (
-            f"未登録のReflectionノード: {expected_reflection_nodes - registered_nodes}"
-        )
+        assert expected_reflection_nodes.issubset(
+            registered_nodes
+        ), f"未登録のReflectionノード: {expected_reflection_nodes - registered_nodes}"
 
     async def test_Reviewエージェントが全て登録される(
         self,
@@ -402,9 +408,9 @@ class TestStandardMrProcessingWorkflowBuild:
             "test_execution_evaluation",
         }
         registered_nodes = set(workflow.executors.keys())
-        assert expected_review_nodes.issubset(registered_nodes), (
-            f"未登録のReviewノード: {expected_review_nodes - registered_nodes}"
-        )
+        assert expected_review_nodes.issubset(
+            registered_nodes
+        ), f"未登録のReviewノード: {expected_review_nodes - registered_nodes}"
 
     async def test_条件ノードが全て登録される(
         self,
@@ -431,9 +437,9 @@ class TestStandardMrProcessingWorkflowBuild:
             "replan_branch",
         }
         registered_nodes = set(workflow.executors.keys())
-        assert expected_condition_nodes.issubset(registered_nodes), (
-            f"未登録の条件ノード: {expected_condition_nodes - registered_nodes}"
-        )
+        assert expected_condition_nodes.issubset(
+            registered_nodes
+        ), f"未登録の条件ノード: {expected_condition_nodes - registered_nodes}"
 
     async def test_エッジが登録される(
         self,
@@ -584,7 +590,7 @@ class TestStandardMrProcessingTaskTypeFlow:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         required_agents = [
@@ -596,9 +602,9 @@ class TestStandardMrProcessingTaskTypeFlow:
         ]
         for agent_id in required_agents:
             agent_config = agent_def.get_agent(agent_id)
-            assert agent_config is not None, (
-                f"コード生成タスクに必要なエージェント定義 '{agent_id}' が見つかりません"
-            )
+            assert (
+                agent_config is not None
+            ), f"コード生成タスクに必要なエージェント定義 '{agent_id}' が見つかりません"
 
     def test_バグ修正タスクのエージェント定義が存在する(self) -> None:
         """
@@ -608,7 +614,7 @@ class TestStandardMrProcessingTaskTypeFlow:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         required_agents = [
@@ -620,9 +626,9 @@ class TestStandardMrProcessingTaskTypeFlow:
         ]
         for agent_id in required_agents:
             agent_config = agent_def.get_agent(agent_id)
-            assert agent_config is not None, (
-                f"バグ修正タスクに必要なエージェント定義 '{agent_id}' が見つかりません"
-            )
+            assert (
+                agent_config is not None
+            ), f"バグ修正タスクに必要なエージェント定義 '{agent_id}' が見つかりません"
 
     def test_テスト作成タスクのエージェント定義が存在する(self) -> None:
         """
@@ -632,7 +638,7 @@ class TestStandardMrProcessingTaskTypeFlow:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         required_agents = [
@@ -643,9 +649,9 @@ class TestStandardMrProcessingTaskTypeFlow:
         ]
         for agent_id in required_agents:
             agent_config = agent_def.get_agent(agent_id)
-            assert agent_config is not None, (
-                f"テスト作成タスクに必要なエージェント定義 '{agent_id}' が見つかりません"
-            )
+            assert (
+                agent_config is not None
+            ), f"テスト作成タスクに必要なエージェント定義 '{agent_id}' が見つかりません"
 
     def test_ドキュメント生成タスクのエージェント定義が存在する(self) -> None:
         """
@@ -655,7 +661,7 @@ class TestStandardMrProcessingTaskTypeFlow:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         required_agents = [
@@ -666,9 +672,9 @@ class TestStandardMrProcessingTaskTypeFlow:
         ]
         for agent_id in required_agents:
             agent_config = agent_def.get_agent(agent_id)
-            assert agent_config is not None, (
-                f"ドキュメント生成タスクに必要なエージェント定義 '{agent_id}' が見つかりません"
-            )
+            assert (
+                agent_config is not None
+            ), f"ドキュメント生成タスクに必要なエージェント定義 '{agent_id}' が見つかりません"
 
     def test_各エージェントにプロンプト定義が対応している(self) -> None:
         """
@@ -678,8 +684,8 @@ class TestStandardMrProcessingTaskTypeFlow:
         from shared.models.agent_definition import AgentDefinition
         from shared.models.prompt_definition import PromptDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
-        prompt_def_data = _load_definition("standard_mr_processing_prompts.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
+        prompt_def_data = _load_definition("standard_mr_processing_prompts.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
         prompt_def = PromptDefinition.from_dict(prompt_def_data)
 
@@ -697,7 +703,7 @@ class TestStandardMrProcessingTaskTypeFlow:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         plan_reflection = agent_def.get_agent("plan_reflection")
@@ -718,7 +724,7 @@ class TestStandardMrProcessingTaskTypeFlow:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         task_classifier = agent_def.get_agent("task_classifier")
@@ -732,15 +738,13 @@ class TestStandardMrProcessingTaskTypeFlow:
         """
         from shared.models.graph_definition import GraphDefinition
 
-        graph_def_data = _load_definition("standard_mr_processing_graph.json")
+        graph_def_data = _load_definition("standard_mr_processing_graph.yaml")
         graph_def = GraphDefinition.from_dict(graph_def_data)
 
-        terminal_edges = [
-            edge for edge in graph_def.edges if edge.to_node is None
-        ]
-        assert len(terminal_edges) > 0, (
-            "グラフ定義に終端エッジ（to=null）が存在しません"
-        )
+        terminal_edges = [edge for edge in graph_def.edges if edge.to_node is None]
+        assert (
+            len(terminal_edges) > 0
+        ), "グラフ定義に終端エッジ（to=null）が存在しません"
 
     def test_replan_branchからtask_type_branchへのエッジが存在する(self) -> None:
         """
@@ -749,15 +753,15 @@ class TestStandardMrProcessingTaskTypeFlow:
         """
         from shared.models.graph_definition import GraphDefinition
 
-        graph_def_data = _load_definition("standard_mr_processing_graph.json")
+        graph_def_data = _load_definition("standard_mr_processing_graph.yaml")
         graph_def = GraphDefinition.from_dict(graph_def_data)
 
         replan_edges = graph_def.get_outgoing_edges("replan_branch")
         target_nodes = {edge.to_node for edge in replan_edges}
 
-        assert "task_type_branch" in target_nodes, (
-            "replan_branchからtask_type_branchへの再計画エッジが存在しません"
-        )
+        assert (
+            "task_type_branch" in target_nodes
+        ), "replan_branchからtask_type_branchへの再計画エッジが存在しません"
 
 
 # ========================================
@@ -780,7 +784,7 @@ class TestStandardMrProcessingContextKeys:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         execution_agents = [
@@ -804,7 +808,7 @@ class TestStandardMrProcessingContextKeys:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         review_agents = [
@@ -826,7 +830,7 @@ class TestStandardMrProcessingContextKeys:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         plan_reflection = agent_def.get_agent("plan_reflection")
@@ -839,7 +843,7 @@ class TestStandardMrProcessingContextKeys:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("standard_mr_processing_agents.json")
+        agent_def_data = _load_definition("standard_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         planning_agents = [

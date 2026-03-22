@@ -1,7 +1,7 @@
 """
 ワークフロー定義シードスクリプト
 
-docs/definitions/配下のJSONファイルをworkflow_definitionsテーブルに
+docs/definitions/配下の定義ファイル（JSON/YAML）をworkflow_definitionsテーブルに
 システムプリセットとして登録する。既に登録済みの場合はスキップする冪等な処理。
 
 AUTOMATA_CODEX_SPEC.md § 4.4.2（システムプリセットの初期登録）に準拠する。
@@ -15,6 +15,8 @@ import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import yaml
 
 if TYPE_CHECKING:
     import asyncpg
@@ -37,9 +39,9 @@ _PRESETS: list[dict[str, str]] = [
             "コード生成・バグ修正・テスト作成・ドキュメント生成の"
             "4タスクに対応する標準フロー"
         ),
-        "graph_file": "standard_mr_processing_graph.json",
-        "agent_file": "standard_mr_processing_agents.json",
-        "prompt_file": "standard_mr_processing_prompts.json",
+        "graph_file": "standard_mr_processing_graph.yaml",
+        "agent_file": "standard_mr_processing_agents.yaml",
+        "prompt_file": "standard_mr_processing_prompts.yaml",
     },
     {
         "name": "multi_codegen_mr_processing",
@@ -48,31 +50,36 @@ _PRESETS: list[dict[str, str]] = [
             "3種類のエージェントが並列でコードを生成し、"
             "コードレビューで最良の実装を自動選択するフロー"
         ),
-        "graph_file": "multi_codegen_mr_processing_graph.json",
-        "agent_file": "multi_codegen_mr_processing_agents.json",
-        "prompt_file": "multi_codegen_mr_processing_prompts.json",
+        "graph_file": "multi_codegen_mr_processing_graph.yaml",
+        "agent_file": "multi_codegen_mr_processing_agents.yaml",
+        "prompt_file": "multi_codegen_mr_processing_prompts.yaml",
     },
 ]
 
 
-def _load_json(filename: str) -> dict[str, Any]:
+def _load_definition_file(filename: str) -> dict[str, Any]:
     """
-    docs/definitions/配下のJSONファイルを読み込む。
+    docs/definitions/配下の定義ファイル（JSONまたはYAML）を読み込む。
+
+    拡張子が `.yaml` / `.yml` の場合はYAML形式、それ以外はJSON形式として解析する。
 
     Args:
-        filename: JSONファイル名（ディレクトリパスなし）
+        filename: 定義ファイル名（ディレクトリパスなし）
 
     Returns:
-        JSONデータの辞書
+        定義データの辞書
 
     Raises:
-        FileNotFoundError: JSONファイルが見つからない場合
+        FileNotFoundError: 定義ファイルが見つからない場合
         json.JSONDecodeError: JSONのパースに失敗した場合
+        yaml.YAMLError: YAMLのパースに失敗した場合
     """
     filepath = _DEFINITIONS_DIR / filename
     if not filepath.exists():
-        raise FileNotFoundError(f"定義JSONファイルが見つかりません: {filepath}")
+        raise FileNotFoundError(f"定義ファイルが見つかりません: {filepath}")
     with open(filepath, encoding="utf-8") as f:
+        if filepath.suffix in (".yaml", ".yml"):
+            return yaml.safe_load(f)
         return json.load(f)
 
 
@@ -107,10 +114,10 @@ async def seed_workflow_definitions(
             logger.info("プリセット '%s' は既に登録済みです。スキップします。", name)
             continue
 
-        # 定義JSONファイルを読み込む
-        graph_def = _load_json(preset["graph_file"])
-        agent_def = _load_json(preset["agent_file"])
-        prompt_def = _load_json(preset["prompt_file"])
+        # 定義ファイルを読み込む（グラフ・エージェント: JSON、プロンプト: YAML）
+        graph_def = _load_definition_file(preset["graph_file"])
+        agent_def = _load_definition_file(preset["agent_file"])
+        prompt_def = _load_definition_file(preset["prompt_file"])
 
         # ワークフロー定義をシステムプリセットとして登録する
         # backend と consumer が同時起動した場合の INSERT 競合を UniqueViolationError でキャッチする

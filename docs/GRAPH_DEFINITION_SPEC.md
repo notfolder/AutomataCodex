@@ -594,7 +594,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
 }
 ```
 
-**注意**: 上記インラインJSONはコード生成タスクの並列分岐部分のみを示した簡略版です。実際の `multi_codegen_mr_processing_graph.json` には以下のノード群も含まれており、標準フローと同様の構成を持ちます。
+**注意**: 上記インラインJSONはコード生成タスクの並列分岐部分のみを示した簡略版です。実際の `multi_codegen_mr_processing_graph.yaml` には以下のノード群も含まれており、標準フローと同様の構成を持ちます。
 
 - タスク種別分岐（`task_type_branch`）・仕様書確認（`spec_check_branch`）
 - バグ修正・テスト作成・ドキュメント生成の各プランニング・実行・レビューノード群（`bug_fix_planning`, `bug_fix`, `test_creation_planning`, `test_creation`, `documentation_planning`, `documentation`, 各リフレクションノード）
@@ -602,7 +602,7 @@ metadataはノード固有の動作をカスタマイズするオプションの
 - テスト実行・評価（`test_execution_evaluation`）
 - 再計画分岐（`replan_branch`）
 
-完全なグラフ定義は `docs/definitions/multi_codegen_mr_processing_graph.json` を参照してください。
+完全なグラフ定義は `docs/definitions/multi_codegen_mr_processing_graph.yaml` を参照してください。
 
 #### 4.2.1 multi_codegen_mr_processingの詳細説明
 

@@ -975,12 +975,12 @@ test_create_admin.pyはメールアドレスバリデーション・重複ユー
 - `docs/AGENT_DEFINITION_SPEC.md` § 4.2（複数コード生成並列エージェント定義）
 - `docs/PROMPT_DEFINITION_SPEC.md` § 4.1（標準MR処理プロンプト定義）
 - `docs/PROMPT_DEFINITION_SPEC.md` § 4.2（複数コード生成並列プロンプト定義）
-- `docs/definitions/standard_mr_processing_agents.json`
-- `docs/definitions/standard_mr_processing_graph.json`
-- `docs/definitions/standard_mr_processing_prompts.json`
-- `docs/definitions/multi_codegen_mr_processing_agents.json`
-- `docs/definitions/multi_codegen_mr_processing_graph.json`
-- `docs/definitions/multi_codegen_mr_processing_prompts.json`
+- `docs/definitions/standard_mr_processing_agents.yaml`
+- `docs/definitions/standard_mr_processing_graph.yaml`
+- `docs/definitions/standard_mr_processing_prompts.yaml`
+- `docs/definitions/multi_codegen_mr_processing_agents.yaml`
+- `docs/definitions/multi_codegen_mr_processing_graph.yaml`
+- `docs/definitions/multi_codegen_mr_processing_prompts.yaml`
 - `docs/PROMPTS.md`（各エージェントのシステムプロンプト原文・デフォルト定義）
 
 **実装ファイル:**

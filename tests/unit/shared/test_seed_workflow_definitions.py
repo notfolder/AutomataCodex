@@ -1,7 +1,7 @@
 """
 seed_workflow_definitions の単体テスト
 
-seed_workflow_definitions()・_load_json()の正常系・異常系を検証する。
+seed_workflow_definitions()・_load_definition_file()の正常系・異常系を検証する。
 
 IMPLEMENTATION_PLAN.md フェーズ9-1 に準拠する。
 """
@@ -18,7 +18,7 @@ import pytest
 from database.seeds.seed_workflow_definitions import (
     _DEFINITIONS_DIR,
     _PRESETS,
-    _load_json,
+    _load_definition_file,
     seed_workflow_definitions,
 )
 from database.repositories.workflow_definition_repository import (
@@ -29,6 +29,7 @@ from database.repositories.workflow_definition_repository import (
 # ========================================
 # テスト用ヘルパー
 # ========================================
+
 
 def _make_repo(existing_name: str | None = None) -> MagicMock:
     """
@@ -45,9 +46,7 @@ def _make_repo(existing_name: str | None = None) -> MagicMock:
         return None
 
     repo.get_workflow_definition_by_name = AsyncMock(side_effect=_get_by_name)
-    repo.create_workflow_definition = AsyncMock(
-        return_value={"id": 1, "name": "dummy"}
-    )
+    repo.create_workflow_definition = AsyncMock(return_value={"id": 1, "name": "dummy"})
     return repo
 
 
@@ -57,12 +56,12 @@ def _make_repo(existing_name: str | None = None) -> MagicMock:
 
 
 class TestLoadJson:
-    """_load_json() の単体テスト"""
+    """_load_definition_file() の単体テスト"""
 
-    def test_正常なJSONファイルを読み込める(self) -> None:
-        """docs/definitions/ に存在するJSONファイルが正常に読み込めることを確認する"""
+    def test_正常なYAMLファイルを読み込める(self) -> None:
+        """docs/definitions/ に存在する定義ファイルが正常に読み込めることを確認する"""
         # 標準MR処理グラフ定義ファイル（実際に存在するファイルを使用）
-        data = _load_json("standard_mr_processing_graph.json")
+        data = _load_definition_file("standard_mr_processing_graph.yaml")
 
         assert isinstance(data, dict)
         assert "version" in data
@@ -70,28 +69,28 @@ class TestLoadJson:
 
     def test_存在しないファイルはFileNotFoundErrorを発生させる(self) -> None:
         """存在しないファイル名を指定した場合にFileNotFoundErrorが発生することを確認する"""
-        with pytest.raises(FileNotFoundError, match="定義JSONファイルが見つかりません"):
-            _load_json("nonexistent_file.json")
+        with pytest.raises(FileNotFoundError, match="定義ファイルが見つかりません"):
+            _load_definition_file("nonexistent_file.json")
 
-    def test_全プリセットのJSONファイルが読み込める(self) -> None:
+    def test_全プリセットの定義ファイルが読み込める(self) -> None:
         """
-        _PARESETSに定義された全ての定義JSONファイルが読み込めることを確認する。
+        _PARETSに定義された全ての定義ファイルが読み込めることを確認する。
         """
         for preset in _PRESETS:
             # グラフ・エージェント・プロンプト定義の各ファイルが読み込めることを確認する
-            graph_def = _load_json(preset["graph_file"])
-            agent_def = _load_json(preset["agent_file"])
-            prompt_def = _load_json(preset["prompt_file"])
+            graph_def = _load_definition_file(preset["graph_file"])
+            agent_def = _load_definition_file(preset["agent_file"])
+            prompt_def = _load_definition_file(preset["prompt_file"])
 
-            assert isinstance(graph_def, dict), (
-                f"グラフ定義の読み込み失敗: {preset['graph_file']}"
-            )
-            assert isinstance(agent_def, dict), (
-                f"エージェント定義の読み込み失敗: {preset['agent_file']}"
-            )
-            assert isinstance(prompt_def, dict), (
-                f"プロンプト定義の読み込み失敗: {preset['prompt_file']}"
-            )
+            assert isinstance(
+                graph_def, dict
+            ), f"グラフ定義の読み込み失敗: {preset['graph_file']}"
+            assert isinstance(
+                agent_def, dict
+            ), f"エージェント定義の読み込み失敗: {preset['agent_file']}"
+            assert isinstance(
+                prompt_def, dict
+            ), f"プロンプト定義の読み込み失敗: {preset['prompt_file']}"
 
 
 # ========================================
@@ -213,4 +212,6 @@ class TestSeedWorkflowDefinitions:
 
             assert isinstance(graph_def, dict), "graph_definitionが辞書型ではありません"
             assert isinstance(agent_def, dict), "agent_definitionが辞書型ではありません"
-            assert isinstance(prompt_def, dict), "prompt_definitionが辞書型ではありません"
+            assert isinstance(
+                prompt_def, dict
+            ), "prompt_definitionが辞書型ではありません"

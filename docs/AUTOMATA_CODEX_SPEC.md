@@ -677,9 +677,9 @@ ProgressReporterは`agent_definition_id`を表示ラベルとして使用し、`
 - **デフォルトプロンプト定義**: [PROMPTS.md](PROMPTS.md)
 
 **システムプリセット（standard_mr_processing）の定義ファイル例**:
-- [グラフ定義](definitions/standard_mr_processing_graph.json)
-- [エージェント定義](definitions/standard_mr_processing_agents.json)
-- [プロンプト定義](definitions/standard_mr_processing_prompts.json)
+- [グラフ定義](definitions/standard_mr_processing_graph.yaml)
+- [エージェント定義](definitions/standard_mr_processing_agents.yaml)
+- [プロンプト定義](definitions/standard_mr_processing_prompts.yaml)
 
 #### 4.4.1 定義ファイルの関係
 
@@ -709,9 +709,9 @@ flowchart LR
 システムプリセット（`is_preset=true`）はDBマイグレーション（初期データ投入スクリプト）によって`workflow_definitions`テーブルに登録される。マイグレーション実行時に以下の2プリセットが存在しない場合に挿入する。
 
 - `standard_mr_processing`: 標準MR処理（コード生成・バグ修正・テスト作成・ドキュメント生成の4タスク対応）
-  - [グラフ定義JSON](definitions/standard_mr_processing_graph.json)
-  - [エージェント定義JSON](definitions/standard_mr_processing_agents.json)
-  - [プロンプト定義JSON](definitions/standard_mr_processing_prompts.json)
+  - [グラフ定義YAML](definitions/standard_mr_processing_graph.yaml)
+  - [エージェント定義YAML](definitions/standard_mr_processing_agents.yaml)
+  - [プロンプト定義YAML](definitions/standard_mr_processing_prompts.yaml)
 - `multi_codegen_mr_processing`: 複数コード生成並列実行（3種類のモデル・温度設定で並列実行し、レビュー時に自動選択）
   - グラフ定義: 標準と同じグラフに並列実行ノードを追加
   - エージェント定義: [AGENT_DEFINITION_SPEC.md セクション4.2](AGENT_DEFINITION_SPEC.md#42-複数コード生成並列エージェント定義multi_codegen_mr_processing)参照

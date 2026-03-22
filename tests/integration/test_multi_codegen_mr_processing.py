@@ -18,6 +18,8 @@ IMPLEMENTATION_PLAN.md フェーズ9-3 に準拠する。
 from __future__ import annotations
 
 import json
+
+import yaml
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -34,9 +36,11 @@ _DEFINITIONS_DIR = Path(__file__).parents[2] / "docs" / "definitions"
 
 
 def _load_definition(filename: str) -> dict[str, Any]:
-    """docs/definitions/ 配下のJSONを読み込む"""
+    """docs/definitions/ 配下のJSONまたはYAMLファイルを読み込む"""
     filepath = _DEFINITIONS_DIR / filename
     with open(filepath, encoding="utf-8") as f:
+        if filepath.suffix in (".yaml", ".yml"):
+            return yaml.safe_load(f)
         return json.load(f)
 
 
@@ -48,9 +52,9 @@ def _make_workflow_definition_row(
 
     複数コード生成並列処理フローの定義を使用する。
     """
-    graph_def = _load_definition("multi_codegen_mr_processing_graph.json")
-    agent_def = _load_definition("multi_codegen_mr_processing_agents.json")
-    prompt_def = _load_definition("multi_codegen_mr_processing_prompts.json")
+    graph_def = _load_definition("multi_codegen_mr_processing_graph.yaml")
+    agent_def = _load_definition("multi_codegen_mr_processing_agents.yaml")
+    prompt_def = _load_definition("multi_codegen_mr_processing_prompts.yaml")
 
     return {
         "id": workflow_id,
@@ -501,7 +505,7 @@ class TestParallelCodeGenerationAgentConfig:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         parallel_agents = [
@@ -521,7 +525,7 @@ class TestParallelCodeGenerationAgentConfig:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         parallel_agents = [
@@ -544,7 +548,7 @@ class TestParallelCodeGenerationAgentConfig:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         agent_config = agent_def.get_agent("code_generation_fast")
@@ -561,7 +565,7 @@ class TestParallelCodeGenerationAgentConfig:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         agent_config = agent_def.get_agent("code_generation_standard")
@@ -578,7 +582,7 @@ class TestParallelCodeGenerationAgentConfig:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         agent_config = agent_def.get_agent("code_generation_creative")
@@ -594,7 +598,7 @@ class TestParallelCodeGenerationAgentConfig:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         parallel_agents = [
@@ -618,8 +622,8 @@ class TestParallelCodeGenerationAgentConfig:
         from shared.models.agent_definition import AgentDefinition
         from shared.models.prompt_definition import PromptDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
-        prompt_def_data = _load_definition("multi_codegen_mr_processing_prompts.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
+        prompt_def_data = _load_definition("multi_codegen_mr_processing_prompts.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
         prompt_def = PromptDefinition.from_dict(prompt_def_data)
 
@@ -660,7 +664,7 @@ class TestMultiCodegenCodeReviewSelection:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         code_review = agent_def.get_agent("code_review")
@@ -676,7 +680,7 @@ class TestMultiCodegenCodeReviewSelection:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         code_review = agent_def.get_agent("code_review")
@@ -692,7 +696,7 @@ class TestMultiCodegenCodeReviewSelection:
         """
         from shared.models.prompt_definition import PromptDefinition
 
-        prompt_def_data = _load_definition("multi_codegen_mr_processing_prompts.json")
+        prompt_def_data = _load_definition("multi_codegen_mr_processing_prompts.yaml")
         prompt_def = PromptDefinition.from_dict(prompt_def_data)
 
         # code_reviewエージェントはcode_review_multiプロンプトを使用する
@@ -710,7 +714,7 @@ class TestMultiCodegenCodeReviewSelection:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         code_review = agent_def.get_agent("code_review")
@@ -901,7 +905,7 @@ class TestMultiCodegenVsStandardDifferences:
         """
         from shared.models.graph_definition import GraphDefinition
 
-        graph_def_data = _load_definition("multi_codegen_mr_processing_graph.json")
+        graph_def_data = _load_definition("multi_codegen_mr_processing_graph.yaml")
         graph_def = GraphDefinition.from_dict(graph_def_data)
 
         node_ids = {node.id for node in graph_def.nodes}
@@ -924,7 +928,7 @@ class TestMultiCodegenVsStandardDifferences:
         from shared.models.graph_definition import GraphDefinition
 
         # multi_codegenグラフ確認
-        multi_graph_data = _load_definition("multi_codegen_mr_processing_graph.json")
+        multi_graph_data = _load_definition("multi_codegen_mr_processing_graph.yaml")
         multi_graph = GraphDefinition.from_dict(multi_graph_data)
         multi_node_ids = {node.id for node in multi_graph.nodes}
         assert (
@@ -932,7 +936,7 @@ class TestMultiCodegenVsStandardDifferences:
         ), "multi_codegenグラフにbranch_merge_executorが存在しません"
 
         # 標準グラフ確認（BranchMergeExecutorは存在しない）
-        std_graph_data = _load_definition("standard_mr_processing_graph.json")
+        std_graph_data = _load_definition("standard_mr_processing_graph.yaml")
         std_graph = GraphDefinition.from_dict(std_graph_data)
         std_node_ids = {node.id for node in std_graph.nodes}
         assert (
@@ -947,7 +951,7 @@ class TestMultiCodegenVsStandardDifferences:
         """
         from shared.models.graph_definition import GraphDefinition
 
-        graph_def_data = _load_definition("multi_codegen_mr_processing_graph.json")
+        graph_def_data = _load_definition("multi_codegen_mr_processing_graph.yaml")
         graph_def = GraphDefinition.from_dict(graph_def_data)
 
         exec_env_node = graph_def.get_node("exec_env_setup_code_gen")
@@ -964,7 +968,7 @@ class TestMultiCodegenVsStandardDifferences:
         """
         from shared.models.graph_definition import GraphDefinition
 
-        graph_def_data = _load_definition("standard_mr_processing_graph.json")
+        graph_def_data = _load_definition("standard_mr_processing_graph.yaml")
         graph_def = GraphDefinition.from_dict(graph_def_data)
 
         exec_env_node = graph_def.get_node("exec_env_setup_code_gen")
@@ -980,7 +984,7 @@ class TestMultiCodegenVsStandardDifferences:
         """
         from shared.models.agent_definition import AgentDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
 
         code_review = agent_def.get_agent("code_review")
@@ -997,8 +1001,8 @@ class TestMultiCodegenVsStandardDifferences:
         from shared.models.agent_definition import AgentDefinition
         from shared.models.prompt_definition import PromptDefinition
 
-        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.json")
-        prompt_def_data = _load_definition("multi_codegen_mr_processing_prompts.json")
+        agent_def_data = _load_definition("multi_codegen_mr_processing_agents.yaml")
+        prompt_def_data = _load_definition("multi_codegen_mr_processing_prompts.yaml")
         agent_def = AgentDefinition.from_dict(agent_def_data)
         prompt_def = PromptDefinition.from_dict(prompt_def_data)
 
