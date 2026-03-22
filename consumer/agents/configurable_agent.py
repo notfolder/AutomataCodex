@@ -76,7 +76,7 @@ class ConfigurableAgent(Executor):
         super().__init__(id=config.node_id or config.id)
 
     @handler(input=Any)
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
+    async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         エージェントノードのメインハンドラ。
 
@@ -112,17 +112,6 @@ class ConfigurableAgent(Executor):
             input_data: dict[str, Any] = {
                 key: ctx.get_state(key) for key in self.config.input_keys
             }
-
-            # ステップ 1.5: ProgressReporter を初期化する（最初の呼び出し時のみ MR に初期コメントを作成）
-            if self.progress_reporter is not None:
-                task_mr_iid: int | None = ctx.get_state("task_mr_iid")
-                if task_mr_iid is not None:
-                    try:
-                        await self.progress_reporter.initialize(ctx, task_mr_iid)
-                    except Exception:
-                        logger.exception(
-                            "ProgressReporter の初期化中にエラーが発生しました。"
-                        )
 
             # ステップ 2: 進捗報告（開始）
             await self.report_progress(ctx=ctx, event="start", details={})

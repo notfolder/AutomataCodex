@@ -217,15 +217,11 @@ class WorkflowFactory:
             except Exception as exc:
                 logger.warning("ユーザー設定の取得に失敗しました: %s", exc)
         try:
-            if user_config is not None:
-                # user_config が取得できた場合は learning_enabled によらず学習ノードを挿入する。
-                # GuidelineLearningAgent がワークフロー最終ノードとして finalize() を
-                # 必ず実行するため、進捗コメントが未完了のまま残ることを防ぐ。
-                # 学習処理が不要な場合（learning_enabled=False）は
-                # GuidelineLearningAgent._process() 内でスキップされる。
+            if user_config and user_config.learning_enabled:
                 self._inject_learning_node(graph_def)
+            self._inject_finalize_node(graph_def)
         except Exception as exc:
-            logger.warning("学習ノード挿入に失敗しました: %s", exc)
+            logger.warning("ノード挿入に失敗しました: %s", exc)
 
         # 4. WorkflowBuilderを生成
         from consumer.factories.workflow_builder import WorkflowBuilder
@@ -297,6 +293,20 @@ class WorkflowFactory:
             node_type = node.type
 
             if node_type == "executor":
+                # progress_finalize ノードは専用 Executor を直接登録する
+                if node_id == "progress_finalize":
+                    from consumer.executors.progress_finalize_executor import (
+                        ProgressFinalizeExecutor,
+                    )
+
+                    finalize_executor = ProgressFinalizeExecutor(
+                        progress_reporter=progress_reporter
+                    )
+                    finalize_executor.id = node_id
+                    builder.add_node(node_id, finalize_executor)
+                    logger.debug("finalize ノードを登録しました: node_id=%s", node_id)
+                    continue
+
                 # ExecutorFactoryからExecutorインスタンスを生成
                 if node.executor_class is None:
                     logger.warning(
@@ -477,6 +487,51 @@ class WorkflowFactory:
             env_ref,
         )
         return None
+
+    def _inject_finalize_node(self, graph_def: GraphDefinition) -> None:
+        """
+        ProgressFinalizeExecutor ノードをワークフローの末尾に常に挿入する。
+
+        learning ノードの有無に関わらず常に呼ばれ、ワークフロー末尾で
+        ProgressReporter.finalize() を実行する専用ノードを配置する。
+
+        Args:
+            graph_def: 変更対象のGraphDefinition（インプレース変更）
+        """
+        from shared.models.graph_definition import (
+            GraphEdgeDefinition,
+            GraphNodeDefinition,
+        )
+
+        # 終了エッジ（to: null）を持つノードを特定する
+        terminal_edges = [edge for edge in graph_def.edges if edge.to_node is None]
+
+        if not terminal_edges:
+            logger.warning(
+                "終了エッジが見つからないため finalize ノードを挿入できません"
+            )
+            return
+
+        # finalize ノードをノードリストに追加する
+        finalize_node = GraphNodeDefinition(
+            id="progress_finalize",
+            type="executor",
+            executor_class="ProgressFinalizeExecutor",
+        )
+        graph_def.nodes.append(finalize_node)
+
+        # 終了エッジを finalize ノードに向け直し、finalize ノードから終了エッジを追加する
+        for edge in terminal_edges:
+            edge.to_node = "progress_finalize"
+            new_terminal_edge = GraphEdgeDefinition.model_validate(
+                {"from": "progress_finalize", "to": None}
+            )
+            graph_def.edges.append(new_terminal_edge)
+
+        logger.info(
+            "finalize ノードをグラフに挿入しました: 変更されたエッジ=%d件",
+            len(terminal_edges),
+        )
 
     def _inject_learning_node(self, graph_def: GraphDefinition) -> None:
         """

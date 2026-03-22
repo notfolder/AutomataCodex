@@ -39,7 +39,7 @@ class TaskContextInitExecutor(BaseExecutor):
         super().__init__(id=self.__class__.__name__)
 
     @handler(input=Any)
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
+    async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         TaskContext の値を WorkflowContext に転写する。
 

@@ -58,7 +58,7 @@ class BaseExecutor(Executor):
         ctx.set_state(key, value)
 
     @abstractmethod
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
+    async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         メッセージを処理して後続ノードへ送信する。
 
@@ -73,7 +73,7 @@ class BaseExecutor(Executor):
         ...
 
 
-class PassthroughExecutor(Executor):
+class PassthroughExecutor(Executor):  # type: ignore[type-arg]
     """
     パススルー Executor
 
@@ -82,7 +82,7 @@ class PassthroughExecutor(Executor):
     """
 
     @handler(input=Any)
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
+    async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         メッセージをそのまま後続ノードへ送信する。
 

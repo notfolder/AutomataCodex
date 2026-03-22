@@ -80,7 +80,7 @@ class GuidelineLearningAgent(Executor):
         super().__init__(id=self.__class__.__name__)
 
     @handler(input=Any)
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
+    async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         ガイドライン学習処理を実行する。
 
@@ -109,19 +109,7 @@ class GuidelineLearningAgent(Executor):
                 exc,
                 exc_info=True,
             )
-        finally:
-            # ワークフロー最終ノードとして ProgressReporter を finalize する
-            if self.progress_reporter is not None:
-                try:
-                    mr_iid: int | None = ctx.get_state("task_mr_iid")
-                    if mr_iid is not None:
-                        await self.progress_reporter.finalize(
-                            ctx, mr_iid, "ワークフロー処理が完了しました"
-                        )
-                except Exception:
-                    logger.exception(
-                        "ProgressReporter の finalize 中にエラーが発生しました。"
-                    )
+        await ctx.send_message(msg)
 
     async def _process(self, ctx: WorkflowContext) -> None:
         """

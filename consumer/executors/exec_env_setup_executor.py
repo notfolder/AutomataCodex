@@ -99,7 +99,7 @@ class ExecEnvSetupExecutor(BaseExecutor):
         return suffix.replace("_", "-")
 
     @handler(input=Any)
-    async def handle(self, msg: Any, ctx: WorkflowContext) -> None:
+    async def handle(self, msg: Any, ctx: WorkflowContext[Any]) -> None:
         """
         実行フェーズの Docker 環境を準備し、必要に応じてサブブランチを作成する。
 

@@ -447,6 +447,7 @@ class TestProgressReporter:
         mock_comment_manager: MagicMock,
     ) -> None:
         """todo_changed eventでcurrent_todo_contentが更新されコメント更新が呼ばれることを確認する"""
+        progress_reporter._initialized = True
         progress_reporter.node_states = {"node_a": "running", "node_b": "pending"}
 
         todo_markdown = "- [x] タスク1\n- [ ] タスク2"
@@ -523,6 +524,7 @@ class TestProgressReporter:
         mock_comment_manager: MagicMock,
     ) -> None:
         """llm_response eventでノード状態は変化せずlatest_llm_responseが更新されることを確認する"""
+        progress_reporter._initialized = True
         progress_reporter.node_states = {"node_a": "running"}
 
         long_response = (

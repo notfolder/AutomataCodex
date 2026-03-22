@@ -141,6 +141,8 @@ class ProgressReporter:
         """
         各イベント発生時に呼び出し、ノード状態を更新してコメントを上書き更新する。
 
+        未初期化の場合は自動的に initialize() を呼び出す（auto-initialize）。
+
         対応イベント:
         - start: ノードを running 状態に更新する
         - complete: ノードを done 状態に更新する
@@ -153,6 +155,17 @@ class ProgressReporter:
             node_id: 対象ノードの識別子
             details: イベント詳細情報
         """
+        # 未初期化なら自動で initialize する（ConfigurableAgent に依存しない自己管理）
+        if not self._initialized:
+            mr_iid: int | None = context.get_state("task_mr_iid")
+            if mr_iid is not None:
+                try:
+                    await self.initialize(context, mr_iid)
+                except Exception:
+                    logger.exception(
+                        "ProgressReporter の自動初期化中にエラーが発生しました。"
+                    )
+
         label = self._get_node_label(node_id)
         timestamp = _now_str()
 

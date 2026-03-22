@@ -25,9 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 # 定義ファイルパス
-_DEFINITIONS_DIR = (
-    Path(__file__).parents[2] / "docs" / "definitions"
-)
+_DEFINITIONS_DIR = Path(__file__).parents[2] / "docs" / "definitions"
 
 
 # ========================================
@@ -110,12 +108,14 @@ def mock_user_config_client() -> MagicMock:
 def mock_gitlab_client() -> MagicMock:
     """GitlabClientのモックを返す"""
     client = MagicMock()
-    client.get_merge_request = AsyncMock(return_value={
-        "iid": 10,
-        "title": "テストMR",
-        "description": "テスト用MRの説明",
-        "source_branch": "feature/test",
-    })
+    client.get_merge_request = AsyncMock(
+        return_value={
+            "iid": 10,
+            "title": "テストMR",
+            "description": "テスト用MRの説明",
+            "source_branch": "feature/test",
+        }
+    )
     client.create_mr_note = AsyncMock()
     client.create_branch = AsyncMock()
     client.merge_branch = MagicMock()
@@ -166,7 +166,9 @@ def _make_agent_factory() -> MagicMock:
 
     factory = MagicMock()
     factory.create_agent = AsyncMock(
-        side_effect=lambda agent_config, **kwargs: PassthroughExecutor(id=agent_config.id)
+        side_effect=lambda agent_config, **kwargs: PassthroughExecutor(
+            id=agent_config.id
+        )
     )
     return factory
 
@@ -270,9 +272,9 @@ class TestMultiCodegenWorkflowBuild:
             "code_generation_creative",
         }
         registered_nodes = set(workflow.executors.keys())
-        assert parallel_agents.issubset(registered_nodes), (
-            f"未登録の並列エージェント: {parallel_agents - registered_nodes}"
-        )
+        assert parallel_agents.issubset(
+            registered_nodes
+        ), f"未登録の並列エージェント: {parallel_agents - registered_nodes}"
 
     async def test_BranchMergeExecutorノードが登録される(
         self,
@@ -286,9 +288,9 @@ class TestMultiCodegenWorkflowBuild:
             task_context=task_context,
         )
 
-        assert "branch_merge_executor" in workflow.executors, (
-            "BranchMergeExecutor（branch_merge_executor）ノードが登録されていません"
-        )
+        assert (
+            "branch_merge_executor" in workflow.executors
+        ), "BranchMergeExecutor（branch_merge_executor）ノードが登録されていません"
 
     async def test_標準フローと同一のExecutorノードが登録される(
         self,
@@ -313,9 +315,9 @@ class TestMultiCodegenWorkflowBuild:
             "exec_env_setup_doc",
         }
         registered_nodes = set(workflow.executors.keys())
-        assert expected_executor_nodes.issubset(registered_nodes), (
-            f"未登録のExecutorノード: {expected_executor_nodes - registered_nodes}"
-        )
+        assert expected_executor_nodes.issubset(
+            registered_nodes
+        ), f"未登録のExecutorノード: {expected_executor_nodes - registered_nodes}"
 
     async def test_バグ修正テスト作成ドキュメント生成エージェントが登録される(
         self,
@@ -338,9 +340,9 @@ class TestMultiCodegenWorkflowBuild:
             "documentation",
         }
         registered_nodes = set(workflow.executors.keys())
-        assert expected_non_codegen_nodes.issubset(registered_nodes), (
-            f"未登録のノード: {expected_non_codegen_nodes - registered_nodes}"
-        )
+        assert expected_non_codegen_nodes.issubset(
+            registered_nodes
+        ), f"未登録のノード: {expected_non_codegen_nodes - registered_nodes}"
 
     async def test_エントリポイントが設定される(
         self,
@@ -368,10 +370,10 @@ class TestMultiCodegenWorkflowBuild:
             task_context=task_context,
         )
 
-        # multi_codegen_mr_processingグラフは31ノードを持つ
-        assert len(workflow.executors) == 31, (
-            f"登録ノード数が不正です: 期待={31}, 実際={len(workflow.executors)}"
-        )
+        # multi_codegen_mr_processingグラフは31ノード + progress_finalizeノード = 32ノードを持つ
+        assert (
+            len(workflow.executors) == 32
+        ), f"登録ノード数が不正です: 期待={32}, 実際={len(workflow.executors)}"
 
 
 # ========================================
@@ -509,9 +511,9 @@ class TestParallelCodeGenerationAgentConfig:
         ]
         for agent_id in parallel_agents:
             agent_config = agent_def.get_agent(agent_id)
-            assert agent_config is not None, (
-                f"並列エージェント定義 '{agent_id}' が見つかりません"
-            )
+            assert (
+                agent_config is not None
+            ), f"並列エージェント定義 '{agent_id}' が見つかりません"
 
     def test_並列エージェントのロールがexecutionである(self) -> None:
         """
@@ -663,9 +665,9 @@ class TestMultiCodegenCodeReviewSelection:
 
         code_review = agent_def.get_agent("code_review")
         assert code_review is not None
-        assert "branch_envs" in code_review.input_keys, (
-            "multi_codegen用code_reviewのinput_keysにbranch_envsが含まれていません"
-        )
+        assert (
+            "branch_envs" in code_review.input_keys
+        ), "multi_codegen用code_reviewのinput_keysにbranch_envsが含まれていません"
 
     def test_code_reviewがselected_implementationを出力キーに持つ(self) -> None:
         """
@@ -679,9 +681,9 @@ class TestMultiCodegenCodeReviewSelection:
 
         code_review = agent_def.get_agent("code_review")
         assert code_review is not None
-        assert "selected_implementation" in code_review.output_keys, (
-            "code_reviewのoutput_keysにselected_implementationが含まれていません"
-        )
+        assert (
+            "selected_implementation" in code_review.output_keys
+        ), "code_reviewのoutput_keysにselected_implementationが含まれていません"
 
     def test_code_review_multiプロンプトが存在する(self) -> None:
         """
@@ -695,11 +697,13 @@ class TestMultiCodegenCodeReviewSelection:
 
         # code_reviewエージェントはcode_review_multiプロンプトを使用する
         code_review_multi_prompt = prompt_def.get_prompt("code_review_multi")
-        assert code_review_multi_prompt is not None, (
-            "code_review_multiプロンプトがプロンプト定義ファイルに存在しません"
-        )
+        assert (
+            code_review_multi_prompt is not None
+        ), "code_review_multiプロンプトがプロンプト定義ファイルに存在しません"
 
-    def test_code_reviewエージェントがcode_review_multiプロンプトを参照している(self) -> None:
+    def test_code_reviewエージェントがcode_review_multiプロンプトを参照している(
+        self,
+    ) -> None:
         """
         multi_codegen用のcode_reviewエージェントのprompt_idが
         code_review_multiを参照していることを確認する。
@@ -738,6 +742,7 @@ class TestBranchMergeExecutorIntegration:
 
         # ダミーのgitlab_clientでexecutorインスタンスを作成してcontextに渡す
         from unittest.mock import MagicMock
+
         dummy_executor = BranchMergeExecutor(gitlab_client=MagicMock())
         s = State()
         for k, v in state.items():
@@ -761,16 +766,18 @@ class TestBranchMergeExecutorIntegration:
         """
         from executors.branch_merge_executor import BranchMergeExecutor
 
-        ctx = self._make_context({
-            "selected_implementation": 2,
-            "branch_envs": {
-                1: {"env_id": "env-001", "branch": "feature/test-code-gen-1"},
-                2: {"env_id": "env-002", "branch": "feature/test-code-gen-2"},
-                3: {"env_id": "env-003", "branch": "feature/test-code-gen-3"},
-            },
-            "original_branch": "feature/test",
-            "project_id": 1,
-        })
+        ctx = self._make_context(
+            {
+                "selected_implementation": 2,
+                "branch_envs": {
+                    1: {"env_id": "env-001", "branch": "feature/test-code-gen-1"},
+                    2: {"env_id": "env-002", "branch": "feature/test-code-gen-2"},
+                    3: {"env_id": "env-003", "branch": "feature/test-code-gen-3"},
+                },
+                "original_branch": "feature/test",
+                "project_id": 1,
+            }
+        )
 
         executor = BranchMergeExecutor(gitlab_client=mock_gitlab_client)
         await executor.handle({}, ctx)
@@ -792,16 +799,18 @@ class TestBranchMergeExecutorIntegration:
         """
         from executors.branch_merge_executor import BranchMergeExecutor
 
-        ctx = self._make_context({
-            "selected_implementation": 2,
-            "branch_envs": {
-                1: {"env_id": "env-001", "branch": "feature/test-code-gen-1"},
-                2: {"env_id": "env-002", "branch": "feature/test-code-gen-2"},
-                3: {"env_id": "env-003", "branch": "feature/test-code-gen-3"},
-            },
-            "original_branch": "feature/test",
-            "project_id": 1,
-        })
+        ctx = self._make_context(
+            {
+                "selected_implementation": 2,
+                "branch_envs": {
+                    1: {"env_id": "env-001", "branch": "feature/test-code-gen-1"},
+                    2: {"env_id": "env-002", "branch": "feature/test-code-gen-2"},
+                    3: {"env_id": "env-003", "branch": "feature/test-code-gen-3"},
+                },
+                "original_branch": "feature/test",
+                "project_id": 1,
+            }
+        )
 
         executor = BranchMergeExecutor(gitlab_client=mock_gitlab_client)
         await executor.handle({}, ctx)
@@ -814,9 +823,7 @@ class TestBranchMergeExecutorIntegration:
         assert deleted_branches == {
             "feature/test-code-gen-1",
             "feature/test-code-gen-3",
-        }, (
-            f"削除されたブランチが不正です: {deleted_branches}"
-        )
+        }, f"削除されたブランチが不正です: {deleted_branches}"
 
     async def test_selected_implementationがない場合はマージをスキップする(
         self,
@@ -830,10 +837,12 @@ class TestBranchMergeExecutorIntegration:
         from executors.branch_merge_executor import BranchMergeExecutor
 
         # selected_implementationなし（バグ修正タスク等）
-        ctx = self._make_context({
-            "original_branch": "feature/bug-fix",
-            "project_id": 1,
-        })
+        ctx = self._make_context(
+            {
+                "original_branch": "feature/bug-fix",
+                "project_id": 1,
+            }
+        )
 
         executor = BranchMergeExecutor(gitlab_client=mock_gitlab_client)
         await executor.handle({}, ctx)
@@ -851,16 +860,18 @@ class TestBranchMergeExecutorIntegration:
         """
         from executors.branch_merge_executor import BranchMergeExecutor
 
-        ctx = self._make_context({
-            "selected_implementation": 1,
-            "branch_envs": {
-                1: {"env_id": "env-001", "branch": "feature/test-code-gen-1"},
-                2: {"env_id": "env-002", "branch": "feature/test-code-gen-2"},
-                3: {"env_id": "env-003", "branch": "feature/test-code-gen-3"},
-            },
-            "original_branch": "feature/test",
-            "project_id": 1,
-        })
+        ctx = self._make_context(
+            {
+                "selected_implementation": 1,
+                "branch_envs": {
+                    1: {"env_id": "env-001", "branch": "feature/test-code-gen-1"},
+                    2: {"env_id": "env-002", "branch": "feature/test-code-gen-2"},
+                    3: {"env_id": "env-003", "branch": "feature/test-code-gen-3"},
+                },
+                "original_branch": "feature/test",
+                "project_id": 1,
+            }
+        )
 
         executor = BranchMergeExecutor(gitlab_client=mock_gitlab_client)
         await executor.handle({}, ctx)
@@ -896,9 +907,9 @@ class TestMultiCodegenVsStandardDifferences:
         node_ids = {node.id for node in graph_def.nodes}
 
         # 単一のcode_generationノードは存在しない
-        assert "code_generation" not in node_ids, (
-            "multi_codegenグラフに単一のcode_generationノードが存在します（不正）"
-        )
+        assert (
+            "code_generation" not in node_ids
+        ), "multi_codegenグラフに単一のcode_generationノードが存在します（不正）"
 
         # 3並列エージェントが存在する
         assert "code_generation_fast" in node_ids
@@ -916,17 +927,17 @@ class TestMultiCodegenVsStandardDifferences:
         multi_graph_data = _load_definition("multi_codegen_mr_processing_graph.json")
         multi_graph = GraphDefinition.from_dict(multi_graph_data)
         multi_node_ids = {node.id for node in multi_graph.nodes}
-        assert "branch_merge_executor" in multi_node_ids, (
-            "multi_codegenグラフにbranch_merge_executorが存在しません"
-        )
+        assert (
+            "branch_merge_executor" in multi_node_ids
+        ), "multi_codegenグラフにbranch_merge_executorが存在しません"
 
         # 標準グラフ確認（BranchMergeExecutorは存在しない）
         std_graph_data = _load_definition("standard_mr_processing_graph.json")
         std_graph = GraphDefinition.from_dict(std_graph_data)
         std_node_ids = {node.id for node in std_graph.nodes}
-        assert "branch_merge_executor" not in std_node_ids, (
-            "標準グラフにbranch_merge_executorが存在します（不正）"
-        )
+        assert (
+            "branch_merge_executor" not in std_node_ids
+        ), "標準グラフにbranch_merge_executorが存在します（不正）"
 
     def test_exec_env_setup_code_genのenv_countが3(self) -> None:
         """
@@ -974,9 +985,9 @@ class TestMultiCodegenVsStandardDifferences:
 
         code_review = agent_def.get_agent("code_review")
         assert code_review is not None
-        assert code_review.role == "review", (
-            f"code_reviewのroleが不正です: 期待=review, 実際={code_review.role}"
-        )
+        assert (
+            code_review.role == "review"
+        ), f"code_reviewのroleが不正です: 期待=review, 実際={code_review.role}"
 
     def test_全エージェントにプロンプト定義が対応している(self) -> None:
         """
