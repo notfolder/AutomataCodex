@@ -106,12 +106,10 @@ flowchart TB
         W1[Planning Agent]
         W2[Execution Agents]
         W3[Review Agents]
-        W4[GuidelineLearningAgent<br/>学習エージェント]
         
         C4 --> W1
         W1 --> W2
         W2 --> W3
-        W3 --> W4
     end
     
     subgraph Runtime ["Runtime Layer"]
@@ -332,14 +330,12 @@ sequenceDiagram
 - `TodoManager`: Todo管理
 - `TokenUsageMiddleware`: トークン統計
 - `DefinitionLoader`: 定義ファイル読み込み
-- `config`: システム全体の設定（ユーザー別学習機能設定はUser Config APIから取得）
-- `gitlab_client`: GitLab APIクライアント（学習ノード生成時のみ使用、他エージェントには渡さない）
+- `config`: システム全体の設定
 
 **主要メソッド**:
 - `create_workflow_from_definition(user_id, task_context)`: ユーザーのワークフロー定義に基づいてWorkflowを生成する
 - `_build_nodes(graph_def, agent_def, prompt_def, user_id)`: グラフ定義の各ノードに対してConfigurableAgentインスタンスを生成する
 - `_setup_plan_environment()`: ワークフロー開始前にpython固定のplan環境を1つ作成し、リポジトリをcloneする。作成した環境IDはコンテキストの`plan_environment_id`キーに保存する
-- `_inject_learning_node(graph_def)`: 学習機能が有効な場合、グラフ定義にGuidelineLearningAgentノードを自動挿入する
 
 **実装方針**:
 1. コンストラクタで各Factory、Manager、Middleware、DefinitionLoaderを保持
@@ -349,38 +345,6 @@ sequenceDiagram
 5. グラフ定義に従って各ノードの確定したenv_idをcreate_agent()に渡し、ConfigurableAgentをWorkflowBuilderに追加する
 6. TokenUsageMiddlewareをWorkflowBuilderに追加する
 7. WorkflowBuilderのbuild()メソッドでWorkflowオブジェクトを生成して返却する
-8. タスク処理開始時にUser Config APIからユーザーの`user_config`を取得し、`user_config.learning_enabled=true`の場合、ワークフロー生成前に`_inject_learning_node()`を呼び出す
-9. 注入された学習ノードはGuidelineLearningAgentインスタンスとして生成し、`gitlab_client`およびuser_configの学習設定を注入する
-
-**学習ノード自動挿入メカニズム**:
-
-`_inject_learning_node(graph_def)`は、学習機能が有効な場合にグラフ定義へ透過的に学習ノードを追加する。
-
-処理手順:
-1. `user_config.learning_enabled`をチェックし、falseの場合は即座に戻る
-2. グラフ定義の`nodes`配列から`is_end_node=true`のノードを検索する
-3. エンドノードへの接続エッジ（例: `review→end`）を特定する
-4. 学習ノード（`node_id="learning"`、`agent_definition_id="guideline_learning"`）を`nodes`配列に追加する
-5. エンドノードへの既存エッジを学習ノードに向け直す（例: `review→learning`）
-6. 学習ノードからエンドノードへのエッジを追加する（例: `learning→end`）
-
-グラフ構造の変化:
-
-```mermaid
-graph LR
-    subgraph "元のグラフ"
-    A1[Planning] --> B1[Execution]
-    B1 --> C1[Review]
-    C1 --> E1[end]
-    end
-
-    subgraph "学習ノード挿入後"
-    A2[Planning] --> B2[Execution]
-    B2 --> C2[Review]
-    C2 --> L2[GuidelineLearningAgent]
-    L2 --> E2[end]
-    end
-```
 
 #### 4.2.2 ExecutorFactory
 
@@ -1136,7 +1100,6 @@ graph TB
         Agent6[ConfigurableAgent<br/>差分計画エージェント]
         Agent7[ConfigurableAgent<br/>リフレクションエージェント]
         AgentN[ConfigurableAgent<br/>その他エージェント]
-        LearningAgent[GuidelineLearningAgent<br/>学習エージェント<br/>GitLabClient保持]
     end
     
     subgraph "MCP/ツール管理層"
@@ -1252,7 +1215,6 @@ graph TB
     AgentFactory -->|Agent生成| Agent7
     AgentFactory -->|Agent生成| AgentN
     AgentFactory -->|create_agentごとに新規生成| MCPClientFactory
-    WorkflowFactory -->|学習ノード自動挿入| LearningAgent
     
     %% Workflow→Agent実行
     Workflow -->|Agent実行| Agent1
@@ -1262,7 +1224,6 @@ graph TB
     Workflow -->|Agent実行| Agent5
     Workflow -->|Agent実行| Agent6
     Workflow -->|Agent実行| Agent7
-    Workflow -->|学習Agent実行| LearningAgent
     
     %% Agent→MCP（各エージェントは専用MCPClientFactoryインスタンスのKernel経由でツール使用）
     Agent1 -->|tools list経由でツール使用| MCPClientFactory
@@ -1300,11 +1261,6 @@ graph TB
     Agent1 -->|進捗報告| ProgressReporter
     Agent2 -->|進捗報告| ProgressReporter
     Agent3 -->|進捗報告| ProgressReporter
-    LearningAgent -->|進捗報告| ProgressReporter
-    
-    %% 学習エージェントの外部操作
-    LearningAgent -->|MRコメント取得/投稿| GitLabClient
-    LearningAgent -.->|PROJECT_GUIDELINES.md更新<br/>commit & push| GitLabClient
     
     %% データベース
     ContextManager -->|読み書き| PostgreSQL
@@ -1327,7 +1283,6 @@ graph TB
     style ExecutorFactory fill:#f5e1ff
     style ContextManager fill:#f0f0f0
     style EnvManager fill:#e8f5e9
-    style LearningAgent fill:#e8ffe8
     style TaskStrategyFactory fill:#ffe8e1
 ```
 
@@ -3005,248 +2960,6 @@ File not found: /path/to/file.py
 #### ログ記録
 
 エラー発生時は、task_uuid・tool_name・error_type・error_message・traceback・retry_countを含む構造化ログをエラーレベルで記録する。
-
----
-
-## 11. 学習機能（Self-Learning System）
-
-### 11.1 概要と目的
-
-ワークフロー終了時にユーザーのMRコメントから自動的にガイドラインを学習し、PROJECT_GUIDELINES.mdを更新する機能。タスク処理の自然なサイクルの中でPROJECT_GUIDELINES.mdが成長し、システムの品質が向上する。
-
-**目的**:
-- ユーザーフィードバックから汎用的なルールを自動抽出
-- プロジェクト固有の知見を体系的に蓄積
-- 同じ指摘の繰り返しを防止
-- ユーザー負担を軽減（明示的なガイドライン更新作業が不要）
-
-**特徴**:
-- データベース不要（ファイルベース）
-- リアルタイム更新のみ（バッチ処理なし）
-- グラフノードとして透過的に動作
-- 設定でデフォルト有効
-
-### 11.2 GuidelineLearningAgent
-
-#### 基本設計
-
-**継承元**: `BaseExecutor`（本システム共通Executor基底クラス）
-
-**責務**: ワークフロー最終段階でユーザーフィードバックを学習してPROJECT_GUIDELINES.mdを更新する
-
-**特徴**:
-- グラフ定義ファイルに記載不要（WorkflowFactoryが自動挿入）
-- 例外的に`GitLabClient`を保持してファイルコミット操作（PROJECT_GUIDELINES.md更新）が可能
-- 他のエージェント（ConfigurableAgent等）と異なり固定実装
-- 学習失敗してもワークフローは継続（エラー耐性）
-
-#### 保持する依存性
-
-- `config`: 学習機能の設定
-- `gitlab_client`: GitLab API操作（例外的に保持）
-- `progress_reporter`: 進捗報告機能
-
-#### 主要処理フロー
-
-`handle(self, msg, ctx: WorkflowContext)`メソッドで以下を実行する：
-
-1. **学習機能有効性チェック**: 設定で無効な場合は即座に終了
-2. **タスク情報取得**: ワークフローコンテキストからタスク情報を取得
-3. **MRコメント取得**: GitLab APIでMRコメント一覧を取得し、以下の条件でフィルタリング
-   - タスク開始時刻以降のコメントのみ
-   - 人間が投稿したコメントのみ（Botコメントを除外）
-4. **ガイドライン読み込み**: PROJECT_GUIDELINES.mdを読み込む（存在しない場合は初期テンプレートを使用）
-5. **LLM判断**: Agent標準機能を使用してLLMに単一呼び出し
-   - 入力: ユーザーコメント、現在のガイドライン、タスクコンテキスト
-   - 出力: JSON形式（should_update, updated_guidelines, rationale, category）
-6. **ガイドライン更新**: 更新が必要な場合のみ実行
-   - ファイル書き込み
-   - git commit & push（例外的に許可）
-   - MRコメント投稿（更新通知）
-7. **応答返却**: AgentResponseを返してワークフロー継続
-
-#### LLMプロンプト設計
-
-**システムプロンプト**:
-
-プロジェクトのガイドライン管理者として、ユーザーのフィードバックから一般化可能なルールを抽出する役割を担う。以下の判断基準で評価する：
-
-- **汎用性**: このルールは他のタスクでも適用できるか
-- **妥当性**: ルールは合理的で制限が厳しすぎないか
-- **新規性**: 既存のガイドラインに含まれていないか
-- **明確性**: ルールは明確で誤解の余地がないか
-
-**ユーザープロンプト構成**:
-
-- タスク情報（タスク種別、タイトル、説明）
-- ユーザーコメント一覧（投稿者名、本文）
-- 現在のPROJECT_GUIDELINES.md全文
-- 抽出対象（含めるべきもの）と除外対象（含めないもの）の明示
-- 出力形式の指定（JSON）
-
-**出力形式**:
-
-JSON形式で以下を含む：
-- `should_update`: 更新が必要か（true/false）
-- `rationale`: 更新判断の理由（日本語）
-- `category`: カテゴリ（documentation, code, review, workflow, general）
-- `updated_guidelines`: 更新後のPROJECT_GUIDELINES.md全文（更新時のみ）
-
-### 11.3 処理フロー
-
-```mermaid
-sequenceDiagram
-    participant WF as WorkflowFactory
-    participant Graph as Workflow Graph
-    participant LA as GuidelineLearningAgent
-    participant GL as GitLab API
-    participant LLM as LLM
-    participant Git as Git Repository
-    
-    Note over WF: ワークフロー生成時
-    WF->>WF: load_graph_definition()
-    WF->>UserAPI: get_user_config(username)
-    UserAPI-->>WF: learning_enabled他学習設定
-    WF->>WF: check user_config.learning_enabled
-    
-    alt user_config.learning_enabled = true
-        WF->>Graph: 学習ノードを自動挿入<br/>review→learning→end
-        WF->>LA: GuidelineLearningAgent生成<br/>（gitlab_client注入）
-        WF->>LA: user_configの学習設定を注入
-    end
-    
-    Note over Graph: ワークフロー実行時
-    Graph->>Graph: Planning実行
-    Graph->>Graph: Execution実行
-    Graph->>Graph: Review実行
-    Graph->>LA: invoke_async()<br/>学習ノード自動実行
-    
-    LA->>GL: get_mr_comments()<br/>（人間コメントのみ）
-    GL-->>LA: コメント一覧
-    
-    LA->>Git: read_file(PROJECT_GUIDELINES.md)
-    Git-->>LA: 現在の内容
-    
-    LA->>LLM: get_chat_completion()<br/>（判断+更新内容生成）
-    LLM-->>LA: JSON応答
-    
-    alt should_update = true
-        LA->>Git: write_file(PROJECT_GUIDELINES.md)
-        LA->>Git: commit_and_push()<br/>（例外的に許可）
-        LA->>GL: post_mr_comment()<br/>「ガイドライン更新」
-    end
-    
-    LA-->>Graph: AgentResponse(success=True)
-    Graph->>Graph: ワークフロー完了
-```
-
-### 11.4 設定
-
-学習機能の各パラメータはシステムのconfig.yamlではなく、ユーザー管理画面（SC-04/SC-05/SC-06/SC-13）でユーザーごとに設定・変更する。デフォルト値は全ユーザーで共通。
-
-**設定項目**（`user_configs`テーブルの学習機能関連カラム）:
-
-- `learning_enabled`: 学習機能の有効/無効（デフォルト: true。trueでノード自動挿入、falseで挿入しない）
-- `learning_llm_model`: 判断用LLMモデル（デフォルト: 'gpt-4o'。ユーザーの通常タスク用モデル（model_name）とは独立して設定できる）
-- `learning_llm_temperature`: LLM温度パラメータ（デフォルト: 0.3。低めで安定した判断）
-- `learning_llm_max_tokens`: 最大トークン数（デフォルト: 8000。全文生成のため多めに設定）
-- `learning_exclude_bot_comments`: Botコメントを除外するか（デフォルト: true）
-- `learning_only_after_task_start`: タスク開始後のコメントのみ対象とするか（デフォルト: true）
-
-**設定の検証範囲**: learning_llm_temperature (0.0〜2.0)、learning_llm_max_tokens (1,000〜32,000)
-
-### 11.5 例外処理：git操作の許可
-
-#### 設計原則
-
-**原則**: 通常のエージェント（ConfigurableAgent等）はgit commit & push操作を行わない。コード変更はMCPツール（text-editor）経由で行い、git操作はワークフロー外で実行する。
-
-**例外**: GuidelineLearningAgentのみが例外的にgit commit & pushを実行する。
-
-#### 例外の理由
-
-- ガイドライン更新は特殊な操作であり、ワークフロー内で完結させる必要がある
-- PROJECT_GUIDELINES.mdはコード実装とは独立したメタデータである
-- 更新履歴をGit履歴で追跡可能にする必要がある
-- セキュリティリスクを局所化（1つのエージェントクラスのみに制限）
-
-#### 実装上の制御
-
-- GuidelineLearningAgentのコンストラクタでのみgitlab_clientを注入
-- 他のエージェント（ConfigurableAgent）はこのクライアントを保持しない
-- コードレビュー時に例外処理であることを明示的に確認
-
-### 11.6 エラーハンドリング
-
-学習処理が失敗してもワークフローは継続する。
-
-**エラー処理方針**:
-
-- すべての処理をtry-exceptブロックで囲む
-- 例外発生時はエラーログを記録し、`AgentResponse(success=False)`を返す
-- ワークフローエンジンはfalse応答でもワークフローを継続
-- 学習はオプショナルな機能であり、失敗してもタスク自体は成功とみなす
-
-**エラー種別と対応**:
-
-- GitLab API エラー: ログ記録して継続（コメント取得失敗は致命的ではない）
-- ファイル読み込みエラー: 初期テンプレートを使用して継続
-- LLM呼び出しエラー: リトライ（最大3回）後、失敗したら継続
-- JSON解析エラー: ログ記録して継続（LLM応答が不正な場合）
-- Git操作エラー: ログ記録して継続（競合等）
-
-### 11.7 PROJECT_GUIDELINES.md構造
-
-YAMLフロントマター形式でシステムプロンプトに自動組み込まれる。
-
-**ファイル構造**:
-
-```markdown
----
-name: ProjectGuidelines
-about: タスク処理から学習したプロジェクトガイドライン
----
-
-# プロジェクトガイドライン
-
-本ファイルは、タスク処理中のユーザーフィードバックから自動的に学習・更新されます。
-
-## 1. ドキュメント作成ガイドライン
-
-### ER図は全エンティティを省略せず描くこと
-
-**理由**: データベース設計の全体像を正確に把握するため
-**出典**: タスクXYZ（2026/03/09）
-
-### コード例は記述せず、日本語で処理を記述すること
-
-**理由**: 仕様書はコード実装の前段階であり、コード例は実装時の制約となるため
-**出典**: 複数のタスクで指摘
-
-## 2. コード実装ガイドライン
-
-（LLMが自動追加）
-
-## 3. レビューガイドライン
-
-（LLMが自動追加）
-
-## 4. ワークフローガイドライン
-
-（LLMが自動追加）
-
-## 5. 一般ガイドライン
-
-（LLMが自動追加）
-```
-
-**カテゴリ別セクション**:
-
-- documentation: ドキュメント作成の規約
-- code: コード実装の規約
-- review: レビュー観点
-- workflow: ワークフロー実行の基準
-- general: その他の一般的なルール
 
 ---
 

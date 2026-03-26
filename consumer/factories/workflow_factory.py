@@ -18,7 +18,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from consumer.agents.guideline_learning_agent import GuidelineLearningAgent
     from consumer.definitions.definition_loader import DefinitionLoader
     from consumer.factories.agent_factory import AgentFactory
     from consumer.factories.executor_factory import ExecutorFactory
@@ -32,7 +31,6 @@ if TYPE_CHECKING:
         WorkflowDefinitionRepository,
     )
     from shared.database.repositories.task_repository import TaskRepository
-    from shared.database.repositories.token_usage_repository import TokenUsageRepository
     from shared.gitlab_client.gitlab_client import GitlabClient
     from shared.models.agent_definition import AgentDefinition, AgentNodeConfig
     from shared.models.graph_definition import GraphDefinition, GraphNodeDefinition
@@ -81,6 +79,7 @@ class WorkflowFactory:
         workflow_exec_state_repo: ワークフロー実行状態リポジトリ
         workflow_def_repo: ワークフロー定義リポジトリ
         task_repository: タスクリポジトリ（resume_workflow() でのタスク復元に使用）
+        middlewares: 各agentノード実行フェーズに介入する IMiddleware のリスト
         _current_task_context: 現在処理中のTaskContext
         _current_workflow: 現在実行中のWorkflowインスタンス
         _current_execution_id: 現在のワークフロー実行ID
@@ -98,7 +97,6 @@ class WorkflowFactory:
         workflow_def_repo: WorkflowDefinitionRepository | None = None,
         task_repository: TaskRepository | None = None,
         middlewares: list[Any] | None = None,
-        token_usage_repository: TokenUsageRepository | None = None,
     ) -> None:
         """
         WorkflowFactoryを初期化する。
@@ -108,13 +106,12 @@ class WorkflowFactory:
             executor_factory: Executorファクトリ
             agent_factory: Agentファクトリ
             user_config_client: ユーザー設定クライアント
-            gitlab_client: GitLab APIクライアント（学習ノード生成時のみ使用）
+            gitlab_client: GitLab APIクライアント
             config_manager: 設定管理クラス
             workflow_exec_state_repo: ワークフロー実行状態リポジトリ（停止・再開用）
             workflow_def_repo: ワークフロー定義リポジトリ
             task_repository: タスクリポジトリ（resume_workflow() でのタスク復元に使用）
             middlewares: 各agentノード実行フェーズに介入する IMiddleware のリスト（省略時は空リスト）
-            token_usage_repository: ガイドライン学習ノードのトークン使用量記録用リポジトリ（省略時は記録しない）
         """
         self.definition_loader = definition_loader
         self.executor_factory = executor_factory
@@ -127,8 +124,6 @@ class WorkflowFactory:
         self.task_repository = task_repository
         # after_execution / on_error フェーズで各 ConfigurableAgent に注入するミドルウェアリスト
         self.middlewares: list[Any] = middlewares if middlewares is not None else []
-        # GuidelineLearningAgent のトークン使用量記録用リポジトリ
-        self.token_usage_repository = token_usage_repository
 
         # 現在実行中のワークフロー情報
         self._current_task_context: TaskContext | None = None
@@ -166,7 +161,7 @@ class WorkflowFactory:
         処理フロー:
         1. ユーザーのワークフロー定義IDを取得
         2. DefinitionLoaderでグラフ・エージェント・プロンプト定義をロード
-        3. User ConfigからlearningEnabledを確認し、必要なら学習ノードを挿入
+        3. ユーザー設定を取得しノード挿入を実行
         4. WorkflowBuilderを生成
         5. _build_nodes()でノードを生成してWorkflowBuilderに登録
         6. エッジを追加
@@ -215,7 +210,7 @@ class WorkflowFactory:
             await self.definition_loader.load_workflow_definition(definition_id)
         )
 
-        # 3. 学習ノード挿入（インプレースでgraph_defを変更する）
+        # 3. ユーザー設定取得・ノード挿入
         username = task_context.username or ""
         user_config: UserConfig | None = task_context.cached_user_config
         if user_config is None:
@@ -226,8 +221,6 @@ class WorkflowFactory:
             except Exception as exc:
                 logger.warning("ユーザー設定の取得に失敗しました: %s", exc)
         try:
-            if user_config and user_config.learning_enabled:
-                self._inject_learning_node(graph_def)
             self._inject_finalize_node(graph_def)
         except Exception as exc:
             logger.warning("ノード挿入に失敗しました: %s", exc)
@@ -338,18 +331,6 @@ class WorkflowFactory:
                 )
 
             elif node_type == "agent":
-                # 学習ノードの場合は専用の GuidelineLearningAgent を登録する
-                # （_inject_learning_node() が type="agent" で挿入するため、
-                #  ここで先に処理しないと agent_def から定義が見つからずスキップされる）
-                if node_id == "learning":
-                    if user_config is not None:
-                        learning_agent = self._create_learning_agent(
-                            user_config, progress_reporter
-                        )
-                        builder.add_node(node_id, learning_agent)
-                        logger.debug("学習ノードを登録しました: node_id=%s", node_id)
-                    continue
-
                 # AgentFactoryからConfigurableAgentインスタンスを生成
                 if node.agent_definition_id is None:
                     logger.warning(
@@ -503,7 +484,7 @@ class WorkflowFactory:
         """
         ProgressFinalizeExecutor ノードをワークフローの末尾に常に挿入する。
 
-        learning ノードの有無に関わらず常に呼ばれ、ワークフロー末尾で
+        ワークフロー末尾で
         ProgressReporter.finalize() を実行する専用ノードを配置する。
 
         Args:
@@ -542,76 +523,6 @@ class WorkflowFactory:
         logger.info(
             "finalize ノードをグラフに挿入しました: 変更されたエッジ=%d件",
             len(terminal_edges),
-        )
-
-    def _inject_learning_node(self, graph_def: GraphDefinition) -> None:
-        """
-        GuidelineLearningAgentノードをワークフローの末尾に自動挿入する。
-
-        学習ノードは is_end_node のノードの直前に挿入される。
-        グラフ定義への明示的記載は不要。
-
-        AUTOMATA_CODEX_SPEC.md § 4.2.1 学習ノード自動挿入メカニズム に準拠する。
-
-        Args:
-            graph_def: 変更対象のGraphDefinition（インプレース変更）
-        """
-        from shared.models.graph_definition import (
-            GraphEdgeDefinition,
-            GraphNodeDefinition,
-        )
-
-        # 終了エッジ（to: null）を持つノードを特定する
-        terminal_edges = [edge for edge in graph_def.edges if edge.to_node is None]
-
-        if not terminal_edges:
-            logger.warning("終了エッジが見つからないため学習ノードを挿入できません")
-            return
-
-        # 学習ノードをノードリストに追加する
-        learning_node = GraphNodeDefinition(
-            id="learning",
-            type="agent",
-            agent_definition_id="guideline_learning",
-        )
-        graph_def.nodes.append(learning_node)
-
-        # 終了エッジを学習ノードに向け直し、学習ノードから終了エッジを追加する
-        for edge in terminal_edges:
-            from_node = edge.from_node
-            # 既存の終了エッジを学習ノードに向け直す
-            edge.to_node = "learning"
-            # 学習ノードから元の終了（null）へのエッジを追加する
-            new_terminal_edge = GraphEdgeDefinition.model_validate(
-                {"from": "learning", "to": None}
-            )
-            graph_def.edges.append(new_terminal_edge)
-
-        logger.info(
-            "学習ノードをグラフに挿入しました: 変更されたエッジ=%d件",
-            len(terminal_edges),
-        )
-
-    def _create_learning_agent(
-        self, user_config: UserConfig, progress_reporter: Any = None
-    ) -> GuidelineLearningAgent:
-        """
-        GuidelineLearningAgentインスタンスを生成する。
-
-        Args:
-            user_config: ユーザー設定
-            progress_reporter: 進捗報告インスタンス（省略可能）
-
-        Returns:
-            GuidelineLearningAgentインスタンス
-        """
-        from consumer.agents.guideline_learning_agent import GuidelineLearningAgent
-
-        return GuidelineLearningAgent(
-            user_config=user_config,
-            gitlab_client=self.gitlab_client,
-            progress_reporter=progress_reporter,
-            token_usage_repository=self.token_usage_repository,
         )
 
     async def save_workflow_state(

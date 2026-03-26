@@ -91,13 +91,6 @@ class UserCreateRequest(BaseModel):
     keep_recent_messages: int = 10
     min_to_compress: int = 5
     min_compression_ratio: float = 0.8
-    # 学習機能設定
-    learning_enabled: bool = True
-    learning_llm_model: str = "gpt-4o"
-    learning_llm_temperature: float = 0.3
-    learning_llm_max_tokens: int = 8000
-    learning_exclude_bot_comments: bool = True
-    learning_only_after_task_start: bool = True
 
     @field_validator("password")
     @classmethod
@@ -184,13 +177,6 @@ class UserUpdateRequest(BaseModel):
     keep_recent_messages: int | None = None
     min_to_compress: int | None = None
     min_compression_ratio: float | None = None
-    # 学習機能設定
-    learning_enabled: bool | None = None
-    learning_llm_model: str | None = None
-    learning_llm_temperature: float | None = None
-    learning_llm_max_tokens: int | None = None
-    learning_exclude_bot_comments: bool | None = None
-    learning_only_after_task_start: bool | None = None
 
     @field_validator("role")
     @classmethod
@@ -497,7 +483,7 @@ async def create_user(
     新規ユーザーを登録する（管理者専用）。
 
     パスワードは bcrypt でハッシュ化（コストファクタ12）して保存する。
-    ユーザー設定（LLM設定、学習機能設定）も同時に作成する。
+    ユーザー設定（LLM設定）も同時に作成する。
     """
     password_hash = hash_password(body.password)
 
@@ -527,12 +513,6 @@ async def create_user(
             keep_recent_messages=body.keep_recent_messages,
             min_to_compress=body.min_to_compress,
             min_compression_ratio=body.min_compression_ratio,
-            learning_enabled=body.learning_enabled,
-            learning_llm_model=body.learning_llm_model,
-            learning_llm_temperature=body.learning_llm_temperature,
-            learning_llm_max_tokens=body.learning_llm_max_tokens,
-            learning_exclude_bot_comments=body.learning_exclude_bot_comments,
-            learning_only_after_task_start=body.learning_only_after_task_start,
         )
     except asyncpg.UniqueViolationError:
         raise HTTPException(
@@ -600,7 +580,7 @@ async def update_user(
         if updated_user:
             user = updated_user
 
-    # user_configs テーブルの更新（LLM設定・学習設定）
+    # user_configs テーブルの更新（LLM設定）
     llm_fields = [
         body.llm_provider,
         body.api_key,
@@ -617,12 +597,6 @@ async def update_user(
         body.keep_recent_messages,
         body.min_to_compress,
         body.min_compression_ratio,
-        body.learning_enabled,
-        body.learning_llm_model,
-        body.learning_llm_temperature,
-        body.learning_llm_max_tokens,
-        body.learning_exclude_bot_comments,
-        body.learning_only_after_task_start,
     ]
     if any(v is not None for v in llm_fields):
         await user_repo.update_user_config(
@@ -642,12 +616,6 @@ async def update_user(
             keep_recent_messages=body.keep_recent_messages,
             min_to_compress=body.min_to_compress,
             min_compression_ratio=body.min_compression_ratio,
-            learning_enabled=body.learning_enabled,
-            learning_llm_model=body.learning_llm_model,
-            learning_llm_temperature=body.learning_llm_temperature,
-            learning_llm_max_tokens=body.learning_llm_max_tokens,
-            learning_exclude_bot_comments=body.learning_exclude_bot_comments,
-            learning_only_after_task_start=body.learning_only_after_task_start,
         )
 
     return {

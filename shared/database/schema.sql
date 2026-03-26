@@ -46,12 +46,6 @@ CREATE TABLE IF NOT EXISTS user_configs (
     keep_recent_messages          INTEGER   NOT NULL DEFAULT 10,
     min_to_compress               INTEGER   NOT NULL DEFAULT 5,
     min_compression_ratio         REAL      NOT NULL DEFAULT 0.8,
-    learning_enabled              BOOLEAN   NOT NULL DEFAULT true,
-    learning_llm_model            TEXT      NOT NULL DEFAULT 'gpt-4o',
-    learning_llm_temperature      REAL      NOT NULL DEFAULT 0.3,
-    learning_llm_max_tokens       INTEGER   NOT NULL DEFAULT 8000,
-    learning_exclude_bot_comments BOOLEAN   NOT NULL DEFAULT true,
-    learning_only_after_task_start BOOLEAN  NOT NULL DEFAULT true,
     created_at                    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at                    TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE

@@ -315,12 +315,6 @@ class UserRepository:
         keep_recent_messages: int = 10,
         min_to_compress: int = 5,
         min_compression_ratio: float = 0.8,
-        learning_enabled: bool = True,
-        learning_llm_model: str = "gpt-4o",
-        learning_llm_temperature: float = 0.3,
-        learning_llm_max_tokens: int = 8000,
-        learning_exclude_bot_comments: bool = True,
-        learning_only_after_task_start: bool = True,
     ) -> dict[str, Any]:
         """
         ユーザー設定を作成する。
@@ -344,12 +338,6 @@ class UserRepository:
             keep_recent_messages: 最新から保持するメッセージ数
             min_to_compress: 圧縮する最小メッセージ数
             min_compression_ratio: 圧縮率の最小値
-            learning_enabled: 学習機能有効フラグ
-            learning_llm_model: 学習用LLMモデル名
-            learning_llm_temperature: 学習用LLM温度パラメータ
-            learning_llm_max_tokens: 学習用最大トークン数
-            learning_exclude_bot_comments: Botコメントを学習対象から除外するか
-            learning_only_after_task_start: タスク開始後のコメントのみ学習対象とするか
 
         Returns:
             作成したuser_configsレコード辞書
@@ -368,18 +356,12 @@ class UserRepository:
                     username, llm_provider, api_key_encrypted, model_name,
                     temperature, max_tokens, top_p, frequency_penalty, presence_penalty,
                     base_url, timeout, context_compression_enabled, token_threshold,
-                    keep_recent_messages, min_to_compress, min_compression_ratio,
-                    learning_enabled, learning_llm_model, learning_llm_temperature,
-                    learning_llm_max_tokens, learning_exclude_bot_comments,
-                    learning_only_after_task_start
+                    keep_recent_messages, min_to_compress, min_compression_ratio
                 ) VALUES (
                     $1, $2, $3, $4,
                     $5, $6, $7, $8, $9,
                     $10, $11, $12, $13,
-                    $14, $15, $16,
-                    $17, $18, $19,
-                    $20, $21,
-                    $22
+                    $14, $15, $16
                 )
                 RETURNING *
                 """,
@@ -399,12 +381,6 @@ class UserRepository:
                 keep_recent_messages,
                 min_to_compress,
                 min_compression_ratio,
-                learning_enabled,
-                learning_llm_model,
-                learning_llm_temperature,
-                learning_llm_max_tokens,
-                learning_exclude_bot_comments,
-                learning_only_after_task_start,
             )
         return dict(row)
 
@@ -461,12 +437,6 @@ class UserRepository:
         keep_recent_messages: int | None = None,
         min_to_compress: int | None = None,
         min_compression_ratio: float | None = None,
-        learning_enabled: bool | None = None,
-        learning_llm_model: str | None = None,
-        learning_llm_temperature: float | None = None,
-        learning_llm_max_tokens: int | None = None,
-        learning_exclude_bot_comments: bool | None = None,
-        learning_only_after_task_start: bool | None = None,
     ) -> dict[str, Any] | None:
         """
         ユーザー設定を更新する。
@@ -501,12 +471,6 @@ class UserRepository:
             "keep_recent_messages": keep_recent_messages,
             "min_to_compress": min_to_compress,
             "min_compression_ratio": min_compression_ratio,
-            "learning_enabled": learning_enabled,
-            "learning_llm_model": learning_llm_model,
-            "learning_llm_temperature": learning_llm_temperature,
-            "learning_llm_max_tokens": learning_llm_max_tokens,
-            "learning_exclude_bot_comments": learning_exclude_bot_comments,
-            "learning_only_after_task_start": learning_only_after_task_start,
         }
 
         for field_name, value in field_map.items():

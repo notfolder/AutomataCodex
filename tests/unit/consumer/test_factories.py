@@ -861,7 +861,6 @@ class TestWorkflowFactory:
         """テスト用UserConfigClientモックを返す"""
         client = MagicMock()
         user_config = MagicMock()
-        user_config.learning_enabled = False
         client.get_user_config = AsyncMock(return_value=user_config)
         client.get_user_workflow_setting = AsyncMock(
             return_value={"workflow_definition_id": 1}

@@ -32,12 +32,6 @@ class UserConfig:
         temperature: 生成温度
         max_tokens: 最大生成トークン数
         base_url: OpenAI互換エンドポイントURL（Ollama/LM Studio用）
-        learning_enabled: 学習機能の有効フラグ
-        learning_llm_model: 学習判断用LLMモデル
-        learning_llm_temperature: 学習用LLM温度
-        learning_llm_max_tokens: 学習用LLM最大トークン数
-        learning_exclude_bot_comments: Botコメントを除外するフラグ
-        learning_only_after_task_start: タスク開始後コメントのみ対象とするフラグ
         workflow_definition_id: ユーザーが選択中のワークフロー定義ID
     """
 
@@ -57,21 +51,6 @@ class UserConfig:
         self.base_url: str | None = data.get("base_url")
         # base_urlはOllama/LM Studio等のOpenAI互換エンドポイントURL。
         # Noneの場合はプロバイダーのデフォルトURLが使用される（OpenAIの場合はhttps://api.openai.com/v1）。
-        # 学習機能設定
-        self.learning_enabled: bool = bool(data.get("learning_enabled", False))
-        self.learning_llm_model: str = data.get("learning_llm_model", "gpt-4o")
-        self.learning_llm_temperature: float = float(
-            data.get("learning_llm_temperature", 0.3)
-        )
-        self.learning_llm_max_tokens: int = int(
-            data.get("learning_llm_max_tokens", 8000)
-        )
-        self.learning_exclude_bot_comments: bool = bool(
-            data.get("learning_exclude_bot_comments", True)
-        )
-        self.learning_only_after_task_start: bool = bool(
-            data.get("learning_only_after_task_start", True)
-        )
         # ワークフロー設定
         self.workflow_definition_id: int | None = data.get("workflow_definition_id")
 
@@ -90,12 +69,6 @@ class UserConfig:
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "base_url": self.base_url,
-            "learning_enabled": self.learning_enabled,
-            "learning_llm_model": self.learning_llm_model,
-            "learning_llm_temperature": self.learning_llm_temperature,
-            "learning_llm_max_tokens": self.learning_llm_max_tokens,
-            "learning_exclude_bot_comments": self.learning_exclude_bot_comments,
-            "learning_only_after_task_start": self.learning_only_after_task_start,
             "workflow_definition_id": self.workflow_definition_id,
         }
 
@@ -196,7 +169,7 @@ class UserConfigClient:
         GitLabユーザー名からユーザー設定を取得する。
 
         User Config APIの GET /api/v1/config/{username} エンドポイントを呼び出し、
-        ユーザーのLLM設定・APIキー・学習機能設定を取得する。
+        ユーザーのLLM設定・APIキー設定を取得する。
 
         USER_MANAGEMENT_SPEC.md § 6.1 に準拠する。
 

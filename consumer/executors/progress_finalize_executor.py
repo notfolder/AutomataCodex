@@ -2,7 +2,7 @@
 ProgressFinalizeExecutor モジュール
 
 ワークフローの最終ノードとして ProgressReporter.finalize() を呼び出す専用 Executor。
-learning ノードの有無に関わらず、常にワークフロー末尾に自動挿入される。
+常にワークフロー末尾に自動挿入される。
 
 CLASS_IMPLEMENTATION_SPEC.md § 3（Executor群）に準拠する。
 """

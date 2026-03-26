@@ -98,7 +98,6 @@ def mock_user_config_client() -> MagicMock:
     """UserConfigClientのモックを返す"""
     client = MagicMock()
     user_config = MagicMock()
-    user_config.learning_enabled = False
     user_config.openai_api_key = "test-api-key"
     user_config.model_name = "gpt-4o"
     client.get_user_config = AsyncMock(return_value=user_config)

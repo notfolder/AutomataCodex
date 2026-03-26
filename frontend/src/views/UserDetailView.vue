@@ -119,59 +119,6 @@
         </v-card-text>
       </v-card>
 
-      <!-- 学習機能設定 -->
-      <v-card class="mb-4">
-        <v-card-title>学習機能設定</v-card-title>
-        <v-card-text>
-          <v-row>
-            <v-col cols="12" md="6">
-              <v-list density="compact">
-                <v-list-item title="学習機能">
-                  <template #subtitle>
-                    <v-chip
-                      :color="user.learning_enabled ? 'success' : 'default'"
-                      size="small"
-                      label
-                    >
-                      {{ user.learning_enabled ? '有効' : '無効' }}
-                    </v-chip>
-                  </template>
-                </v-list-item>
-                <v-list-item title="学習LLMモデル" :subtitle="user.learning_llm_model || '-'" />
-                <v-list-item title="学習LLM Temperature" :subtitle="user.learning_llm_temperature?.toString() || '-'" />
-              </v-list>
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-list density="compact">
-                <v-list-item title="学習LLM Max Tokens" :subtitle="user.learning_llm_max_tokens?.toString() || '-'" />
-                <v-list-item title="Botコメントを除外">
-                  <template #subtitle>
-                    <v-chip
-                      :color="user.learning_exclude_bot_comments ? 'info' : 'default'"
-                      size="small"
-                      label
-                    >
-                      {{ user.learning_exclude_bot_comments ? 'はい' : 'いいえ' }}
-                    </v-chip>
-                  </template>
-                </v-list-item>
-                <v-list-item title="タスク開始後のみ学習">
-                  <template #subtitle>
-                    <v-chip
-                      :color="user.learning_only_after_task_start ? 'info' : 'default'"
-                      size="small"
-                      label
-                    >
-                      {{ user.learning_only_after_task_start ? 'はい' : 'いいえ' }}
-                    </v-chip>
-                  </template>
-                </v-list-item>
-              </v-list>
-            </v-col>
-          </v-row>
-        </v-card-text>
-      </v-card>
-
       <!-- ワークフロー設定 -->
       <v-card class="mb-4">
         <v-card-title>ワークフロー設定</v-card-title>

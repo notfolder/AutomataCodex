@@ -38,12 +38,6 @@ _DEFAULT_CONFIG = {
     "keep_recent_messages": 10,
     "min_to_compress": 5,
     "min_compression_ratio": 0.8,
-    "learning_enabled": True,
-    "learning_llm_model": "gpt-4o",
-    "learning_llm_temperature": 0.3,
-    "learning_llm_max_tokens": 8000,
-    "learning_exclude_bot_comments": True,
-    "learning_only_after_task_start": True,
 }
 
 
@@ -134,17 +128,11 @@ async def _create_admin_user(
                 INSERT INTO user_configs (
                     username, llm_provider, model_name, temperature, max_tokens,
                     context_compression_enabled, token_threshold,
-                    keep_recent_messages, min_to_compress, min_compression_ratio,
-                    learning_enabled, learning_llm_model, learning_llm_temperature,
-                    learning_llm_max_tokens, learning_exclude_bot_comments,
-                    learning_only_after_task_start
+                    keep_recent_messages, min_to_compress, min_compression_ratio
                 ) VALUES (
                     $1, $2, $3, $4, $5,
                     $6, $7,
-                    $8, $9, $10,
-                    $11, $12, $13,
-                    $14, $15,
-                    $16
+                    $8, $9, $10
                 )
                 """,
                 username,
@@ -157,12 +145,6 @@ async def _create_admin_user(
                 _DEFAULT_CONFIG["keep_recent_messages"],
                 _DEFAULT_CONFIG["min_to_compress"],
                 _DEFAULT_CONFIG["min_compression_ratio"],
-                _DEFAULT_CONFIG["learning_enabled"],
-                _DEFAULT_CONFIG["learning_llm_model"],
-                _DEFAULT_CONFIG["learning_llm_temperature"],
-                _DEFAULT_CONFIG["learning_llm_max_tokens"],
-                _DEFAULT_CONFIG["learning_exclude_bot_comments"],
-                _DEFAULT_CONFIG["learning_only_after_task_start"],
             )
 
 
@@ -239,8 +221,15 @@ def _parse_args() -> argparse.Namespace:
   python -m backend.user_management.cli.create_admin
         """,
     )
-    parser.add_argument("--username", type=str, default=None, help="管理者GitLabユーザー名")
-    parser.add_argument("--password", type=str, default=None, help="管理者パスワード（セキュリティ上、対話式推奨）")
+    parser.add_argument(
+        "--username", type=str, default=None, help="管理者GitLabユーザー名"
+    )
+    parser.add_argument(
+        "--password",
+        type=str,
+        default=None,
+        help="管理者パスワード（セキュリティ上、対話式推奨）",
+    )
     return parser.parse_args()
 
 
